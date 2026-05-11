@@ -57,14 +57,16 @@
     <key>UILaunchStoryboardName</key>
     <string>LaunchScreen</string>
 
-    <!-- SCENE -->
+    <!-- IOS SCENE -->
     <key>UIApplicationSceneManifest</key>
     <dict>
+
         <key>UIApplicationSupportsMultipleScenes</key>
         <false/>
 
         <key>UISceneConfigurations</key>
         <dict>
+
             <key>UIWindowSceneSessionRoleApplication</key>
             <array>
                 <dict>
@@ -80,7 +82,9 @@
 
                 </dict>
             </array>
+
         </dict>
+
     </dict>
 
     <!-- ORIENTATION -->
@@ -107,13 +111,25 @@
     <!-- INTERNET -->
     <key>NSAppTransportSecurity</key>
     <dict>
+
         <key>NSAllowsArbitraryLoads</key>
         <true/>
+
+        <key>NSAllowsArbitraryLoadsInWebContent</key>
+        <true/>
+
     </dict>
 
     <!-- WEBVIEW -->
     <key>io.flutter.embedded_views_preview</key>
     <true/>
+
+    <!-- CAMERA / MEDIA FIX -->
+    <key>NSCameraUsageDescription</key>
+    <string>Camera access is required.</string>
+
+    <key>NSPhotoLibraryUsageDescription</key>
+    <string>Photo library access is required.</string>
 
 </dict>
 

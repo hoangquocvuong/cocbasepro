@@ -3,137 +3,26 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_flutter_wkwebview/webview_flutter_wkwebview.dart';
+
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
+
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 
-/* =========================
-   ADMOB BANNER
-========================= */
-class AdBanner extends StatefulWidget {
-  const AdBanner({super.key});
-
-  @override
-  State<AdBanner> createState() => _AdBannerState();
-}
-
-class _AdBannerState extends State<AdBanner> {
-  BannerAd? _bannerAd;
-  bool loaded = false;
-
-  @override
-  void initState() {
-    super.initState();
-
-    _bannerAd = BannerAd(
-      size: AdSize.banner,
-
-      // TEST ADS
-      adUnitId: Platform.isAndroid
-          ? "ca-app-pub-3940256099942544/6300978111"
-          : "ca-app-pub-3940256099942544/2934735716",
-
-      request: const AdRequest(),
-
-      listener: BannerAdListener(
-        onAdLoaded: (_) {
-          if (mounted) {
-            setState(() {
-              loaded = true;
-            });
-          }
-        },
-
-        onAdFailedToLoad: (ad, error) {
-          ad.dispose();
-        },
-      ),
-    );
-
-    _bannerAd!.load();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (!loaded || _bannerAd == null) {
-      return const SizedBox();
-    }
-
-    return SizedBox(
-      width: _bannerAd!.size.width.toDouble(),
-      height: _bannerAd!.size.height.toDouble(),
-      child: AdWidget(ad: _bannerAd!),
-    );
-  }
-
-  @override
-  void dispose() {
-    _bannerAd?.dispose();
-    super.dispose();
-  }
-}
-
-/* =========================
-   NAVIGATOR
-========================= */
-class AppNavigator {
-  static final GlobalKey<NavigatorState> key =
-  GlobalKey<NavigatorState>();
-
-  static NavigatorState get nav => key.currentState!;
-}
-
-/* =========================
-   DIALOG
-========================= */
-class AppDialog {
-  static Future<bool> confirm({
-    required String title,
-    required String message,
-  }) async {
-    final context = AppNavigator.key.currentContext;
-
-    if (context == null) return false;
-
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (ctx) {
-        return AlertDialog(
-          title: Text(title),
-          content: Text(message),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.pop(ctx, false);
-              },
-              child: const Text("No"),
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.pop(ctx, true);
-              },
-              child: const Text("Yes"),
-            ),
-          ],
-        );
-      },
-    );
-
-    return result ?? false;
-  }
-}
-
-/* =========================
+/* ======================================================
    MAIN
-========================= */
+====================================================== */
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // FIX IOS BLACK SCREEN
+  // IOS WEBVIEW FIX
   if (Platform.isIOS) {
-    WebViewPlatform.instance = WebKitWebViewPlatform();
+    WebViewPlatform.instance =
+        WebKitWebViewPlatform();
   }
 
   // INIT ADS
@@ -142,26 +31,31 @@ Future<void> main() async {
   runApp(const MyApp());
 }
 
-/* =========================
+/* ======================================================
    ROOT APP
-========================= */
+====================================================== */
+
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      navigatorKey: AppNavigator.key,
       debugShowCheckedModeBanner: false,
-      theme: ThemeData.dark(),
+
+      theme: ThemeData(
+        brightness: Brightness.dark,
+      ),
+
       home: const SplashScreen(),
     );
   }
 }
 
-/* =========================
+/* ======================================================
    SPLASH
-========================= */
+====================================================== */
+
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 
@@ -170,20 +64,25 @@ class SplashScreen extends StatefulWidget {
       _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen> {
+class _SplashScreenState
+    extends State<SplashScreen> {
   @override
   void initState() {
     super.initState();
 
-    Timer(const Duration(seconds: 2), () {
-      if (mounted) {
-        AppNavigator.nav.pushReplacement(
-          MaterialPageRoute(
-            builder: (_) => const AppGate(),
-          ),
-        );
-      }
-    });
+    Timer(
+      const Duration(seconds: 2),
+          () {
+        if (mounted) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (_) => const AppGate(),
+            ),
+          );
+        }
+      },
+    );
   }
 
   @override
@@ -192,7 +91,9 @@ class _SplashScreenState extends State<SplashScreen> {
       backgroundColor: Colors.black,
       body: Center(
         child: Image(
-          image: AssetImage("assets/logo.png"),
+          image: AssetImage(
+            "assets/logo.png",
+          ),
           width: 140,
         ),
       ),
@@ -200,14 +101,16 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 }
 
-/* =========================
+/* ======================================================
    INTERNET CHECK
-========================= */
+====================================================== */
+
 class AppGate extends StatefulWidget {
   const AppGate({super.key});
 
   @override
-  State<AppGate> createState() => _AppGateState();
+  State<AppGate> createState() =>
+      _AppGateState();
 }
 
 class _AppGateState extends State<AppGate> {
@@ -217,6 +120,7 @@ class _AppGateState extends State<AppGate> {
   @override
   void initState() {
     super.initState();
+
     _checkInternet();
   }
 
@@ -246,27 +150,31 @@ class _AppGateState extends State<AppGate> {
     if (loading) {
       return const Scaffold(
         body: Center(
-          child: CircularProgressIndicator(),
+          child:
+          CircularProgressIndicator(),
         ),
       );
     }
 
     return hasInternet
         ? const MainScreen()
-        : const NoInternet();
+        : const NoInternetScreen();
   }
 }
 
-/* =========================
+/* ======================================================
    NO INTERNET
-========================= */
-class NoInternet extends StatelessWidget {
-  const NoInternet({super.key});
+====================================================== */
+
+class NoInternetScreen
+    extends StatelessWidget {
+  const NoInternetScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
+
       body: Center(
         child: Column(
           mainAxisAlignment:
@@ -275,29 +183,34 @@ class NoInternet extends StatelessWidget {
             const Icon(
               Icons.wifi_off,
               color: Colors.white,
-              size: 80,
-            ),
-
-            const SizedBox(height: 10),
-
-            const Text(
-              "No Internet Connection",
-              style: TextStyle(
-                color: Colors.white,
-              ),
+              size: 90,
             ),
 
             const SizedBox(height: 15),
 
+            const Text(
+              "No Internet Connection",
+              style: TextStyle(
+                fontSize: 18,
+                color: Colors.white,
+              ),
+            ),
+
+            const SizedBox(height: 20),
+
             ElevatedButton(
               onPressed: () {
-                AppNavigator.nav.pushReplacement(
+                Navigator.pushReplacement(
+                  context,
                   MaterialPageRoute(
-                    builder: (_) => const AppGate(),
+                    builder: (_) =>
+                    const AppGate(),
                   ),
                 );
               },
-              child: const Text("Retry"),
+              child: const Text(
+                "Retry",
+              ),
             ),
           ],
         ),
@@ -306,9 +219,10 @@ class NoInternet extends StatelessWidget {
   }
 }
 
-/* =========================
+/* ======================================================
    MAIN SCREEN
-========================= */
+====================================================== */
+
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
 
@@ -317,7 +231,8 @@ class MainScreen extends StatefulWidget {
       _MainScreenState();
 }
 
-class _MainScreenState extends State<MainScreen> {
+class _MainScreenState
+    extends State<MainScreen> {
   int index = 0;
 
   final pages = const [
@@ -330,7 +245,8 @@ class _MainScreenState extends State<MainScreen> {
     return Scaffold(
       body: pages[index],
 
-      bottomNavigationBar: BottomNavigationBar(
+      bottomNavigationBar:
+      BottomNavigationBar(
         currentIndex: index,
 
         onTap: (i) {
@@ -354,9 +270,10 @@ class _MainScreenState extends State<MainScreen> {
   }
 }
 
-/* =========================
-   ABOUT PAGE
-========================= */
+/* ======================================================
+   ABOUT
+====================================================== */
+
 class AboutPage extends StatelessWidget {
   const AboutPage({super.key});
 
@@ -373,9 +290,88 @@ class AboutPage extends StatelessWidget {
   }
 }
 
-/* =========================
+/* ======================================================
+   ADMOB BANNER
+====================================================== */
+
+class AdBanner extends StatefulWidget {
+  const AdBanner({super.key});
+
+  @override
+  State<AdBanner> createState() =>
+      _AdBannerState();
+}
+
+class _AdBannerState
+    extends State<AdBanner> {
+  BannerAd? bannerAd;
+
+  bool loaded = false;
+
+  @override
+  void initState() {
+    super.initState();
+
+    bannerAd = BannerAd(
+      size: AdSize.banner,
+
+      adUnitId: Platform.isAndroid
+          ? "ca-app-pub-3940256099942544/6300978111"
+          : "ca-app-pub-3940256099942544/2934735716",
+
+      listener: BannerAdListener(
+        onAdLoaded: (ad) {
+          if (mounted) {
+            setState(() {
+              loaded = true;
+            });
+          }
+        },
+
+        onAdFailedToLoad: (
+            ad,
+            error,
+            ) {
+          ad.dispose();
+        },
+      ),
+
+      request: const AdRequest(),
+    );
+
+    bannerAd!.load();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!loaded || bannerAd == null) {
+      return const SizedBox();
+    }
+
+    return SizedBox(
+      width:
+      bannerAd!.size.width.toDouble(),
+
+      height:
+      bannerAd!.size.height.toDouble(),
+
+      child: AdWidget(
+        ad: bannerAd!,
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    bannerAd?.dispose();
+    super.dispose();
+  }
+}
+
+/* ======================================================
    WEBVIEW
-========================= */
+====================================================== */
+
 class WebShell extends StatefulWidget {
   const WebShell({super.key});
 
@@ -384,105 +380,116 @@ class WebShell extends StatefulWidget {
       _WebShellState();
 }
 
-class _WebShellState extends State<WebShell> {
+class _WebShellState
+    extends State<WebShell> {
   late final WebViewController controller;
 
-  bool loading = true;
-  double progress = 0;
+  bool isLoading = true;
 
-  final String url =
+  final String websiteUrl =
       "https://www.cocbasepro.com";
 
   @override
   void initState() {
     super.initState();
 
-    controller = WebViewController();
+    late final PlatformWebViewControllerCreationParams
+    params;
 
-    controller.setJavaScriptMode(
-      JavaScriptMode.unrestricted,
-    );
+    if (WebViewPlatform.instance
+    is WebKitWebViewPlatform) {
+      params =
+          WebKitWebViewControllerCreationParams(
+            allowsInlineMediaPlayback:
+            true,
 
-    controller.setBackgroundColor(
-      const Color(0x00000000),
-    );
-
-    controller.setUserAgent(
-      "cocbasepro_app",
-    );
-
-    controller.setNavigationDelegate(
-      NavigationDelegate(
-        onProgress: (p) {
-          if (mounted) {
-            setState(() {
-              progress = p / 100;
-            });
-          }
-        },
-
-        onPageStarted: (_) {
-          if (mounted) {
-            setState(() {
-              loading = true;
-            });
-          }
-        },
-
-        onPageFinished: (_) {
-          if (mounted) {
-            setState(() {
-              loading = false;
-            });
-          }
-        },
-
-        onNavigationRequest:
-            (NavigationRequest request) async {
-          final uri = Uri.parse(request.url);
-
-          // INTERNAL DOMAIN
-          if (uri.host.contains(
-            "cocbasepro.com",
-          )) {
-            return NavigationDecision.navigate;
-          }
-
-          // PHONE / EMAIL
-          if ([
-            "tel",
-            "mailto",
-            "sms",
-          ].contains(uri.scheme)) {
-            await launchUrl(uri);
-
-            return NavigationDecision.prevent;
-          }
-
-          // EXTERNAL LINKS
-          final open =
-          await AppDialog.confirm(
-            title: "Open Link",
-            message:
-            "Open this link in browser?",
+            mediaTypesRequiringUserAction:
+            const {},
           );
+    } else {
+      params =
+      const PlatformWebViewControllerCreationParams();
+    }
 
-          if (open) {
+    controller =
+        WebViewController.fromPlatformCreationParams(
+          params,
+        );
+
+    controller
+      ..setJavaScriptMode(
+        JavaScriptMode.unrestricted,
+      )
+
+      ..setBackgroundColor(
+        Colors.white,
+      )
+
+      ..setUserAgent(
+        "cocbasepro_ios_app",
+      )
+
+      ..setNavigationDelegate(
+        NavigationDelegate(
+          onPageStarted: (url) {
+            if (mounted) {
+              setState(() {
+                isLoading = true;
+              });
+            }
+          },
+
+          onPageFinished: (url) {
+            if (mounted) {
+              setState(() {
+                isLoading = false;
+              });
+            }
+          },
+
+          onNavigationRequest:
+              (request) async {
+            final uri =
+            Uri.parse(request.url);
+
+            // INTERNAL DOMAIN
+            if (uri.host.contains(
+              "cocbasepro.com",
+            )) {
+              return NavigationDecision
+                  .navigate;
+            }
+
+            // PHONE / EMAIL
+            if ([
+              "tel",
+              "mailto",
+              "sms",
+            ].contains(uri.scheme)) {
+              await launchUrl(uri);
+
+              return NavigationDecision
+                  .prevent;
+            }
+
+            // OPEN EXTERNAL
             await launchUrl(
               uri,
-              mode:
-              LaunchMode.externalApplication,
+              mode: LaunchMode
+                  .externalApplication,
             );
-          }
 
-          return NavigationDecision.prevent;
-        },
-      ),
-    );
+            return NavigationDecision
+                .prevent;
+          },
+        ),
+      )
 
-    controller.loadRequest(
-      Uri.parse(url),
-    );
+      ..loadRequest(
+        Uri.parse(
+          websiteUrl,
+        ),
+      );
   }
 
   Future<bool> _handleBack() async {
@@ -491,17 +498,11 @@ class _WebShellState extends State<WebShell> {
 
     if (canBack) {
       controller.goBack();
+
       return false;
     }
 
-    return await AppDialog.confirm(
-      title: "Exit App",
-      message: "Do you want to exit?",
-    );
-  }
-
-  Future<void> _refresh() async {
-    await controller.reload();
+    return true;
   }
 
   @override
@@ -513,48 +514,35 @@ class _WebShellState extends State<WebShell> {
           (didPop, result) async {
         if (didPop) return;
 
-        final exit = await _handleBack();
+        final exit =
+        await _handleBack();
 
-        if (exit && mounted) {
+        if (exit) {
           SystemNavigator.pop();
         }
       },
 
       child: Scaffold(
-        body: SafeArea(
-          child: Column(
-            children: [
-              if (loading)
-                LinearProgressIndicator(
-                  value: progress,
-                ),
+        backgroundColor: Colors.white,
 
-              Expanded(
-                child: Stack(
-                  children: [
-                    WebViewWidget(
-                      controller: controller,
-                    ),
-
-                    if (loading)
-                      const Center(
-                        child:
-                        CircularProgressIndicator(),
-                      ),
-                  ],
-                ),
+        body: Stack(
+          children: [
+            Positioned.fill(
+              child: WebViewWidget(
+                controller: controller,
               ),
+            ),
 
-              const AdBanner(),
-            ],
-          ),
+            if (isLoading)
+              const Center(
+                child:
+                CircularProgressIndicator(),
+              ),
+          ],
         ),
 
-        floatingActionButton:
-        FloatingActionButton(
-          onPressed: _refresh,
-          child: const Icon(Icons.refresh),
-        ),
+        bottomNavigationBar:
+        const AdBanner(),
       ),
     );
   }
