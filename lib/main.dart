@@ -49,48 +49,9 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return const MaterialApp(
       debugShowCheckedModeBanner: false,
-      home: SplashScreen(),
-    );
-  }
-}
 
-/* =========================
-   SPLASH (XANH NƯỚC BIỂN + LOGO)
-========================= */
-class SplashScreen extends StatefulWidget {
-  const SplashScreen({super.key});
-
-  @override
-  State<SplashScreen> createState() => _SplashScreenState();
-}
-
-class _SplashScreenState extends State<SplashScreen> {
-
-  @override
-  void initState() {
-    super.initState();
-
-    Future.delayed(const Duration(milliseconds: 1800), () {
-      if (!mounted) return;
-
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const WebScreen()),
-      );
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF1E88F0), // xanh nước biển
-
-      body: Center(
-        child: Image.asset(
-          "assets/logo.png",
-          width: 140,
-        ),
-      ),
+      // 🔥 FIX: vào thẳng WebView (KHÔNG splash Flutter)
+      home: WebScreen(),
     );
   }
 }
@@ -203,7 +164,6 @@ class _WebScreenState extends State<WebScreen> {
 
   @override
   Widget build(BuildContext context) {
-
     return PopScope(
       canPop: false,
 
