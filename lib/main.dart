@@ -26,11 +26,9 @@ class _AdBannerState extends State<AdBanner> {
 
     _bannerAd = BannerAd(
       size: AdSize.banner,
-      adUnitId: "ca-app-pub-3940256099942544/6300978111", // TEST ID
+      adUnitId: "ca-app-pub-3940256099942544/6300978111",
       listener: BannerAdListener(
-        onAdLoaded: (_) {
-          setState(() => loaded = true);
-        },
+        onAdLoaded: (_) => setState(() => loaded = true),
         onAdFailedToLoad: (ad, err) {
           ad.dispose();
         },
@@ -43,9 +41,7 @@ class _AdBannerState extends State<AdBanner> {
 
   @override
   Widget build(BuildContext context) {
-    if (!loaded || _bannerAd == null) {
-      return const SizedBox();
-    }
+    if (!loaded || _bannerAd == null) return const SizedBox();
 
     return SizedBox(
       height: _bannerAd!.size.height.toDouble(),
@@ -62,51 +58,40 @@ class _AdBannerState extends State<AdBanner> {
 }
 
 /* =========================
-   GLOBAL NAVIGATOR
+   NAVIGATOR
 ========================= */
 class AppNavigator {
   static final GlobalKey<NavigatorState> key =
   GlobalKey<NavigatorState>();
 
   static NavigatorState get nav => key.currentState!;
-  static BuildContext get context => key.currentContext!;
-
-  static Future<T?> push<T>(Widget page) {
-    return nav.push(MaterialPageRoute(builder: (_) => page));
-  }
-
-  static void pop<T>([T? result]) {
-    nav.pop(result);
-  }
-
-  static Future<T?> pushReplacement<T>(Widget page) {
-    return nav.pushReplacement(
-      MaterialPageRoute(builder: (_) => page),
-    );
-  }
 }
 
 /* =========================
-   DIALOG
+   DIALOG SAFE
 ========================= */
 class AppDialog {
   static Future<bool> confirm({
     required String title,
     required String message,
   }) async {
+    final context = AppNavigator.key.currentContext;
+
+    if (context == null) return false;
+
     final result = await showDialog<bool>(
-      context: AppNavigator.context,
-      builder: (dialogContext) {
+      context: context,
+      builder: (ctx) {
         return AlertDialog(
           title: Text(title),
           content: Text(message),
           actions: [
             TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(false),
+              onPressed: () => Navigator.of(ctx).pop(false),
               child: const Text("No"),
             ),
             TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(true),
+              onPressed: () => Navigator.of(ctx).pop(true),
               child: const Text("Yes"),
             ),
           ],
@@ -121,16 +106,17 @@ class AppDialog {
 /* =========================
    MAIN
 ========================= */
-void main() async {
+void main() {
   WidgetsFlutterBinding.ensureInitialized();
-
-  await MobileAds.instance.initialize(); // 🔥 ADMOB INIT
 
   SystemChrome.setEnabledSystemUIMode(
     SystemUiMode.immersiveSticky,
   );
 
   runApp(const MyApp());
+
+  // 🔥 FIX: init ads AFTER runApp (avoid iOS crash)
+  MobileAds.instance.initialize();
 }
 
 /* =========================
@@ -165,7 +151,11 @@ class _SplashScreenState extends State<SplashScreen> {
     super.initState();
 
     Future.delayed(const Duration(seconds: 2), () {
-      AppNavigator.pushReplacement(const AppGate());
+      if (mounted) {
+        AppNavigator.nav.pushReplacement(
+          MaterialPageRoute(builder: (_) => const AppGate()),
+        );
+      }
     });
   }
 
@@ -184,7 +174,7 @@ class _SplashScreenState extends State<SplashScreen> {
 }
 
 /* =========================
-   GATE (INTERNET CHECK)
+   INTERNET GATE
 ========================= */
 class AppGate extends StatefulWidget {
   const AppGate({super.key});
@@ -209,6 +199,7 @@ class _AppGateState extends State<AppGate> {
     if (!mounted) return;
 
     setState(() {
+      // FIX đúng cho List<ConnectivityResult>
       hasInternet = !result.contains(ConnectivityResult.none);
       loading = false;
     });
@@ -247,7 +238,9 @@ class NoInternet extends StatelessWidget {
             const SizedBox(height: 10),
             ElevatedButton(
               onPressed: () {
-                AppNavigator.pushReplacement(const AppGate());
+                AppNavigator.nav.pushReplacement(
+                  MaterialPageRoute(builder: (_) => const AppGate()),
+                );
               },
               child: const Text("Retry"),
             )
@@ -300,31 +293,16 @@ class AboutPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text("About")),
-      body: const Padding(
-        padding: EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text("COC Base Pro",
-                style: TextStyle(
-                    fontSize: 20, fontWeight: FontWeight.bold)),
-            SizedBox(height: 10),
-            Text(
-              "Find the best Clash of Clans bases updated daily.\n\nWar, Farming, Hybrid - all strategies in one place.",
-            ),
-            SizedBox(height: 20),
-            Text("Version: 1.0.0"),
-          ],
-        ),
+    return const Scaffold(
+      body: Center(
+        child: Text("COC Base Pro\nVersion 1.0.0"),
       ),
     );
   }
 }
 
 /* =========================
-   WEBVIEW SCREEN + ADS
+   WEBVIEW
 ========================= */
 class WebShell extends StatefulWidget {
   const WebShell({super.key});
@@ -356,9 +334,9 @@ class _WebShellState extends State<WebShell> {
           onNavigationRequest: (request) async {
             final uri = Uri.parse(request.url);
 
+            // FIX: avoid reload loop crash
             if (uri.host.contains("cocbasepro.com")) {
-              controller.loadRequest(uri);
-              return NavigationDecision.prevent;
+              return NavigationDecision.navigate;
             }
 
             if (["tel", "mailto", "sms"].contains(uri.scheme)) {
@@ -428,14 +406,13 @@ class _WebShellState extends State<WebShell> {
                       onRefresh: _refresh,
                       child: WebViewWidget(controller: controller),
                     ),
-
                     if (loading)
                       const Center(child: CircularProgressIndicator()),
                   ],
                 ),
               ),
 
-              const AdBanner(), // 🔥 ADS HERE
+              const AdBanner(),
             ],
           ),
         ),
