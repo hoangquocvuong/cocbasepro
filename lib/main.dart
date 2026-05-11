@@ -1,23 +1,27 @@
 import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+import 'package:webview_flutter_wkwebview/webview_flutter_wkwebview.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
+import 'package:webview_flutter_android/webview_flutter_android.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // chạy app trước
+  // Fullscreen safe for iOS + Android
+  SystemChrome.setEnabledSystemUIMode(
+    SystemUiMode.edgeToEdge,
+  );
+
+  // Init ads
+  await MobileAds.instance.initialize();
+
   runApp(const MyApp());
-
-  // init ads SAU khi render để tránh iOS black screen
-  Future.delayed(const Duration(seconds: 1), () {
-    MobileAds.instance.initialize();
-  });
-
-  SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
 }
 
 /* =========================
@@ -30,13 +34,15 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
+      title: 'COC BASE PRO',
+      theme: ThemeData.dark(),
       home: const SplashScreen(),
     );
   }
 }
 
 /* =========================
-   SPLASH
+   SPLASH SCREEN
 ========================= */
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -46,17 +52,20 @@ class SplashScreen extends StatefulWidget {
 }
 
 class _SplashScreenState extends State<SplashScreen> {
+
   @override
   void initState() {
     super.initState();
 
     Future.delayed(const Duration(seconds: 2), () {
-      if (mounted) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const AppGate()),
-        );
-      }
+      if (!mounted) return;
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => const AppGate(),
+        ),
+      );
     });
   }
 
@@ -67,7 +76,11 @@ class _SplashScreenState extends State<SplashScreen> {
       body: Center(
         child: Text(
           "COC BASE PRO",
-          style: TextStyle(color: Colors.white, fontSize: 22),
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+          ),
         ),
       ),
     );
@@ -86,37 +99,51 @@ class AppGate extends StatefulWidget {
 
 class _AppGateState extends State<AppGate> {
   bool loading = true;
-  bool hasInternet = true;
+  bool hasInternet = false;
 
   @override
   void initState() {
     super.initState();
-    checkNet();
+    checkInternet();
   }
 
-  Future<void> checkNet() async {
-    final result = await Connectivity().checkConnectivity();
+  Future<void> checkInternet() async {
+    try {
+      final result = await Connectivity().checkConnectivity();
 
-    setState(() {
-      hasInternet = result != ConnectivityResult.none;
-      loading = false;
-    });
+      setState(() {
+        hasInternet = !result.contains(ConnectivityResult.none);
+        loading = false;
+      });
+    } catch (e) {
+      setState(() {
+        hasInternet = false;
+        loading = false;
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+
     if (loading) {
       return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
+        body: Center(
+          child: CircularProgressIndicator(),
+        ),
       );
     }
 
-    return hasInternet ? const WebScreen() : const NoInternet();
+    if (!hasInternet) {
+      return const NoInternet();
+    }
+
+    return const WebScreen();
   }
 }
 
 /* =========================
-   NO INTERNET
+   NO INTERNET SCREEN
 ========================= */
 class NoInternet extends StatelessWidget {
   const NoInternet({super.key});
@@ -124,23 +151,45 @@ class NoInternet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.black,
       body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.wifi_off, size: 60),
-            const SizedBox(height: 10),
-            const Text("No Internet"),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(builder: (_) => const AppGate()),
-                );
-              },
-              child: const Text("Retry"),
-            )
-          ],
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+
+              const Icon(
+                Icons.wifi_off,
+                color: Colors.white,
+                size: 70,
+              ),
+
+              const SizedBox(height: 20),
+
+              const Text(
+                "No Internet Connection",
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 20,
+                ),
+              ),
+
+              const SizedBox(height: 20),
+
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const AppGate(),
+                    ),
+                  );
+                },
+                child: const Text("Retry"),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -158,50 +207,121 @@ class WebScreen extends StatefulWidget {
 }
 
 class _WebScreenState extends State<WebScreen> {
-  late final WebViewController controller;
-  bool loading = true;
 
-  final url = "https://www.cocbasepro.com";
+  late final WebViewController controller;
+
+  bool isLoading = true;
+
+  final String url = "https://www.cocbasepro.com";
 
   @override
   void initState() {
     super.initState();
 
-    controller = WebViewController()
+    // iOS WebKit setup
+    late final PlatformWebViewControllerCreationParams params;
+
+    if (Platform.isIOS) {
+      params = WebKitWebViewControllerCreationParams(
+        allowsInlineMediaPlayback: true,
+        mediaTypesRequiringUserAction: const {},
+      );
+    } else {
+      params = const PlatformWebViewControllerCreationParams();
+    }
+
+    final WebViewController webController =
+    WebViewController.fromPlatformCreationParams(params);
+
+    // Android debug
+    if (webController.platform is AndroidWebViewController) {
+      AndroidWebViewController.enableDebugging(true);
+
+      (webController.platform as AndroidWebViewController)
+          .setMediaPlaybackRequiresUserGesture(false);
+    }
+
+    controller = webController
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..setBackgroundColor(const Color(0x00000000))
+
       ..setNavigationDelegate(
         NavigationDelegate(
-          onPageStarted: (_) => setState(() => loading = true),
-          onPageFinished: (_) => setState(() => loading = false),
-          onNavigationRequest: (request) async {
-            final uri = Uri.parse(request.url);
 
-            if (uri.scheme == "http" || uri.scheme == "https") {
+          onPageStarted: (String url) {
+            setState(() {
+              isLoading = true;
+            });
+          },
+
+          onPageFinished: (String url) {
+            setState(() {
+              isLoading = false;
+            });
+          },
+
+          onWebResourceError: (WebResourceError error) {
+            debugPrint("WebView error: ${error.description}");
+          },
+
+          onNavigationRequest: (NavigationRequest request) async {
+
+            final Uri uri = Uri.parse(request.url);
+
+            // allow website
+            if (uri.scheme == 'http' || uri.scheme == 'https') {
               return NavigationDecision.navigate;
             }
 
+            // open external apps
             if (await canLaunchUrl(uri)) {
-              await launchUrl(uri);
+              await launchUrl(
+                uri,
+                mode: LaunchMode.externalApplication,
+              );
             }
 
             return NavigationDecision.prevent;
           },
         ),
       )
+
       ..loadRequest(Uri.parse(url));
   }
 
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: SafeArea(
-        child: Stack(
-          children: [
-            WebViewWidget(controller: controller),
 
-            if (loading)
-              const Center(child: CircularProgressIndicator()),
-          ],
+    return PopScope(
+      canPop: false,
+
+      onPopInvokedWithResult: (didPop, result) async {
+
+        if (didPop) return;
+
+        if (await controller.canGoBack()) {
+          await controller.goBack();
+        }
+      },
+
+      child: Scaffold(
+        backgroundColor: Colors.black,
+
+        body: SafeArea(
+          child: Stack(
+            children: [
+
+              WebViewWidget(
+                controller: controller,
+              ),
+
+              if (isLoading)
+                const Center(
+                  child: CircularProgressIndicator(),
+                ),
+            ],
+          ),
         ),
       ),
     );
