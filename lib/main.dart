@@ -1,8 +1,9 @@
 import 'dart:async';
+import 'dart:developer';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'dart:developer';
+
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -11,7 +12,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 
 /* =========================
-   BACKGROUND HANDLER
+   BACKGROUND NOTI HANDLER
 ========================= */
 Future<void> firebaseBgHandler(RemoteMessage message) async {
   await Firebase.initializeApp();
@@ -23,7 +24,11 @@ Future<void> firebaseBgHandler(RemoteMessage message) async {
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  await Firebase.initializeApp();
+  try {
+    await Firebase.initializeApp();
+  } catch (e) {
+    debugPrint("Firebase init error: $e");
+  }
 
   FirebaseMessaging.onBackgroundMessage(firebaseBgHandler);
 
@@ -50,7 +55,7 @@ class MyApp extends StatelessWidget {
 }
 
 /* =========================
-   SPLASH
+   SPLASH (XANH NƯỚC BIỂN + LOGO)
 ========================= */
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -65,24 +70,27 @@ class _SplashScreenState extends State<SplashScreen> {
   void initState() {
     super.initState();
 
-    Future.delayed(const Duration(seconds: 3), () {
-      if (!mounted) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Future.delayed(const Duration(seconds: 3), () {
+        if (!mounted) return;
 
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const WebScreen()),
-      );
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const WebScreen()),
+        );
+      });
     });
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF00AEEF),
+      backgroundColor: const Color(0xFF00AEEF), // xanh nước biển
+
       body: Center(
         child: Image.asset(
           "assets/logo.png",
-          width: 130,
+          width: 140,
         ),
       ),
     );
@@ -90,7 +98,7 @@ class _SplashScreenState extends State<SplashScreen> {
 }
 
 /* =========================
-   WEBVIEW + FCM
+   WEBVIEW SCREEN
 ========================= */
 class WebScreen extends StatefulWidget {
   const WebScreen({super.key});
@@ -102,7 +110,7 @@ class WebScreen extends StatefulWidget {
 class _WebScreenState extends State<WebScreen> {
 
   late final WebViewController controller;
-  late StreamSubscription networkSub;
+  late StreamSubscription netSub;
 
   bool isOffline = false;
 
@@ -117,10 +125,10 @@ class _WebScreenState extends State<WebScreen> {
     ========================= */
     controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..setBackgroundColor(const Color(0x00000000))
       ..setNavigationDelegate(
         NavigationDelegate(
           onNavigationRequest: (request) async {
-
             final uri = Uri.parse(request.url);
 
             if (uri.scheme == 'http' || uri.scheme == 'https') {
@@ -140,22 +148,23 @@ class _WebScreenState extends State<WebScreen> {
     /* =========================
        NETWORK LISTENER
     ========================= */
-    networkSub =
-        Connectivity().onConnectivityChanged.listen((result) {
+    netSub = Connectivity()
+        .onConnectivityChanged
+        .listen((result) {
 
-          final offline = result.contains(ConnectivityResult.none);
+      final offline = result.contains(ConnectivityResult.none);
 
-          if (offline != isOffline) {
-            setState(() => isOffline = offline);
+      if (offline != isOffline) {
+        setState(() => isOffline = offline);
 
-            if (!offline) {
-              controller.reload();
-            }
-          }
-        });
+        if (!offline) {
+          controller.reload();
+        }
+      }
+    });
 
     /* =========================
-       FIREBASE MESSAGING
+       FIREBASE NOTI
     ========================= */
     setupFirebase();
   }
@@ -165,17 +174,13 @@ class _WebScreenState extends State<WebScreen> {
 
     await messaging.requestPermission();
 
-    // Token (để gửi push từ server)
     String? token = await messaging.getToken();
-
     log("FCM TOKEN: $token");
 
-    // Khi app đang mở
-    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-      debugPrint("Notification received");
+    FirebaseMessaging.onMessage.listen((message) {
+      debugPrint("NOTIFICATION RECEIVED");
     });
 
-    // Khi mở app từ notification
     FirebaseMessaging.onMessageOpenedApp.listen((message) {
       log("OPEN FROM NOTI");
     });
@@ -183,7 +188,7 @@ class _WebScreenState extends State<WebScreen> {
 
   @override
   void dispose() {
-    networkSub.cancel();
+    netSub.cancel();
     super.dispose();
   }
 
@@ -212,36 +217,37 @@ class _WebScreenState extends State<WebScreen> {
       child: Scaffold(
         backgroundColor: Colors.black,
 
-        body: SafeArea(
-          child: Stack(
-            children: [
+        body: Stack(
+          children: [
 
-              WebViewWidget(controller: controller),
+            WebViewWidget(controller: controller),
 
-              /* OFFLINE */
-              if (isOffline)
-                Container(
-                  color: Colors.black,
-                  child: const Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
+            /* OFFLINE OVERLAY */
+            if (isOffline)
+              Container(
+                color: Colors.black,
+                child: const Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
 
-                        Icon(Icons.wifi_off,
-                            color: Colors.white, size: 70),
+                      Icon(
+                        Icons.wifi_off,
+                        color: Colors.white,
+                        size: 70,
+                      ),
 
-                        SizedBox(height: 10),
+                      SizedBox(height: 10),
 
-                        Text(
-                          "No Internet Connection",
-                          style: TextStyle(color: Colors.white),
-                        ),
-                      ],
-                    ),
+                      Text(
+                        "No Internet Connection",
+                        style: TextStyle(color: Colors.white),
+                      ),
+                    ],
                   ),
                 ),
-            ],
-          ),
+              ),
+          ],
         ),
       ),
     );
