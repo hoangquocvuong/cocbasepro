@@ -42,6 +42,12 @@
     <key>LSRequiresIPhoneOS</key>
     <true/>
 
+    <!-- ONLY IPHONE -->
+    <key>UIDeviceFamily</key>
+    <array>
+        <integer>1</integer>
+    </array>
+
     <!-- STATUS BAR -->
     <key>UIStatusBarHidden</key>
     <true/>
@@ -49,7 +55,11 @@
     <key>UIViewControllerBasedStatusBarAppearance</key>
     <false/>
 
-    <!-- LAUNCH -->
+    <!-- INPUT -->
+    <key>UIApplicationSupportsIndirectInputEvents</key>
+    <true/>
+
+    <!-- LAUNCH SCREEN -->
     <key>UILaunchStoryboardName</key>
     <string>LaunchScreen</string>
 
@@ -64,6 +74,7 @@
             <key>UIWindowSceneSessionRoleApplication</key>
             <array>
                 <dict>
+
                     <key>UISceneClassName</key>
                     <string>UIWindowScene</string>
 
@@ -72,22 +83,14 @@
 
                     <key>UISceneDelegateClassName</key>
                     <string>$(PRODUCT_MODULE_NAME).SceneDelegate</string>
+
                 </dict>
             </array>
         </dict>
     </dict>
 
-    <!-- INPUT -->
-    <key>UIApplicationSupportsIndirectInputEvents</key>
-    <true/>
-
     <!-- ORIENTATION -->
     <key>UISupportedInterfaceOrientations</key>
-    <array>
-        <string>UIInterfaceOrientationPortrait</string>
-    </array>
-
-    <key>UISupportedInterfaceOrientations~ipad</key>
     <array>
         <string>UIInterfaceOrientationPortrait</string>
     </array>
