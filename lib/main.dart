@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:webview_flutter/webview_flutter.dart';
@@ -5,31 +6,37 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 
-void main() async {
+void main() {
   WidgetsFlutterBinding.ensureInitialized();
 
-  await MobileAds.instance.initialize();
-
+  // chạy app trước
   runApp(const MyApp());
+
+  // init ads SAU khi render để tránh iOS black screen
+  Future.delayed(const Duration(seconds: 1), () {
+    MobileAds.instance.initialize();
+  });
+
+  SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
 }
 
 /* =========================
-   ROOT
+   ROOT APP
 ========================= */
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return const MaterialApp(
+    return MaterialApp(
       debugShowCheckedModeBanner: false,
-      home: SplashScreen(),
+      home: const SplashScreen(),
     );
   }
 }
 
 /* =========================
-   SPLASH (SAFE NO BLACK SCREEN)
+   SPLASH
 ========================= */
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -44,12 +51,12 @@ class _SplashScreenState extends State<SplashScreen> {
     super.initState();
 
     Future.delayed(const Duration(seconds: 2), () {
-      if (!mounted) return;
-
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const AppGate()),
-      );
+      if (mounted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const AppGate()),
+        );
+      }
     });
   }
 
@@ -60,7 +67,7 @@ class _SplashScreenState extends State<SplashScreen> {
       body: Center(
         child: Text(
           "COC BASE PRO",
-          style: TextStyle(color: Colors.white, fontSize: 18),
+          style: TextStyle(color: Colors.white, fontSize: 22),
         ),
       ),
     );
@@ -84,10 +91,10 @@ class _AppGateState extends State<AppGate> {
   @override
   void initState() {
     super.initState();
-    check();
+    checkNet();
   }
 
-  Future<void> check() async {
+  Future<void> checkNet() async {
     final result = await Connectivity().checkConnectivity();
 
     setState(() {
@@ -104,7 +111,7 @@ class _AppGateState extends State<AppGate> {
       );
     }
 
-    return hasInternet ? const MainScreen() : const NoInternet();
+    return hasInternet ? const WebScreen() : const NoInternet();
   }
 }
 
@@ -118,14 +125,22 @@ class NoInternet extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       body: Center(
-        child: ElevatedButton(
-          onPressed: () {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (_) => const AppGate()),
-            );
-          },
-          child: const Text("Retry"),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.wifi_off, size: 60),
+            const SizedBox(height: 10),
+            const Text("No Internet"),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(builder: (_) => const AppGate()),
+                );
+              },
+              child: const Text("Retry"),
+            )
+          ],
         ),
       ),
     );
@@ -133,68 +148,17 @@ class NoInternet extends StatelessWidget {
 }
 
 /* =========================
-   MAIN SCREEN
+   WEBVIEW SCREEN
 ========================= */
-class MainScreen extends StatefulWidget {
-  const MainScreen({super.key});
+class WebScreen extends StatefulWidget {
+  const WebScreen({super.key});
 
   @override
-  State<MainScreen> createState() => _MainScreenState();
+  State<WebScreen> createState() => _WebScreenState();
 }
 
-class _MainScreenState extends State<MainScreen> {
-  int index = 0;
-
-  final pages = const [
-    WebPage(),
-    AboutPage(),
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: pages[index],
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: index,
-        onTap: (i) => setState(() => index = i),
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home), label: "Home"),
-          BottomNavigationBarItem(icon: Icon(Icons.info), label: "About"),
-        ],
-      ),
-    );
-  }
-}
-
-/* =========================
-   ABOUT
-========================= */
-class AboutPage extends StatelessWidget {
-  const AboutPage({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return const Scaffold(
-      body: Center(
-        child: Text("COC BASE PRO\nv1.0.0"),
-      ),
-    );
-  }
-}
-
-/* =========================
-   WEBVIEW (STABLE IOS FIX)
-========================= */
-class WebPage extends StatefulWidget {
-  const WebPage({super.key});
-
-  @override
-  State<WebPage> createState() => _WebPageState();
-}
-
-class _WebPageState extends State<WebPage> {
+class _WebScreenState extends State<WebScreen> {
   late final WebViewController controller;
-
   bool loading = true;
 
   final url = "https://www.cocbasepro.com";
@@ -209,6 +173,19 @@ class _WebPageState extends State<WebPage> {
         NavigationDelegate(
           onPageStarted: (_) => setState(() => loading = true),
           onPageFinished: (_) => setState(() => loading = false),
+          onNavigationRequest: (request) async {
+            final uri = Uri.parse(request.url);
+
+            if (uri.scheme == "http" || uri.scheme == "https") {
+              return NavigationDecision.navigate;
+            }
+
+            if (await canLaunchUrl(uri)) {
+              await launchUrl(uri);
+            }
+
+            return NavigationDecision.prevent;
+          },
         ),
       )
       ..loadRequest(Uri.parse(url));
