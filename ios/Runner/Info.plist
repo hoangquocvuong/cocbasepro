@@ -42,13 +42,7 @@
     <key>LSRequiresIPhoneOS</key>
     <true/>
 
-    <!-- ONLY IPHONE -->
-    <key>UIDeviceFamily</key>
-    <array>
-        <integer>1</integer>
-    </array>
-
-    <!-- STATUS BAR -->
+    <!-- STATUS -->
     <key>UIStatusBarHidden</key>
     <true/>
 
@@ -59,11 +53,11 @@
     <key>UIApplicationSupportsIndirectInputEvents</key>
     <true/>
 
-    <!-- LAUNCH SCREEN -->
+    <!-- LAUNCH -->
     <key>UILaunchStoryboardName</key>
     <string>LaunchScreen</string>
 
-    <!-- IOS SCENE -->
+    <!-- SCENE -->
     <key>UIApplicationSceneManifest</key>
     <dict>
         <key>UIApplicationSupportsMultipleScenes</key>
@@ -93,20 +87,31 @@
     <key>UISupportedInterfaceOrientations</key>
     <array>
         <string>UIInterfaceOrientationPortrait</string>
+        <string>UIInterfaceOrientationLandscapeLeft</string>
+        <string>UIInterfaceOrientationLandscapeRight</string>
+    </array>
+
+    <!-- IPAD -->
+    <key>UISupportedInterfaceOrientations~ipad</key>
+    <array>
+        <string>UIInterfaceOrientationPortrait</string>
+        <string>UIInterfaceOrientationPortraitUpsideDown</string>
+        <string>UIInterfaceOrientationLandscapeLeft</string>
+        <string>UIInterfaceOrientationLandscapeRight</string>
     </array>
 
     <!-- ADMOB -->
     <key>GADApplicationIdentifier</key>
     <string>ca-app-pub-3940256099942544~1458002511</string>
 
-    <!-- INTERNET / WEBVIEW -->
+    <!-- INTERNET -->
     <key>NSAppTransportSecurity</key>
     <dict>
         <key>NSAllowsArbitraryLoads</key>
         <true/>
     </dict>
 
-    <!-- WEBVIEW FIX -->
+    <!-- WEBVIEW -->
     <key>io.flutter.embedded_views_preview</key>
     <true/>
 
