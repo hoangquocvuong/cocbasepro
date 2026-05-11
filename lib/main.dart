@@ -1,25 +1,26 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+
 import 'package:webview_flutter/webview_flutter.dart';
-import 'package:webview_flutter_wkwebview/webview_flutter_wkwebview.dart';
+
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
-import 'package:webview_flutter_android/webview_flutter_android.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Fullscreen safe for iOS + Android
+  // UI full screen safe
   SystemChrome.setEnabledSystemUIMode(
     SystemUiMode.edgeToEdge,
   );
 
-  // Init ads
-  await MobileAds.instance.initialize();
+  // Ads init SAFE
+  Future.delayed(const Duration(seconds: 2), () {
+    MobileAds.instance.initialize();
+  });
 
   runApp(const MyApp());
 }
@@ -42,7 +43,7 @@ class MyApp extends StatelessWidget {
 }
 
 /* =========================
-   SPLASH SCREEN
+   SPLASH
 ========================= */
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -58,13 +59,11 @@ class _SplashScreenState extends State<SplashScreen> {
     super.initState();
 
     Future.delayed(const Duration(seconds: 2), () {
-      if (!mounted) return;
+      if (mounted == false) return;
 
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(
-          builder: (_) => const AppGate(),
-        ),
+        MaterialPageRoute(builder: (_) => const AppGate()),
       );
     });
   }
@@ -108,19 +107,12 @@ class _AppGateState extends State<AppGate> {
   }
 
   Future<void> checkInternet() async {
-    try {
-      final result = await Connectivity().checkConnectivity();
+    final result = await Connectivity().checkConnectivity();
 
-      setState(() {
-        hasInternet = !result.contains(ConnectivityResult.none);
-        loading = false;
-      });
-    } catch (e) {
-      setState(() {
-        hasInternet = false;
-        loading = false;
-      });
-    }
+    setState(() {
+      hasInternet = !result.contains(ConnectivityResult.none);
+      loading = false;
+    });
   }
 
   @override
@@ -128,9 +120,7 @@ class _AppGateState extends State<AppGate> {
 
     if (loading) {
       return const Scaffold(
-        body: Center(
-          child: CircularProgressIndicator(),
-        ),
+        body: Center(child: CircularProgressIndicator()),
       );
     }
 
@@ -143,7 +133,7 @@ class _AppGateState extends State<AppGate> {
 }
 
 /* =========================
-   NO INTERNET SCREEN
+   NO INTERNET
 ========================= */
 class NoInternet extends StatelessWidget {
   const NoInternet({super.key});
@@ -153,43 +143,31 @@ class NoInternet extends StatelessWidget {
     return Scaffold(
       backgroundColor: Colors.black,
       body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
 
-              const Icon(
-                Icons.wifi_off,
-                color: Colors.white,
-                size: 70,
-              ),
+            const Icon(Icons.wifi_off, size: 70, color: Colors.white),
 
-              const SizedBox(height: 20),
+            const SizedBox(height: 20),
 
-              const Text(
-                "No Internet Connection",
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 20,
-                ),
-              ),
+            const Text(
+              "No Internet Connection",
+              style: TextStyle(color: Colors.white, fontSize: 20),
+            ),
 
-              const SizedBox(height: 20),
+            const SizedBox(height: 20),
 
-              ElevatedButton(
-                onPressed: () {
-                  Navigator.pushReplacement(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const AppGate(),
-                    ),
-                  );
-                },
-                child: const Text("Retry"),
-              ),
-            ],
-          ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(builder: (_) => const AppGate()),
+                );
+              },
+              child: const Text("Retry"),
+            ),
+          ],
         ),
       ),
     );
@@ -209,7 +187,6 @@ class WebScreen extends StatefulWidget {
 class _WebScreenState extends State<WebScreen> {
 
   late final WebViewController controller;
-
   bool isLoading = true;
 
   final String url = "https://www.cocbasepro.com";
@@ -218,77 +195,35 @@ class _WebScreenState extends State<WebScreen> {
   void initState() {
     super.initState();
 
-    // iOS WebKit setup
-    late final PlatformWebViewControllerCreationParams params;
-
-    if (Platform.isIOS) {
-      params = WebKitWebViewControllerCreationParams(
-        allowsInlineMediaPlayback: true,
-        mediaTypesRequiringUserAction: const {},
-      );
-    } else {
-      params = const PlatformWebViewControllerCreationParams();
-    }
-
-    final WebViewController webController =
-    WebViewController.fromPlatformCreationParams(params);
-
-    // Android debug
-    if (webController.platform is AndroidWebViewController) {
-      AndroidWebViewController.enableDebugging(true);
-
-      (webController.platform as AndroidWebViewController)
-          .setMediaPlaybackRequiresUserGesture(false);
-    }
-
-    controller = webController
+    controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setBackgroundColor(const Color(0x00000000))
-
       ..setNavigationDelegate(
         NavigationDelegate(
-
-          onPageStarted: (String url) {
-            setState(() {
-              isLoading = true;
-            });
+          onPageStarted: (_) {
+            setState(() => isLoading = true);
           },
-
-          onPageFinished: (String url) {
-            setState(() {
-              isLoading = false;
-            });
+          onPageFinished: (_) {
+            setState(() => isLoading = false);
           },
+          onNavigationRequest: (request) async {
 
-          onWebResourceError: (WebResourceError error) {
-            debugPrint("WebView error: ${error.description}");
-          },
+            final uri = Uri.parse(request.url);
 
-          onNavigationRequest: (NavigationRequest request) async {
-
-            final Uri uri = Uri.parse(request.url);
-
-            // allow website
             if (uri.scheme == 'http' || uri.scheme == 'https') {
               return NavigationDecision.navigate;
             }
 
-            // open external apps
             if (await canLaunchUrl(uri)) {
-              await launchUrl(
-                uri,
-                mode: LaunchMode.externalApplication,
-              );
+              await launchUrl(uri, mode: LaunchMode.externalApplication);
             }
 
             return NavigationDecision.prevent;
           },
         ),
       )
-
       ..loadRequest(Uri.parse(url));
   }
-
 
   @override
   Widget build(BuildContext context) {
@@ -312,14 +247,10 @@ class _WebScreenState extends State<WebScreen> {
           child: Stack(
             children: [
 
-              WebViewWidget(
-                controller: controller,
-              ),
+              WebViewWidget(controller: controller),
 
               if (isLoading)
-                const Center(
-                  child: CircularProgressIndicator(),
-                ),
+                const Center(child: CircularProgressIndicator()),
             ],
           ),
         ),
