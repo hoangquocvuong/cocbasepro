@@ -70,22 +70,20 @@ class _SplashScreenState extends State<SplashScreen> {
   void initState() {
     super.initState();
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      Future.delayed(const Duration(seconds: 3), () {
-        if (!mounted) return;
+    Future.delayed(const Duration(milliseconds: 1800), () {
+      if (!mounted) return;
 
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const WebScreen()),
-        );
-      });
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const WebScreen()),
+      );
     });
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF005F8F), // xanh nước biển
+      backgroundColor: const Color(0xFF1E88F0), // xanh nước biển
 
       body: Center(
         child: Image.asset(

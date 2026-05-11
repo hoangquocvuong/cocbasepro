@@ -2,7 +2,7 @@ name: cocbasepro
 description: Coc Base Pro App
 publish_to: "none"
 
-version: 1.0.0+16
+version: 1.0.0+17
 
 environment:
   sdk: ">=3.3.0 <4.0.0"
@@ -29,7 +29,7 @@ dev_dependencies:
     sdk: flutter
 
   flutter_lints: ^5.0.0
-
+  flutter_launcher_icons: ^0.14.0
   flutter_native_splash: ^2.4.1
 
 flutter:
@@ -39,8 +39,17 @@ flutter:
     - assets/icon.png
 
 flutter_native_splash:
-  color: "#005F8F"
+  color: "#1E88F0"
   image: assets/icon.png
   fullscreen: true
   android: true
   ios: true
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+
+  image_path: "assets/icon_foreground.png"
+
+  adaptive_icon_background: "#1E88F0"
+  adaptive_icon_foreground: "assets/icon_foreground.png"
