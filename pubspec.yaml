@@ -2,7 +2,7 @@ name: cocbasepro
 description: Coc Base Pro App
 publish_to: "none"
 
-version: 1.0.0+10
+version: 1.0.0+11
 
 environment:
   sdk: ">=3.3.0 <4.0.0"
@@ -14,7 +14,7 @@ dependencies:
   webview_flutter: ^4.8.0
   connectivity_plus: ^6.0.5
   url_launcher: ^6.3.2
-  google_mobile_ads: ^5.1.0
+  google_mobile_ads: ^5.0.0
 
 dev_dependencies:
   flutter_test:
@@ -25,4 +25,4 @@ flutter:
   uses-material-design: true
 
   assets:
-    - assets/
+    - assets/icon.png
