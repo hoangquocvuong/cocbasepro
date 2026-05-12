@@ -2,7 +2,7 @@ name: cocbasepro
 description: Coc Base Pro App
 publish_to: "none"
 
-version: 1.0.0+18
+version: 1.0.0+19
 
 environment:
   sdk: ">=3.3.0 <4.0.0"
@@ -24,7 +24,7 @@ dependencies:
   # Open external links
   url_launcher: ^6.3.2
 
-  # Ads (nếu dùng)
+  # Ads
   google_mobile_ads: ^5.1.0
 
   # Review app
@@ -45,6 +45,7 @@ flutter:
 
   assets:
     - assets/icon.png
+    - assets/icon_ios.png
 
 
 # =========================
@@ -54,9 +55,13 @@ flutter_native_splash:
   color: "#1E88F0"
   image: assets/icon.png
   fullscreen: true
+
   android: true
   ios: true
-  android_12: true
+
+  android_12:
+    color: "#1E88F0"
+    image: assets/icon.png
 
 
 # =========================
@@ -66,7 +71,13 @@ flutter_launcher_icons:
   android: true
   ios: true
 
-  image_path: "assets/icon.png"
+  # Android adaptive icon
+  image_path_android: "assets/icon.png"
 
   adaptive_icon_background: "#1E88F0"
   adaptive_icon_foreground: "assets/icon.png"
+
+  # iOS icon
+  image_path_ios: "assets/icon_ios.png"
+
+  remove_alpha_ios: true
