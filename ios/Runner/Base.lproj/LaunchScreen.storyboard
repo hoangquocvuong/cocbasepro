@@ -1,21 +1,30 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB" version="3.0" toolsVersion="16096" systemVersion="20G95" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" launchScreen="YES" colorMatched="YES" initialViewController="01J-lp-oVM">
+<document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB"
+    version="3.0"
+    toolsVersion="17152"
+    targetRuntime="iOS.CocoaTouch"
+    propertyAccessControl="none"
+    useAutolayout="YES"
+    launchScreen="YES"
+    colorMatched="YES"
+    initialViewController="VC">
 
     <scenes>
-        <scene sceneID="EHf-IW-A2E">
+        <scene sceneID="scene1">
             <objects>
 
-                <viewController id="01J-lp-oVM" sceneMemberID="viewController">
+                <viewController id="VC" sceneMemberID="viewController">
 
-                    <view key="view" contentMode="scaleToFill" id="Ze5-6b-2t3">
+                    <view key="view" contentMode="scaleToFill" id="root">
 
-                        <!-- BACKGROUND COLOR -->
-                        <color key="backgroundColor" red="0.1176" green="0.5333" blue="0.9412" alpha="1"/>
+                        <color key="backgroundColor"
+                            red="0.1176"
+                            green="0.5333"
+                            blue="0.9412"
+                            alpha="1"/>
 
                         <subviews>
                             <imageView
-                                clipsSubviews="YES"
-                                userInteractionEnabled="NO"
                                 contentMode="scaleAspectFit"
                                 image="LaunchImage"
                                 translatesAutoresizingMaskIntoConstraints="NO"
@@ -23,8 +32,8 @@
                         </subviews>
 
                         <constraints>
-                            <constraint firstItem="logo" firstAttribute="centerX" secondItem="Ze5-6b-2t3" secondAttribute="centerX"/>
-                            <constraint firstItem="logo" firstAttribute="centerY" secondItem="Ze5-6b-2t3" secondAttribute="centerY"/>
+                            <constraint firstItem="logo" firstAttribute="centerX" secondItem="root" secondAttribute="centerX"/>
+                            <constraint firstItem="logo" firstAttribute="centerY" secondItem="root" secondAttribute="centerY"/>
                             <constraint firstItem="logo" firstAttribute="width" constant="140"/>
                             <constraint firstItem="logo" firstAttribute="height" constant="140"/>
                         </constraints>
