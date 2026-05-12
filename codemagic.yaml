@@ -4,22 +4,18 @@ workflows:
 
     environment:
       flutter: stable
+      xcode: latest
 
     scripts:
-      - name: Clean Flutter
-        script: flutter clean
+      - flutter clean
+      - flutter pub get
 
-      - name: Get dependencies
-        script: flutter pub get
+      - |
+        cd ios
+        pod install
+        cd ..
 
-      - name: Install iOS pods
-        script: |
-          cd ios
-          pod install
-          cd ..
-
-      - name: Build iOS
-        script: flutter build ios --release --no-codesign
+      - flutter build ipa --release --no-codesign
 
     artifacts:
-      - build/ios/ipa
+      - build/ios/ipa/*.ipa
