@@ -2,7 +2,7 @@ name: cocbasepro
 description: Coc Base Pro App
 publish_to: "none"
 
-version: 1.0.0+25
+version: 1.0.0+26
 
 environment:
   sdk: ">=3.3.0 <4.0.0"
@@ -33,9 +33,6 @@ dev_dependencies:
 flutter:
   uses-material-design: true
 
-  assets:
-    - assets/icon.png
-
 
 # =========================
 # SPLASH SCREEN (TRẮNG + KHÔNG LOGO)
@@ -51,17 +48,3 @@ flutter_native_splash:
     color: "#FFFFFF"
     icon_background_color: "#FFFFFF"
 
-
-# =========================
-# APP ICON (KHÔNG LIÊN QUAN SPLASH)
-# =========================
-flutter_launcher_icons:
-  android: true
-  ios: true
-
-  image_path: "assets/icon.png"
-
-  adaptive_icon_background: "#FFFFFF"
-  adaptive_icon_foreground: "assets/icon.png"
-
-  remove_alpha_ios: true
