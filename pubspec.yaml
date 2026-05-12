@@ -33,7 +33,7 @@ flutter:
 
   assets:
     - assets/icon.png
-    - assets/splash.png
+    
 
 
 flutter_launcher_icons:
