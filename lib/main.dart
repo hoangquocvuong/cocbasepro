@@ -32,9 +32,7 @@ void main() async {
 
   FirebaseMessaging.onBackgroundMessage(firebaseBgHandler);
 
-  SystemChrome.setEnabledSystemUIMode(
-    SystemUiMode.edgeToEdge,
-  );
+  SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
 
   runApp(const MyApp());
 }
@@ -49,56 +47,53 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return const MaterialApp(
       debugShowCheckedModeBanner: false,
-
-      // 🔥 FIX: vào thẳng WebView (KHÔNG splash Flutter)
-      home: SplashScreen(),
+      home: LogoIntroScreen(),
     );
   }
 }
 
-class SplashScreen extends StatefulWidget {
-  const SplashScreen({super.key});
+/* =========================
+   LOGO INTRO SCREEN
+========================= */
+class LogoIntroScreen extends StatefulWidget {
+  const LogoIntroScreen({super.key});
 
   @override
-  State<SplashScreen> createState() => _SplashScreenState();
+  State<LogoIntroScreen> createState() => _LogoIntroScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen> {
+class _LogoIntroScreenState extends State<LogoIntroScreen> {
 
   @override
   void initState() {
     super.initState();
 
-    Future.delayed(const Duration(seconds: 3), () {
-
-      if (!mounted) return;
-
+    Timer(const Duration(milliseconds: 1800), () {
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(
-          builder: (_) => const WebScreen(),
-        ),
+        MaterialPageRoute(builder: (_) => const WebScreen()),
       );
     });
   }
 
   @override
   Widget build(BuildContext context) {
-
     return Scaffold(
-      backgroundColor: const Color(0xFF1E88F0),
+      backgroundColor: const Color(0xFF1E88F0), // 🔥 màu bạn muốn
 
       body: Center(
         child: Image.asset(
           "assets/icon.png",
-          width: 180,
+          width: 130,
+          height: 130,
         ),
       ),
     );
   }
 }
+
 /* =========================
-   WEBVIEW SCREEN
+   WEBVIEW SCREEN (GIỮ NGUYÊN CODE BẠN)
 ========================= */
 class WebScreen extends StatefulWidget {
   const WebScreen({super.key});
@@ -120,9 +115,6 @@ class _WebScreenState extends State<WebScreen> {
   void initState() {
     super.initState();
 
-    /* =========================
-       WEBVIEW INIT
-    ========================= */
     controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setBackgroundColor(const Color(0x00000000))
@@ -145,13 +137,9 @@ class _WebScreenState extends State<WebScreen> {
       )
       ..loadRequest(Uri.parse(url));
 
-    /* =========================
-       NETWORK LISTENER
-    ========================= */
     netSub = Connectivity()
         .onConnectivityChanged
         .listen((result) {
-
       final offline = result.contains(ConnectivityResult.none);
 
       if (offline != isOffline) {
@@ -163,9 +151,6 @@ class _WebScreenState extends State<WebScreen> {
       }
     });
 
-    /* =========================
-       FIREBASE NOTI
-    ========================= */
     setupFirebase();
   }
 
@@ -192,9 +177,6 @@ class _WebScreenState extends State<WebScreen> {
     super.dispose();
   }
 
-  /* =========================
-     BACK HANDLER
-  ========================= */
   Future<bool> handleBack() async {
     if (await controller.canGoBack()) {
       await controller.goBack();
@@ -207,7 +189,6 @@ class _WebScreenState extends State<WebScreen> {
   Widget build(BuildContext context) {
     return PopScope(
       canPop: false,
-
       onPopInvokedWithResult: (didPop, result) async {
         if (didPop) return;
         await handleBack();
@@ -218,10 +199,8 @@ class _WebScreenState extends State<WebScreen> {
 
         body: Stack(
           children: [
-
             WebViewWidget(controller: controller),
 
-            /* OFFLINE OVERLAY */
             if (isOffline)
               Container(
                 color: Colors.black,
@@ -229,15 +208,8 @@ class _WebScreenState extends State<WebScreen> {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-
-                      Icon(
-                        Icons.wifi_off,
-                        color: Colors.white,
-                        size: 70,
-                      ),
-
+                      Icon(Icons.wifi_off, color: Colors.white, size: 70),
                       SizedBox(height: 10),
-
                       Text(
                         "No Internet Connection",
                         style: TextStyle(color: Colors.white),
