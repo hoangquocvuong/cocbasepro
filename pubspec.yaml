@@ -2,7 +2,7 @@ name: cocbasepro
 description: Coc Base Pro App
 publish_to: "none"
 
-version: 1.0.0+42
+version: 1.0.0+43
 
 environment:
   sdk: ">=3.3.0 <4.0.0"
@@ -35,4 +35,15 @@ flutter:
 
   assets:
     - assets/icon.png
+flutter_launcher_icons:
+  android: true
+  ios: true
 
+  image_path: "assets/icon.png"
+
+  # Android adaptive icon
+  adaptive_icon_background: "#1E88F0"
+  adaptive_icon_foreground: "assets/icon.png"
+
+  # iOS
+  remove_alpha_ios: true
