@@ -15,7 +15,7 @@ workflows:
       xcode: latest
 
     integrations:
-      app_store_connect: Codemagic
+      app_store_connect: Apple Developer
 
     scripts:
       - flutter clean
