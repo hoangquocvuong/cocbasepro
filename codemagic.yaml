@@ -2,12 +2,22 @@ workflows:
   ios-release:
     name: iOS Release Build
 
+    triggering:
+      events:
+        - push
+
+      branch_patterns:
+        - pattern: main
+          include: true
+          source: true
+
     environment:
       flutter: stable
       xcode: latest
 
     scripts:
       - flutter clean
+
       - flutter pub get
 
       - |
