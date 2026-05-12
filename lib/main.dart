@@ -51,52 +51,11 @@ class MyApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
 
       // 🔥 FIX: vào thẳng WebView (KHÔNG splash Flutter)
-      home: SplashScreen(),
+      home: WebScreen(),
     );
   }
 }
 
-class SplashScreen extends StatefulWidget {
-  const SplashScreen({super.key});
-
-  @override
-  State<SplashScreen> createState() => _SplashScreenState();
-}
-
-class _SplashScreenState extends State<SplashScreen> {
-
-  @override
-  void initState() {
-    super.initState();
-
-    Future.delayed(const Duration(seconds: 3), () {
-
-      if (!mounted) return;
-
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (_) => const WebScreen(),
-        ),
-      );
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-
-    return Scaffold(
-      backgroundColor: const Color(0xFF1E88F0),
-
-      body: Center(
-        child: Image.asset(
-          "assets/icon.png",
-          width: 140,
-        ),
-      ),
-    );
-  }
-}
 /* =========================
    WEBVIEW SCREEN
 ========================= */
