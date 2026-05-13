@@ -13,7 +13,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 
 /* =========================
-   BACKGROUND NOTI HANDLER
+   BACKGROUND NOTIFICATION
 ========================= */
 Future<void> firebaseBgHandler(RemoteMessage message) async {
   await Firebase.initializeApp();
@@ -23,10 +23,7 @@ Future<void> firebaseBgHandler(RemoteMessage message) async {
    ADMOB
 ========================= */
 
-/// BANNER
 late BannerAd bannerAd;
-
-/// INTERSTITIAL
 InterstitialAd? interstitialAd;
 
 void loadInterstitial() {
@@ -89,47 +86,65 @@ class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 
   @override
-  State<SplashScreen> createState() => _SplashScreenState();
+  State<SplashScreen> createState() =>
+      _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen> {
+class _SplashScreenState
+    extends State<SplashScreen> {
 
   @override
   void initState() {
     super.initState();
 
+    /* =========================
+       LOAD BANNER
+    ========================= */
     bannerAd = BannerAd(
       size: AdSize.banner,
-      adUnitId: 'ca-app-pub-9371341402256787/8085634494',
+      adUnitId:
+      'ca-app-pub-9371341402256787/8085634494',
       listener: BannerAdListener(),
       request: const AdRequest(),
     )..load();
 
+    /* =========================
+       LOAD INTERSTITIAL
+    ========================= */
     loadInterstitial();
 
-    Future.delayed(const Duration(milliseconds: 1800), () {
+    /* =========================
+       OPEN WEBVIEW
+    ========================= */
+    Future.delayed(
+      const Duration(milliseconds: 1800),
+          () {
 
-      if (!mounted) return;
+        if (!mounted) return;
 
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (_) => const WebScreen(),
-        ),
-      );
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => const WebScreen(),
+          ),
+        );
 
-      /// SHOW INTERSTITIAL
-      Future.delayed(const Duration(seconds: 1), () {
-        interstitialAd?.show();
-      });
-    });
+        /* SHOW INTERSTITIAL */
+        Future.delayed(
+          const Duration(seconds: 1),
+              () {
+            interstitialAd?.show();
+          },
+        );
+      },
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-
     return Scaffold(
-      backgroundColor: const Color(0xFF1E88F0),
+      backgroundColor:
+      const Color(0xFF1E88F0),
 
       body: Center(
         child: Image.asset(
@@ -149,66 +164,100 @@ class WebScreen extends StatefulWidget {
   const WebScreen({super.key});
 
   @override
-  State<WebScreen> createState() => _WebScreenState();
+  State<WebScreen> createState() =>
+      _WebScreenState();
 }
 
-class _WebScreenState extends State<WebScreen>
+class _WebScreenState
+    extends State<WebScreen>
     with WidgetsBindingObserver {
 
   late final WebViewController controller;
-  late StreamSubscription netSub;
+
+  late StreamSubscription<List<ConnectivityResult>>
+  netSub;
 
   bool isOffline = false;
+  bool webviewLoaded = false;
 
-  final String url = "https://www.cocbasepro.com";
+  final String url =
+      "https://www.cocbasepro.com";
 
   @override
   void initState() {
     super.initState();
 
-    WidgetsBinding.instance.addObserver(this);
+    WidgetsBinding.instance
+        .addObserver(this);
 
     /* =========================
-       WEBVIEW INIT
+       WEBVIEW
     ========================= */
     controller = WebViewController()
-      ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setBackgroundColor(const Color(0xFFFFFFFF))
+
+      ..setJavaScriptMode(
+        JavaScriptMode.unrestricted,
+      )
+
+      ..setBackgroundColor(
+        const Color(0xFF1E88F0),
+      )
+
       ..setNavigationDelegate(
         NavigationDelegate(
 
-          onNavigationRequest: (request) async {
+          onPageFinished: (url) {
 
-            final uri = Uri.parse(request.url);
+            if (!webviewLoaded) {
 
+              setState(() {
+                webviewLoaded = true;
+              });
+            }
+          },
+
+          onNavigationRequest:
+              (request) async {
+
+            final uri =
+            Uri.parse(request.url);
+
+            /* OPEN NORMAL WEB LINKS */
             if (uri.scheme == 'http' ||
                 uri.scheme == 'https') {
 
-              return NavigationDecision.navigate;
+              return NavigationDecision
+                  .navigate;
             }
 
+            /* OPEN EXTERNAL APPS */
             if (await canLaunchUrl(uri)) {
+
               await launchUrl(
                 uri,
-                mode: LaunchMode.externalApplication,
+                mode: LaunchMode
+                    .externalApplication,
               );
             }
 
-            return NavigationDecision.prevent;
+            return NavigationDecision
+                .prevent;
           },
         ),
       )
+
       ..loadRequest(Uri.parse(url));
 
     /* =========================
-       NETWORK LISTENER
+       CONNECTIVITY
     ========================= */
     netSub = Connectivity()
         .onConnectivityChanged
-        .listen((result) {
+        .listen((results) {
 
-      final offline =
-      result.contains(ConnectivityResult.none);
+      final offline = results.contains(
+        ConnectivityResult.none,
+      );
 
       if (offline != isOffline) {
 
@@ -222,25 +271,36 @@ class _WebScreenState extends State<WebScreen>
       }
     });
 
-    /* =========================
-       FIREBASE
-    ========================= */
     setupFirebase();
   }
 
   /* =========================
-     FIX IOS BLACK SCREEN
+     IOS BLACK SCREEN FIX
   ========================= */
   @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
+  void didChangeAppLifecycleState(
+      AppLifecycleState state) async {
 
-    if (state == AppLifecycleState.resumed) {
-      controller.reload();
+    if (state ==
+        AppLifecycleState.resumed) {
+
+      try {
+
+        await controller.runJavaScript(
+          """
+          document.body.style.opacity='0.99';
+          setTimeout(function(){
+            document.body.style.opacity='1';
+          },50);
+          """,
+        );
+
+      } catch (_) {}
     }
   }
 
   /* =========================
-     FIREBASE SETUP
+     FIREBASE
   ========================= */
   Future<void> setupFirebase() async {
 
@@ -249,32 +309,29 @@ class _WebScreenState extends State<WebScreen>
 
     await messaging.requestPermission();
 
-    String? token = await messaging.getToken();
+    String? token =
+    await messaging.getToken();
 
     log("FCM TOKEN: $token");
 
-    FirebaseMessaging.onMessage.listen((message) {
-      debugPrint("NOTIFICATION RECEIVED");
+    FirebaseMessaging.onMessage
+        .listen((message) {
+
+      debugPrint(
+        "NOTIFICATION RECEIVED",
+      );
     });
 
-    FirebaseMessaging.onMessageOpenedApp.listen((message) {
+    FirebaseMessaging
+        .onMessageOpenedApp
+        .listen((message) {
+
       log("OPEN FROM NOTIFICATION");
     });
   }
 
-  @override
-  void dispose() {
-
-    WidgetsBinding.instance.removeObserver(this);
-
-    bannerAd.dispose();
-    netSub.cancel();
-
-    super.dispose();
-  }
-
   /* =========================
-     BACK HANDLER
+     BACK BUTTON
   ========================= */
   Future<bool> handleBack() async {
 
@@ -289,7 +346,25 @@ class _WebScreenState extends State<WebScreen>
   }
 
   @override
+  void dispose() {
+
+    WidgetsBinding.instance
+        .removeObserver(this);
+
+    netSub.cancel();
+
+    bannerAd.dispose();
+
+    interstitialAd?.dispose();
+
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+
+    final bannerHeight =
+    bannerAd.size.height.toDouble();
 
     return PopScope(
       canPop: false,
@@ -304,21 +379,51 @@ class _WebScreenState extends State<WebScreen>
 
       child: Scaffold(
 
-        extendBody: true,
+        resizeToAvoidBottomInset: false,
 
-        backgroundColor: const Color(0xFF1E88F0),
+        backgroundColor:
+        const Color(0xFF1E88F0),
 
+        /* =========================
+           BODY
+        ========================= */
         body: Stack(
           children: [
 
-            /* WEBVIEW */
+            /* =========================
+               WEBVIEW
+            ========================= */
             Positioned.fill(
-              child: WebViewWidget(
-                controller: controller,
+              child: Padding(
+                padding: EdgeInsets.only(
+                  bottom: bannerHeight,
+                ),
+
+                child: WebViewWidget(
+                  controller: controller,
+                ),
               ),
             ),
 
-            /* OFFLINE OVERLAY */
+            /* =========================
+               LOADING
+            ========================= */
+            if (!webviewLoaded)
+              Container(
+                color:
+                const Color(0xFF1E88F0),
+
+                child: const Center(
+                  child:
+                  CircularProgressIndicator(
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+
+            /* =========================
+               OFFLINE SCREEN
+            ========================= */
             if (isOffline)
               Container(
                 color: Colors.black,
@@ -326,7 +431,8 @@ class _WebScreenState extends State<WebScreen>
                 child: const Center(
                   child: Column(
                     mainAxisAlignment:
-                    MainAxisAlignment.center,
+                    MainAxisAlignment
+                        .center,
 
                     children: [
 
@@ -341,30 +447,33 @@ class _WebScreenState extends State<WebScreen>
                       Text(
                         "No Internet Connection",
                         style: TextStyle(
-                          color: Colors.white,
+                          color:
+                          Colors.white,
+                          fontSize: 16,
                         ),
                       ),
                     ],
                   ),
                 ),
               ),
-
-            /* ADMOB BANNER */
-            Align(
-              alignment: Alignment.bottomCenter,
-
-              child: SafeArea(
-                child: SizedBox(
-                  width: bannerAd.size.width.toDouble(),
-                  height: bannerAd.size.height.toDouble(),
-
-                  child: AdWidget(
-                    ad: bannerAd,
-                  ),
-                ),
-              ),
-            ),
           ],
+        ),
+
+        /* =========================
+           BOTTOM ADS
+        ========================= */
+        bottomNavigationBar: SafeArea(
+          child: SizedBox(
+            width: bannerAd
+                .size.width
+                .toDouble(),
+
+            height: bannerHeight,
+
+            child: AdWidget(
+              ad: bannerAd,
+            ),
+          ),
         ),
       ),
     );
