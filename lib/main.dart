@@ -13,14 +13,14 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 
 /* =========================
-   FIREBASE BG
+   BACKGROUND NOTI
 ========================= */
 Future<void> firebaseBgHandler(RemoteMessage message) async {
   await Firebase.initializeApp();
 }
 
 /* =========================
-   ADS
+   ADMOB
 ========================= */
 BannerAd? bannerAd;
 InterstitialAd? interstitialAd;
@@ -63,45 +63,26 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return const MaterialApp(
       debugShowCheckedModeBanner: false,
-      home: MainScreen(),
+      home: SplashScreen(),
     );
   }
 }
 
 /* =========================
-   MAIN SCREEN (PRO)
+   SPLASH
 ========================= */
-class MainScreen extends StatefulWidget {
-  const MainScreen({super.key});
+class SplashScreen extends StatefulWidget {
+  const SplashScreen({super.key});
 
   @override
-  State<MainScreen> createState() => _MainScreenState();
+  State<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _MainScreenState extends State<MainScreen>
-    with WidgetsBindingObserver {
-  late final WebViewController controller;
-  late StreamSubscription netSub;
-
-  bool isOffline = false;
-  bool isLoading = true;
-
-  int currentIndex = 0;
-
-  final List<String> pages = [
-    "https://www.cocbasepro.com",
-    "https://www.cocbasepro.com/th17",
-    "https://www.cocbasepro.com/builder",
-    "https://www.cocbasepro.com/pro",
-  ];
-
+class _SplashScreenState extends State<SplashScreen> {
   @override
   void initState() {
     super.initState();
 
-    WidgetsBinding.instance.addObserver(this);
-
-    /* ADS */
     bannerAd = BannerAd(
       size: AdSize.banner,
       adUnitId: 'ca-app-pub-9371341402256787/8085634494',
@@ -111,22 +92,69 @@ class _MainScreenState extends State<MainScreen>
 
     loadInterstitial();
 
-    /* WEBVIEW */
+    Future.delayed(const Duration(milliseconds: 1500), () {
+      if (!mounted) return;
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const WebScreen()),
+      );
+
+      Future.delayed(const Duration(seconds: 1), () {
+        interstitialAd?.show();
+      });
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return const Scaffold(
+      backgroundColor: Color(0xFF1E88F0),
+      body: Center(
+        child: Image(
+          image: AssetImage("assets/icon.png"),
+          width: 260,
+        ),
+      ),
+    );
+  }
+}
+
+/* =========================
+   WEBVIEW
+========================= */
+class WebScreen extends StatefulWidget {
+  const WebScreen({super.key});
+
+  @override
+  State<WebScreen> createState() => _WebScreenState();
+}
+
+class _WebScreenState extends State<WebScreen>
+    with WidgetsBindingObserver {
+  late final WebViewController controller;
+  late StreamSubscription netSub;
+
+  bool isOffline = false;
+  bool webviewLoaded = false;
+
+  final String url = "https://www.cocbasepro.com";
+
+  @override
+  void initState() {
+    super.initState();
+
+    WidgetsBinding.instance.addObserver(this);
+
     controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setBackgroundColor(const Color(0xFF1E88F0))
       ..setNavigationDelegate(
         NavigationDelegate(
-          onPageFinished: (_) async {
-            setState(() => isLoading = false);
-
-            /* 🔥 INJECT JS (XỊN NHẤT) */
-            await controller.runJavaScript("""
-              document.querySelector('header')?.remove();
-              document.querySelector('footer')?.remove();
-              document.body.style.marginTop='0px';
-              document.body.style.paddingBottom='60px';
-            """);
+          onPageFinished: (_) {
+            if (!webviewLoaded) {
+              setState(() => webviewLoaded = true);
+            }
           },
           onNavigationRequest: (request) async {
             final uri = Uri.parse(request.url);
@@ -136,15 +164,14 @@ class _MainScreenState extends State<MainScreen>
             }
 
             if (await canLaunchUrl(uri)) {
-              await launchUrl(uri,
-                  mode: LaunchMode.externalApplication);
+              await launchUrl(uri, mode: LaunchMode.externalApplication);
             }
 
             return NavigationDecision.prevent;
           },
         ),
       )
-      ..loadRequest(Uri.parse(pages[0]));
+      ..loadRequest(Uri.parse(url));
 
     /* NETWORK */
     netSub = Connectivity().onConnectivityChanged.listen((result) {
@@ -160,6 +187,18 @@ class _MainScreenState extends State<MainScreen>
     setupFirebase();
   }
 
+  /* FIX IOS */
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) async {
+    if (state == AppLifecycleState.resumed) {
+      try {
+        await controller.runJavaScript(
+          "document.body.style.opacity='0.99';setTimeout(()=>document.body.style.opacity='1',50);",
+        );
+      } catch (_) {}
+    }
+  }
+
   /* FIREBASE */
   Future<void> setupFirebase() async {
     final messaging = FirebaseMessaging.instance;
@@ -170,49 +209,22 @@ class _MainScreenState extends State<MainScreen>
     log("FCM TOKEN: $token");
 
     FirebaseMessaging.onMessage.listen((_) {
-      debugPrint("NOTI RECEIVED");
+      debugPrint("NOTIFICATION RECEIVED");
     });
 
-    FirebaseMessaging.onMessageOpenedApp.listen((message) {
-      final url = message.data['url'];
-      if (url != null) {
-        controller.loadRequest(Uri.parse(url));
-      }
+    FirebaseMessaging.onMessageOpenedApp.listen((_) {
+      log("OPEN FROM NOTIFICATION");
     });
-  }
-
-  /* LIFECYCLE FIX */
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) async {
-    if (state == AppLifecycleState.resumed) {
-      try {
-        await controller.runJavaScript(
-            "document.body.style.opacity='0.99';setTimeout(()=>document.body.style.opacity='1',50);");
-      } catch (_) {}
-    }
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+
     bannerAd?.dispose();
     netSub.cancel();
+
     super.dispose();
-  }
-
-  /* NAVIGATION */
-  void onTab(int index) {
-    setState(() {
-      currentIndex = index;
-      isLoading = true;
-    });
-
-    controller.loadRequest(Uri.parse(pages[index]));
-
-    /* show interstitial nhẹ */
-    if (index != 0) {
-      interstitialAd?.show();
-    }
   }
 
   /* BACK */
@@ -235,66 +247,41 @@ class _MainScreenState extends State<MainScreen>
       child: Scaffold(
         backgroundColor: const Color(0xFF1E88F0),
 
+        /* ✅ QUAN TRỌNG: KHÔNG DÙNG STACK */
         body: Column(
           children: [
-            /* WEBVIEW + REFRESH */
+            /* WEBVIEW */
             Expanded(
-              child: RefreshIndicator(
-                onRefresh: () async {
-                  controller.reload();
-                },
-                child: Stack(
-                  children: [
-                    WebViewWidget(controller: controller),
+              child: Stack(
+                children: [
+                  WebViewWidget(controller: controller),
 
-                    if (isLoading)
-                      const Center(
-                        child: CircularProgressIndicator(
-                            color: Colors.white),
-                      ),
+                  if (!webviewLoaded)
+                    const Center(
+                      child: CircularProgressIndicator(color: Colors.white),
+                    ),
 
-                    if (isOffline)
-                      Container(
-                        color: Colors.black,
-                        child: const Center(
-                          child: Column(
-                            mainAxisAlignment:
-                            MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.wifi_off,
-                                  color: Colors.white,
-                                  size: 70),
-                              SizedBox(height: 10),
-                              Text("No Internet",
-                                  style: TextStyle(
-                                      color: Colors.white)),
-                            ],
-                          ),
+                  if (isOffline)
+                    Container(
+                      color: Colors.black,
+                      child: const Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.wifi_off,
+                                color: Colors.white, size: 70),
+                            SizedBox(height: 10),
+                            Text("No Internet Connection",
+                                style: TextStyle(color: Colors.white)),
+                          ],
                         ),
                       ),
-                  ],
-                ),
+                    ),
+                ],
               ),
             ),
 
-            /* BOTTOM NAV */
-            BottomNavigationBar(
-              currentIndex: currentIndex,
-              onTap: onTab,
-              type: BottomNavigationBarType.fixed,
-              items: const [
-                BottomNavigationBarItem(
-                    icon: Icon(Icons.home), label: "Home"),
-                BottomNavigationBarItem(
-                    icon: Icon(Icons.shield), label: "TH17"),
-                BottomNavigationBarItem(
-                    icon: Icon(Icons.build), label: "Builder"),
-                BottomNavigationBarItem(
-                    icon: Icon(Icons.star), label: "Pro"),
-              ],
-            ),
-
-            /* BANNER */
+            /* BANNER (KHÔNG ĐÈ TOUCH) */
             if (bannerAd != null)
               SafeArea(
                 top: false,
