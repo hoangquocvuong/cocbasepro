@@ -110,7 +110,6 @@ class _SplashScreenState extends State<SplashScreen> {
         child: Image(
           image: AssetImage("assets/icon.png"),
           width: 260,
-          height: 260,
         ),
       ),
     );
@@ -118,7 +117,7 @@ class _SplashScreenState extends State<SplashScreen> {
 }
 
 /* =========================
-   WEBVIEW
+   WEBVIEW PRO
 ========================= */
 class WebScreen extends StatefulWidget {
   const WebScreen({super.key});
@@ -134,6 +133,8 @@ class _WebScreenState extends State<WebScreen>
   late StreamSubscription<List<ConnectivityResult>> netSub;
 
   bool isOffline = false;
+  bool hasLoadedOnce = false;
+  int progress = 0;
 
   final String homeUrl = "https://www.cocbasepro.com";
 
@@ -150,26 +151,25 @@ class _WebScreenState extends State<WebScreen>
       ..setBackgroundColor(const Color(0xFF1E88F0))
       ..setNavigationDelegate(
         NavigationDelegate(
+          onProgress: (p) {
+            setState(() => progress = p);
+          },
+          onPageFinished: (_) {
+            hasLoadedOnce = true;
+            setState(() => progress = 100);
+          },
           onNavigationRequest: (request) async {
             final uri = Uri.parse(request.url);
 
-            /* =========================
-               INTERNAL LINK (CHO PHÉP)
-            ========================= */
             if (_isInternal(uri)) {
               return NavigationDecision.navigate;
             }
 
-            /* =========================
-               EXTERNAL LINK (HIỆN POPUP)
-            ========================= */
             final ok = await _showExternalDialog(uri.toString());
 
             if (ok) {
-              await launchUrl(
-                uri,
-                mode: LaunchMode.externalApplication,
-              );
+              await launchUrl(uri,
+                  mode: LaunchMode.externalApplication);
             }
 
             return NavigationDecision.prevent;
@@ -179,7 +179,7 @@ class _WebScreenState extends State<WebScreen>
       ..loadRequest(homeUri);
 
     /* =========================
-       CONNECTIVITY
+       CONNECTIVITY FIX
     ========================= */
     netSub = Connectivity().onConnectivityChanged.listen((results) {
       final offline = results.contains(ConnectivityResult.none);
@@ -187,40 +187,34 @@ class _WebScreenState extends State<WebScreen>
       if (offline != isOffline) {
         setState(() => isOffline = offline);
 
-        if (!offline) controller.reload();
+        if (!offline && hasLoadedOnce) {
+          controller.reload();
+        }
       }
     });
 
     setupFirebase();
   }
 
-  /* =========================
-     CHECK INTERNAL DOMAIN
-  ========================= */
   bool _isInternal(Uri uri) {
     return uri.host.contains("cocbasepro.com");
   }
 
-  /* =========================
-     DIALOG MỞ LINK NGOÀI
-  ========================= */
   Future<bool> _showExternalDialog(String url) async {
     if (!mounted) return false;
 
     final result = await showDialog<bool>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
+      builder: (ctx) => AlertDialog(
         title: const Text("Open External Link"),
-        content: Text(
-          "You are leaving the app to open:\n\n$url",
-        ),
+        content: Text(url),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
+            onPressed: () => Navigator.pop(ctx, false),
             child: const Text("Cancel"),
           ),
           ElevatedButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
+            onPressed: () => Navigator.pop(ctx, true),
             child: const Text("Open"),
           ),
         ],
@@ -228,21 +222,6 @@ class _WebScreenState extends State<WebScreen>
     );
 
     return result ?? false;
-  }
-
-  /* =========================
-     IOS FIX
-  ========================= */
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) async {
-    if (state == AppLifecycleState.resumed) {
-      try {
-        await controller.runJavaScript('''
-          document.body.style.opacity='0.99';
-          setTimeout(()=>document.body.style.opacity='1',50);
-        ''');
-      } catch (_) {}
-    }
   }
 
   /* =========================
@@ -255,14 +234,13 @@ class _WebScreenState extends State<WebScreen>
 
     final token = await messaging.getToken();
     log("FCM TOKEN: $token");
+  }
 
-    FirebaseMessaging.onMessage.listen((_) {
-      debugPrint("NOTIFICATION RECEIVED");
-    });
-
-    FirebaseMessaging.onMessageOpenedApp.listen((_) {
-      log("OPEN FROM NOTIFICATION");
-    });
+  /* =========================
+     PULL TO REFRESH
+  ========================= */
+  Future<void> _refresh() async {
+    await controller.reload();
   }
 
   /* =========================
@@ -293,10 +271,28 @@ class _WebScreenState extends State<WebScreen>
         backgroundColor: const Color(0xFF1E88F0),
         body: Stack(
           children: [
-            Positioned.fill(
+            RefreshIndicator(
+              onRefresh: _refresh,
               child: WebViewWidget(controller: controller),
             ),
 
+            /* =========================
+               LOADING BAR
+            ========================= */
+            if (progress < 100)
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: LinearProgressIndicator(
+                  value: progress / 100,
+                  minHeight: 3,
+                ),
+              ),
+
+            /* =========================
+               OFFLINE SCREEN
+            ========================= */
             if (isOffline)
               Container(
                 color: Colors.black,
