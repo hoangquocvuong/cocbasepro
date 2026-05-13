@@ -22,7 +22,6 @@ Future<void> firebaseBgHandler(RemoteMessage message) async {
 /* =========================
    ADMOB
 ========================= */
-
 InterstitialAd? interstitialAd;
 
 void loadInterstitial() {
@@ -30,12 +29,8 @@ void loadInterstitial() {
     adUnitId: 'ca-app-pub-9371341402256787/5085734937',
     request: const AdRequest(),
     adLoadCallback: InterstitialAdLoadCallback(
-      onAdLoaded: (ad) {
-        interstitialAd = ad;
-      },
-      onAdFailedToLoad: (error) {
-        debugPrint(error.toString());
-      },
+      onAdLoaded: (ad) => interstitialAd = ad,
+      onAdFailedToLoad: (error) => debugPrint(error.toString()),
     ),
   );
 }
@@ -54,9 +49,7 @@ void main() async {
 
   FirebaseMessaging.onBackgroundMessage(firebaseBgHandler);
 
-  SystemChrome.setEnabledSystemUIMode(
-    SystemUiMode.edgeToEdge,
-  );
+  SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
 
   await MobileAds.instance.initialize();
 
@@ -79,60 +72,43 @@ class MyApp extends StatelessWidget {
 }
 
 /* =========================
-   SPLASH SCREEN
+   SPLASH
 ========================= */
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 
   @override
-  State<SplashScreen> createState() =>
-      _SplashScreenState();
+  State<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState
-    extends State<SplashScreen> {
-
+class _SplashScreenState extends State<SplashScreen> {
   @override
   void initState() {
     super.initState();
 
-    /* LOAD INTERSTITIAL */
     loadInterstitial();
 
-    /* OPEN WEBVIEW */
-    Future.delayed(
-      const Duration(milliseconds: 1200),
-          () {
+    Future.delayed(const Duration(milliseconds: 1200), () {
+      if (!mounted) return;
 
-        if (!mounted) return;
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const WebScreen()),
+      );
 
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (_) => const WebScreen(),
-          ),
-        );
-
-        /* SHOW INTERSTITIAL */
-        Future.delayed(
-          const Duration(seconds: 1),
-              () {
-            interstitialAd?.show();
-          },
-        );
-      },
-    );
+      Future.delayed(const Duration(seconds: 1), () {
+        interstitialAd?.show();
+      });
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor:
-      const Color(0xFF1E88F0),
-
+    return const Scaffold(
+      backgroundColor: Color(0xFF1E88F0),
       body: Center(
-        child: Image.asset(
-          "assets/icon.png",
+        child: Image(
+          image: AssetImage("assets/icon.png"),
           width: 260,
           height: 260,
         ),
@@ -142,107 +118,76 @@ class _SplashScreenState
 }
 
 /* =========================
-   WEBVIEW SCREEN
+   WEBVIEW
 ========================= */
 class WebScreen extends StatefulWidget {
   const WebScreen({super.key});
 
   @override
-  State<WebScreen> createState() =>
-      _WebScreenState();
+  State<WebScreen> createState() => _WebScreenState();
 }
 
-class _WebScreenState
-    extends State<WebScreen>
+class _WebScreenState extends State<WebScreen>
     with WidgetsBindingObserver {
-
   late final WebViewController controller;
 
-  late StreamSubscription<List<ConnectivityResult>>
-  netSub;
+  late StreamSubscription<List<ConnectivityResult>> netSub;
 
   bool isOffline = false;
 
-  final String url =
-      "https://www.cocbasepro.com";
+  final String homeUrl = "https://www.cocbasepro.com";
+
+  Uri get homeUri => Uri.parse(homeUrl);
 
   @override
   void initState() {
     super.initState();
 
-    WidgetsBinding.instance
-        .addObserver(this);
+    WidgetsBinding.instance.addObserver(this);
 
-    /* =========================
-       WEBVIEW
-    ========================= */
     controller = WebViewController()
-
-      ..setJavaScriptMode(
-        JavaScriptMode.unrestricted,
-      )
-
-      ..setBackgroundColor(
-        const Color(0xFF1E88F0),
-      )
-
+      ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..setBackgroundColor(const Color(0xFF1E88F0))
       ..setNavigationDelegate(
         NavigationDelegate(
+          onNavigationRequest: (request) async {
+            final uri = Uri.parse(request.url);
 
-          onPageFinished: (url) {},
-
-          onNavigationRequest:
-              (request) async {
-
-            final uri =
-            Uri.parse(request.url);
-
-            /* NORMAL LINKS */
-            if (uri.scheme == 'http' ||
-                uri.scheme == 'https') {
-
-              return NavigationDecision
-                  .navigate;
+            /* =========================
+               INTERNAL LINK (CHO PHÉP)
+            ========================= */
+            if (_isInternal(uri)) {
+              return NavigationDecision.navigate;
             }
 
-            /* OPEN EXTERNAL APP */
-            if (await canLaunchUrl(uri)) {
+            /* =========================
+               EXTERNAL LINK (HIỆN POPUP)
+            ========================= */
+            final ok = await _showExternalDialog(uri.toString());
 
+            if (ok) {
               await launchUrl(
                 uri,
-                mode: LaunchMode
-                    .externalApplication,
+                mode: LaunchMode.externalApplication,
               );
             }
 
-            return NavigationDecision
-                .prevent;
+            return NavigationDecision.prevent;
           },
         ),
       )
-
-      ..loadRequest(Uri.parse(url));
+      ..loadRequest(homeUri);
 
     /* =========================
        CONNECTIVITY
     ========================= */
-    netSub = Connectivity()
-        .onConnectivityChanged
-        .listen((results) {
-
-      final offline = results.contains(
-        ConnectivityResult.none,
-      );
+    netSub = Connectivity().onConnectivityChanged.listen((results) {
+      final offline = results.contains(ConnectivityResult.none);
 
       if (offline != isOffline) {
+        setState(() => isOffline = offline);
 
-        setState(() {
-          isOffline = offline;
-        });
-
-        if (!offline) {
-          controller.reload();
-        }
+        if (!offline) controller.reload();
       }
     });
 
@@ -250,26 +195,52 @@ class _WebScreenState
   }
 
   /* =========================
-     IOS BLACK SCREEN FIX
+     CHECK INTERNAL DOMAIN
+  ========================= */
+  bool _isInternal(Uri uri) {
+    return uri.host.contains("cocbasepro.com");
+  }
+
+  /* =========================
+     DIALOG MỞ LINK NGOÀI
+  ========================= */
+  Future<bool> _showExternalDialog(String url) async {
+    if (!mounted) return false;
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text("Open External Link"),
+        content: Text(
+          "You are leaving the app to open:\n\n$url",
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text("Cancel"),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text("Open"),
+          ),
+        ],
+      ),
+    );
+
+    return result ?? false;
+  }
+
+  /* =========================
+     IOS FIX
   ========================= */
   @override
-  void didChangeAppLifecycleState(
-      AppLifecycleState state) async {
-
-    if (state ==
-        AppLifecycleState.resumed) {
-
+  void didChangeAppLifecycleState(AppLifecycleState state) async {
+    if (state == AppLifecycleState.resumed) {
       try {
-
-        await controller.runJavaScript(
-          """
+        await controller.runJavaScript('''
           document.body.style.opacity='0.99';
-          setTimeout(function(){
-            document.body.style.opacity='1';
-          },50);
-          """,
-        );
-
+          setTimeout(()=>document.body.style.opacity='1',50);
+        ''');
       } catch (_) {}
     }
   }
@@ -278,29 +249,18 @@ class _WebScreenState
      FIREBASE
   ========================= */
   Future<void> setupFirebase() async {
-
-    FirebaseMessaging messaging =
-        FirebaseMessaging.instance;
+    final messaging = FirebaseMessaging.instance;
 
     await messaging.requestPermission();
 
-    String? token =
-    await messaging.getToken();
-
+    final token = await messaging.getToken();
     log("FCM TOKEN: $token");
 
-    FirebaseMessaging.onMessage
-        .listen((message) {
-
-      debugPrint(
-        "NOTIFICATION RECEIVED",
-      );
+    FirebaseMessaging.onMessage.listen((_) {
+      debugPrint("NOTIFICATION RECEIVED");
     });
 
-    FirebaseMessaging
-        .onMessageOpenedApp
-        .listen((message) {
-
+    FirebaseMessaging.onMessageOpenedApp.listen((_) {
       log("OPEN FROM NOTIFICATION");
     });
   }
@@ -308,90 +268,48 @@ class _WebScreenState
   /* =========================
      BACK BUTTON
   ========================= */
-  Future<bool> handleBack() async {
-
+  Future<void> handleBack() async {
     if (await controller.canGoBack()) {
-
       await controller.goBack();
-
-      return false;
     }
-
-    return true;
   }
 
   @override
   void dispose() {
-
-    WidgetsBinding.instance
-        .removeObserver(this);
-
+    WidgetsBinding.instance.removeObserver(this);
     netSub.cancel();
-
     interstitialAd?.dispose();
-
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-
     return PopScope(
       canPop: false,
-
-      onPopInvokedWithResult:
-          (didPop, result) async {
-
-        if (didPop) return;
-
-        await handleBack();
+      onPopInvokedWithResult: (didPop, _) async {
+        if (!didPop) await handleBack();
       },
-
       child: Scaffold(
-
-        resizeToAvoidBottomInset: false,
-
-        backgroundColor:
-        const Color(0xFF1E88F0),
-
+        backgroundColor: const Color(0xFF1E88F0),
         body: Stack(
           children: [
-
-            /* WEBVIEW */
             Positioned.fill(
-              child: WebViewWidget(
-                controller: controller,
-              ),
+              child: WebViewWidget(controller: controller),
             ),
 
-            /* OFFLINE */
             if (isOffline)
               Container(
                 color: Colors.black,
-
                 child: const Center(
                   child: Column(
-                    mainAxisAlignment:
-                    MainAxisAlignment
-                        .center,
-
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-
-                      Icon(
-                        Icons.wifi_off,
-                        color: Colors.white,
-                        size: 70,
-                      ),
-
+                      Icon(Icons.wifi_off,
+                          color: Colors.white, size: 70),
                       SizedBox(height: 10),
-
                       Text(
                         "No Internet Connection",
-                        style: TextStyle(
-                          color:
-                          Colors.white,
-                          fontSize: 16,
-                        ),
+                        style: TextStyle(color: Colors.white),
                       ),
                     ],
                   ),
