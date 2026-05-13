@@ -101,7 +101,7 @@ class _SplashScreenState
 
     /* OPEN WEBVIEW */
     Future.delayed(
-      const Duration(milliseconds: 1800),
+      const Duration(milliseconds: 1200),
           () {
 
         if (!mounted) return;
@@ -162,7 +162,6 @@ class _WebScreenState
   netSub;
 
   bool isOffline = false;
-  bool webviewLoaded = false;
 
   final String url =
       "https://www.cocbasepro.com";
@@ -190,15 +189,7 @@ class _WebScreenState
       ..setNavigationDelegate(
         NavigationDelegate(
 
-          onPageFinished: (url) {
-
-            if (!webviewLoaded) {
-
-              setState(() {
-                webviewLoaded = true;
-              });
-            }
-          },
+          onPageFinished: (url) {},
 
           onNavigationRequest:
               (request) async {
@@ -372,20 +363,6 @@ class _WebScreenState
                 controller: controller,
               ),
             ),
-
-            /* LOADING */
-            if (!webviewLoaded)
-              Container(
-                color:
-                const Color(0xFF1E88F0),
-
-                child: const Center(
-                  child:
-                  CircularProgressIndicator(
-                    color: Colors.white,
-                  ),
-                ),
-              ),
 
             /* OFFLINE */
             if (isOffline)
