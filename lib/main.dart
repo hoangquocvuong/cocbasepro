@@ -310,8 +310,7 @@ class _WebScreenState extends State<WebScreen>
       child: Scaffold(
         backgroundColor: Colors.black,
 
-        body: SafeArea(
-          child: Stack(
+        body: Stack(
             children: [
 
               /* WEBVIEW */
@@ -376,7 +375,6 @@ class _WebScreenState extends State<WebScreen>
               ),
             ],
           ),
-        ),
       ),
     );
   }
