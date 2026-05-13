@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart';
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -16,6 +17,36 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 ========================= */
 Future<void> firebaseBgHandler(RemoteMessage message) async {
   await Firebase.initializeApp();
+}
+
+/* =========================
+   ADMOB
+========================= */
+
+/// BANNER
+BannerAd bannerAd = BannerAd(
+  size: AdSize.banner,
+  adUnitId: 'ca-app-pub-9371341402256787/8085634494',
+  listener: BannerAdListener(),
+  request: const AdRequest(),
+);
+
+/// INTERSTITIAL
+InterstitialAd? interstitialAd;
+
+void loadInterstitial() {
+  InterstitialAd.load(
+    adUnitId: 'ca-app-pub-9371341402256787/5085734937',
+    request: const AdRequest(),
+    adLoadCallback: InterstitialAdLoadCallback(
+      onAdLoaded: (ad) {
+        interstitialAd = ad;
+      },
+      onAdFailedToLoad: (error) {
+        debugPrint(error.toString());
+      },
+    ),
+  );
 }
 
 /* =========================
@@ -36,6 +67,8 @@ void main() async {
     SystemUiMode.edgeToEdge,
   );
 
+  await MobileAds.instance.initialize();
+
   runApp(const MyApp());
 }
 
@@ -55,7 +88,7 @@ class MyApp extends StatelessWidget {
 }
 
 /* =========================
-   SPLASH (XANH NƯỚC BIỂN + LOGO)
+   SPLASH SCREEN
 ========================= */
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -70,20 +103,32 @@ class _SplashScreenState extends State<SplashScreen> {
   void initState() {
     super.initState();
 
+    bannerAd.load();
+    loadInterstitial();
+
     Future.delayed(const Duration(milliseconds: 1800), () {
+
       if (!mounted) return;
 
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (_) => const WebScreen()),
+        MaterialPageRoute(
+          builder: (_) => const WebScreen(),
+        ),
       );
+
+      /// SHOW INTERSTITIAL
+      Future.delayed(const Duration(seconds: 1), () {
+        interstitialAd?.show();
+      });
     });
   }
 
   @override
   Widget build(BuildContext context) {
+
     return Scaffold(
-      backgroundColor: const Color(0xFF1E88F0), // xanh nước biển
+      backgroundColor: const Color(0xFF1E88F0),
 
       body: Center(
         child: Image.asset(
@@ -106,7 +151,8 @@ class WebScreen extends StatefulWidget {
   State<WebScreen> createState() => _WebScreenState();
 }
 
-class _WebScreenState extends State<WebScreen> {
+class _WebScreenState extends State<WebScreen>
+    with WidgetsBindingObserver {
 
   late final WebViewController controller;
   late StreamSubscription netSub;
@@ -119,6 +165,9 @@ class _WebScreenState extends State<WebScreen> {
   void initState() {
     super.initState();
 
+    /// APP LIFECYCLE OBSERVER
+    WidgetsBinding.instance.addObserver(this);
+
     /* =========================
        WEBVIEW INIT
     ========================= */
@@ -127,15 +176,22 @@ class _WebScreenState extends State<WebScreen> {
       ..setBackgroundColor(const Color(0x00000000))
       ..setNavigationDelegate(
         NavigationDelegate(
+
           onNavigationRequest: (request) async {
+
             final uri = Uri.parse(request.url);
 
-            if (uri.scheme == 'http' || uri.scheme == 'https') {
+            if (uri.scheme == 'http' ||
+                uri.scheme == 'https') {
+
               return NavigationDecision.navigate;
             }
 
             if (await canLaunchUrl(uri)) {
-              await launchUrl(uri, mode: LaunchMode.externalApplication);
+              await launchUrl(
+                uri,
+                mode: LaunchMode.externalApplication,
+              );
             }
 
             return NavigationDecision.prevent;
@@ -151,29 +207,55 @@ class _WebScreenState extends State<WebScreen> {
         .onConnectivityChanged
         .listen((result) {
 
-      final offline = result.contains(ConnectivityResult.none);
+      final offline =
+      result.contains(ConnectivityResult.none);
 
       if (offline != isOffline) {
-        setState(() => isOffline = offline);
+
+        setState(() {
+          isOffline = offline;
+        });
 
         if (!offline) {
-          controller.reload();
+
+          /// FIX BLACK SCREEN
+          controller.loadRequest(Uri.parse(url));
         }
       }
     });
 
     /* =========================
-       FIREBASE NOTI
+       FIREBASE
     ========================= */
     setupFirebase();
   }
 
+  /* =========================
+     APP RESUME FIX
+  ========================= */
+  @override
+  void didChangeAppLifecycleState(
+      AppLifecycleState state) {
+
+    if (state == AppLifecycleState.resumed) {
+
+      /// FIX iOS BLACK SCREEN
+      controller.loadRequest(Uri.parse(url));
+    }
+  }
+
+  /* =========================
+     FIREBASE SETUP
+  ========================= */
   Future<void> setupFirebase() async {
-    FirebaseMessaging messaging = FirebaseMessaging.instance;
+
+    FirebaseMessaging messaging =
+        FirebaseMessaging.instance;
 
     await messaging.requestPermission();
 
     String? token = await messaging.getToken();
+
     log("FCM TOKEN: $token");
 
     FirebaseMessaging.onMessage.listen((message) {
@@ -181,13 +263,18 @@ class _WebScreenState extends State<WebScreen> {
     });
 
     FirebaseMessaging.onMessageOpenedApp.listen((message) {
-      log("OPEN FROM NOTI");
+      log("OPEN FROM NOTIFICATION");
     });
   }
 
   @override
   void dispose() {
+
+    WidgetsBinding.instance.removeObserver(this);
+
+    bannerAd.dispose();
     netSub.cancel();
+
     super.dispose();
   }
 
@@ -195,10 +282,14 @@ class _WebScreenState extends State<WebScreen> {
      BACK HANDLER
   ========================= */
   Future<bool> handleBack() async {
+
     if (await controller.canGoBack()) {
+
       await controller.goBack();
+
       return false;
     }
+
     return true;
   }
 
@@ -208,45 +299,83 @@ class _WebScreenState extends State<WebScreen> {
     return PopScope(
       canPop: false,
 
-      onPopInvokedWithResult: (didPop, result) async {
+      onPopInvokedWithResult:
+          (didPop, result) async {
+
         if (didPop) return;
+
         await handleBack();
       },
 
       child: Scaffold(
         backgroundColor: Colors.black,
 
-        body: Stack(
-          children: [
+        body: SafeArea(
+          child: Stack(
+            children: [
 
-            WebViewWidget(controller: controller),
+              /* WEBVIEW */
+              Positioned.fill(
+                child: Padding(
+                  padding: EdgeInsets.only(
+                    bottom: bannerAd.size.height.toDouble(),
+                  ),
 
-            /* OFFLINE OVERLAY */
-            if (isOffline)
-              Container(
-                color: Colors.black,
-                child: const Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-
-                      Icon(
-                        Icons.wifi_off,
-                        color: Colors.white,
-                        size: 70,
-                      ),
-
-                      SizedBox(height: 10),
-
-                      Text(
-                        "No Internet Connection",
-                        style: TextStyle(color: Colors.white),
-                      ),
-                    ],
+                  child: WebViewWidget(
+                    controller: controller,
                   ),
                 ),
               ),
-          ],
+
+              /* OFFLINE OVERLAY */
+              if (isOffline)
+                Container(
+                  color: Colors.black,
+
+                  child: const Center(
+                    child: Column(
+                      mainAxisAlignment:
+                      MainAxisAlignment.center,
+
+                      children: [
+
+                        Icon(
+                          Icons.wifi_off,
+                          color: Colors.white,
+                          size: 70,
+                        ),
+
+                        SizedBox(height: 10),
+
+                        Text(
+                          "No Internet Connection",
+                          style: TextStyle(
+                            color: Colors.white,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+              /* ADMOB BANNER */
+              Align(
+                alignment: Alignment.bottomCenter,
+
+                child: SizedBox(
+                  width:
+                  bannerAd.size.width.toDouble(),
+
+                  height:
+                  bannerAd.size.height.toDouble(),
+
+                  child: AdWidget(
+                    ad: bannerAd,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
