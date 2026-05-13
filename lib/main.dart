@@ -24,12 +24,7 @@ Future<void> firebaseBgHandler(RemoteMessage message) async {
 ========================= */
 
 /// BANNER
-BannerAd bannerAd = BannerAd(
-  size: AdSize.banner,
-  adUnitId: 'ca-app-pub-9371341402256787/8085634494',
-  listener: BannerAdListener(),
-  request: const AdRequest(),
-);
+late BannerAd bannerAd;
 
 /// INTERSTITIAL
 InterstitialAd? interstitialAd;
@@ -103,7 +98,13 @@ class _SplashScreenState extends State<SplashScreen> {
   void initState() {
     super.initState();
 
-    bannerAd.load();
+    bannerAd = BannerAd(
+      size: AdSize.banner,
+      adUnitId: 'ca-app-pub-9371341402256787/8085634494',
+      listener: BannerAdListener(),
+      request: const AdRequest(),
+    )..load();
+
     loadInterstitial();
 
     Future.delayed(const Duration(milliseconds: 1800), () {
@@ -165,7 +166,6 @@ class _WebScreenState extends State<WebScreen>
   void initState() {
     super.initState();
 
-    /// APP LIFECYCLE OBSERVER
     WidgetsBinding.instance.addObserver(this);
 
     /* =========================
@@ -173,7 +173,7 @@ class _WebScreenState extends State<WebScreen>
     ========================= */
     controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setBackgroundColor(const Color(0x00000000))
+      ..setBackgroundColor(const Color(0xFFFFFFFF))
       ..setNavigationDelegate(
         NavigationDelegate(
 
@@ -217,9 +217,7 @@ class _WebScreenState extends State<WebScreen>
         });
 
         if (!offline) {
-
-          /// FIX BLACK SCREEN
-          controller.loadRequest(Uri.parse(url));
+          controller.reload();
         }
       }
     });
@@ -231,16 +229,13 @@ class _WebScreenState extends State<WebScreen>
   }
 
   /* =========================
-     APP RESUME FIX
+     FIX IOS BLACK SCREEN
   ========================= */
   @override
-  void didChangeAppLifecycleState(
-      AppLifecycleState state) {
+  void didChangeAppLifecycleState(AppLifecycleState state) {
 
     if (state == AppLifecycleState.resumed) {
-
-      /// FIX iOS BLACK SCREEN
-      controller.loadRequest(Uri.parse(url));
+      controller.reload();
     }
   }
 
@@ -308,73 +303,69 @@ class _WebScreenState extends State<WebScreen>
       },
 
       child: Scaffold(
-        backgroundColor: Colors.black,
+
+        extendBody: true,
+
+        backgroundColor: const Color(0xFF1E88F0),
 
         body: Stack(
-            children: [
+          children: [
 
-              /* WEBVIEW */
-              Positioned.fill(
-                child: Padding(
-                  padding: EdgeInsets.only(
-                    bottom: bannerAd.size.height.toDouble(),
-                  ),
+            /* WEBVIEW */
+            Positioned.fill(
+              child: WebViewWidget(
+                controller: controller,
+              ),
+            ),
 
-                  child: WebViewWidget(
-                    controller: controller,
+            /* OFFLINE OVERLAY */
+            if (isOffline)
+              Container(
+                color: Colors.black,
+
+                child: const Center(
+                  child: Column(
+                    mainAxisAlignment:
+                    MainAxisAlignment.center,
+
+                    children: [
+
+                      Icon(
+                        Icons.wifi_off,
+                        color: Colors.white,
+                        size: 70,
+                      ),
+
+                      SizedBox(height: 10),
+
+                      Text(
+                        "No Internet Connection",
+                        style: TextStyle(
+                          color: Colors.white,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
 
-              /* OFFLINE OVERLAY */
-              if (isOffline)
-                Container(
-                  color: Colors.black,
+            /* ADMOB BANNER */
+            Align(
+              alignment: Alignment.bottomCenter,
 
-                  child: const Center(
-                    child: Column(
-                      mainAxisAlignment:
-                      MainAxisAlignment.center,
-
-                      children: [
-
-                        Icon(
-                          Icons.wifi_off,
-                          color: Colors.white,
-                          size: 70,
-                        ),
-
-                        SizedBox(height: 10),
-
-                        Text(
-                          "No Internet Connection",
-                          style: TextStyle(
-                            color: Colors.white,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-
-              /* ADMOB BANNER */
-              Align(
-                alignment: Alignment.bottomCenter,
-
+              child: SafeArea(
                 child: SizedBox(
-                  width:
-                  bannerAd.size.width.toDouble(),
-
-                  height:
-                  bannerAd.size.height.toDouble(),
+                  width: bannerAd.size.width.toDouble(),
+                  height: bannerAd.size.height.toDouble(),
 
                   child: AdWidget(
                     ad: bannerAd,
                   ),
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
+        ),
       ),
     );
   }
