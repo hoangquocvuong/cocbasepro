@@ -23,7 +23,10 @@ Future<void> firebaseBgHandler(RemoteMessage message) async {
    ADMOB
 ========================= */
 
+/// BANNER
 late BannerAd bannerAd;
+
+/// INTERSTITIAL
 InterstitialAd? interstitialAd;
 
 void loadInterstitial() {
@@ -47,11 +50,17 @@ void loadInterstitial() {
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  await Firebase.initializeApp();
+  try {
+    await Firebase.initializeApp();
+  } catch (e) {
+    debugPrint("Firebase init error: $e");
+  }
 
   FirebaseMessaging.onBackgroundMessage(firebaseBgHandler);
 
-  SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+  SystemChrome.setEnabledSystemUIMode(
+    SystemUiMode.edgeToEdge,
+  );
 
   await MobileAds.instance.initialize();
 
@@ -74,7 +83,7 @@ class MyApp extends StatelessWidget {
 }
 
 /* =========================
-   SPLASH
+   SPLASH SCREEN
 ========================= */
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -84,6 +93,7 @@ class SplashScreen extends StatefulWidget {
 }
 
 class _SplashScreenState extends State<SplashScreen> {
+
   @override
   void initState() {
     super.initState();
@@ -98,13 +108,17 @@ class _SplashScreenState extends State<SplashScreen> {
     loadInterstitial();
 
     Future.delayed(const Duration(milliseconds: 1800), () {
+
       if (!mounted) return;
 
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (_) => const WebScreen()),
+        MaterialPageRoute(
+          builder: (_) => const WebScreen(),
+        ),
       );
 
+      /// SHOW INTERSTITIAL
       Future.delayed(const Duration(seconds: 1), () {
         interstitialAd?.show();
       });
@@ -113,8 +127,10 @@ class _SplashScreenState extends State<SplashScreen> {
 
   @override
   Widget build(BuildContext context) {
+
     return Scaffold(
       backgroundColor: const Color(0xFF1E88F0),
+
       body: Center(
         child: Image.asset(
           "assets/icon.png",
@@ -127,7 +143,7 @@ class _SplashScreenState extends State<SplashScreen> {
 }
 
 /* =========================
-   WEB SCREEN (FIXED FULL)
+   WEBVIEW SCREEN
 ========================= */
 class WebScreen extends StatefulWidget {
   const WebScreen({super.key});
@@ -138,11 +154,11 @@ class WebScreen extends StatefulWidget {
 
 class _WebScreenState extends State<WebScreen>
     with WidgetsBindingObserver {
+
   late final WebViewController controller;
   late StreamSubscription netSub;
 
   bool isOffline = false;
-  bool webviewLoaded = false;
 
   final String url = "https://www.cocbasepro.com";
 
@@ -152,20 +168,22 @@ class _WebScreenState extends State<WebScreen>
 
     WidgetsBinding.instance.addObserver(this);
 
+    /* =========================
+       WEBVIEW INIT
+    ========================= */
     controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setBackgroundColor(const Color(0xFF1E88F0))
+      ..setBackgroundColor(const Color(0xFFFFFFFF))
       ..setNavigationDelegate(
         NavigationDelegate(
-          onPageFinished: (url) {
-            if (!webviewLoaded) {
-              setState(() => webviewLoaded = true);
-            }
-          },
+
           onNavigationRequest: (request) async {
+
             final uri = Uri.parse(request.url);
 
-            if (uri.scheme == 'http' || uri.scheme == 'https') {
+            if (uri.scheme == 'http' ||
+                uri.scheme == 'https') {
+
               return NavigationDecision.navigate;
             }
 
@@ -182,11 +200,21 @@ class _WebScreenState extends State<WebScreen>
       )
       ..loadRequest(Uri.parse(url));
 
-    netSub = Connectivity().onConnectivityChanged.listen((result) {
-      final offline = result.contains(ConnectivityResult.none);
+    /* =========================
+       NETWORK LISTENER
+    ========================= */
+    netSub = Connectivity()
+        .onConnectivityChanged
+        .listen((result) {
+
+      final offline =
+      result.contains(ConnectivityResult.none);
 
       if (offline != isOffline) {
-        setState(() => isOffline = offline);
+
+        setState(() {
+          isOffline = offline;
+        });
 
         if (!offline) {
           controller.reload();
@@ -194,13 +222,33 @@ class _WebScreenState extends State<WebScreen>
       }
     });
 
+    /* =========================
+       FIREBASE
+    ========================= */
     setupFirebase();
   }
 
+  /* =========================
+     FIX IOS BLACK SCREEN
+  ========================= */
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+
+    if (state == AppLifecycleState.resumed) {
+      controller.reload();
+    }
+  }
+
+  /* =========================
+     FIREBASE SETUP
+  ========================= */
   Future<void> setupFirebase() async {
-    FirebaseMessaging messaging = FirebaseMessaging.instance;
+
+    FirebaseMessaging messaging =
+        FirebaseMessaging.instance;
 
     await messaging.requestPermission();
+
     String? token = await messaging.getToken();
 
     log("FCM TOKEN: $token");
@@ -214,84 +262,109 @@ class _WebScreenState extends State<WebScreen>
     });
   }
 
+  @override
+  void dispose() {
+
+    WidgetsBinding.instance.removeObserver(this);
+
+    bannerAd.dispose();
+    netSub.cancel();
+
+    super.dispose();
+  }
+
+  /* =========================
+     BACK HANDLER
+  ========================= */
   Future<bool> handleBack() async {
+
     if (await controller.canGoBack()) {
+
       await controller.goBack();
+
       return false;
     }
+
     return true;
   }
 
   @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    netSub.cancel();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final bannerHeight = bannerAd.size.height.toDouble();
 
     return PopScope(
       canPop: false,
-      onPopInvokedWithResult: (didPop, result) async {
+
+      onPopInvokedWithResult:
+          (didPop, result) async {
+
         if (didPop) return;
+
         await handleBack();
       },
+
       child: Scaffold(
+
+        extendBody: true,
+
         backgroundColor: const Color(0xFF1E88F0),
 
-        // =========================
-        // WEBVIEW (CÓ CHỖ CHO BANNER)
-        // =========================
         body: Stack(
           children: [
+
+            /* WEBVIEW */
             Positioned.fill(
-              child: Padding(
-                padding: EdgeInsets.only(bottom: bannerHeight),
-                child: WebViewWidget(controller: controller),
+              child: WebViewWidget(
+                controller: controller,
               ),
             ),
 
-            if (!webviewLoaded)
-              Container(
-                color: const Color(0xFF1E88F0),
-                child: const Center(
-                  child: CircularProgressIndicator(color: Colors.white),
-                ),
-              ),
-
+            /* OFFLINE OVERLAY */
             if (isOffline)
               Container(
                 color: Colors.black,
+
                 child: const Center(
                   child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisAlignment:
+                    MainAxisAlignment.center,
+
                     children: [
-                      Icon(Icons.wifi_off,
-                          color: Colors.white, size: 70),
+
+                      Icon(
+                        Icons.wifi_off,
+                        color: Colors.white,
+                        size: 70,
+                      ),
+
                       SizedBox(height: 10),
+
                       Text(
                         "No Internet Connection",
-                        style: TextStyle(color: Colors.white),
+                        style: TextStyle(
+                          color: Colors.white,
+                        ),
                       ),
                     ],
                   ),
                 ),
               ),
-          ],
-        ),
 
-        // =========================
-        // BANNER FIX CHUẨN
-        // =========================
-        bottomNavigationBar: SafeArea(
-          child: SizedBox(
-            width: bannerAd.size.width.toDouble(),
-            height: bannerHeight,
-            child: AdWidget(ad: bannerAd),
-          ),
+            /* ADMOB BANNER */
+            Align(
+              alignment: Alignment.bottomCenter,
+
+              child: SafeArea(
+                child: SizedBox(
+                  width: bannerAd.size.width.toDouble(),
+                  height: bannerAd.size.height.toDouble(),
+
+                  child: AdWidget(
+                    ad: bannerAd,
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
