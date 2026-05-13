@@ -23,7 +23,6 @@ Future<void> firebaseBgHandler(RemoteMessage message) async {
    ADMOB
 ========================= */
 
-late BannerAd bannerAd;
 InterstitialAd? interstitialAd;
 
 void loadInterstitial() {
@@ -97,25 +96,10 @@ class _SplashScreenState
   void initState() {
     super.initState();
 
-    /* =========================
-       LOAD BANNER
-    ========================= */
-    bannerAd = BannerAd(
-      size: AdSize.banner,
-      adUnitId:
-      'ca-app-pub-9371341402256787/8085634494',
-      listener: BannerAdListener(),
-      request: const AdRequest(),
-    )..load();
-
-    /* =========================
-       LOAD INTERSTITIAL
-    ========================= */
+    /* LOAD INTERSTITIAL */
     loadInterstitial();
 
-    /* =========================
-       OPEN WEBVIEW
-    ========================= */
+    /* OPEN WEBVIEW */
     Future.delayed(
       const Duration(milliseconds: 1800),
           () {
@@ -222,7 +206,7 @@ class _WebScreenState
             final uri =
             Uri.parse(request.url);
 
-            /* OPEN NORMAL WEB LINKS */
+            /* NORMAL LINKS */
             if (uri.scheme == 'http' ||
                 uri.scheme == 'https') {
 
@@ -230,7 +214,7 @@ class _WebScreenState
                   .navigate;
             }
 
-            /* OPEN EXTERNAL APPS */
+            /* OPEN EXTERNAL APP */
             if (await canLaunchUrl(uri)) {
 
               await launchUrl(
@@ -353,8 +337,6 @@ class _WebScreenState
 
     netSub.cancel();
 
-    bannerAd.dispose();
-
     interstitialAd?.dispose();
 
     super.dispose();
@@ -362,9 +344,6 @@ class _WebScreenState
 
   @override
   Widget build(BuildContext context) {
-
-    final bannerHeight =
-    bannerAd.size.height.toDouble();
 
     return PopScope(
       canPop: false,
@@ -384,30 +363,17 @@ class _WebScreenState
         backgroundColor:
         const Color(0xFF1E88F0),
 
-        /* =========================
-           BODY
-        ========================= */
         body: Stack(
           children: [
 
-            /* =========================
-               WEBVIEW
-            ========================= */
+            /* WEBVIEW */
             Positioned.fill(
-              child: Padding(
-                padding: EdgeInsets.only(
-                  bottom: bannerHeight,
-                ),
-
-                child: WebViewWidget(
-                  controller: controller,
-                ),
+              child: WebViewWidget(
+                controller: controller,
               ),
             ),
 
-            /* =========================
-               LOADING
-            ========================= */
+            /* LOADING */
             if (!webviewLoaded)
               Container(
                 color:
@@ -421,9 +387,7 @@ class _WebScreenState
                 ),
               ),
 
-            /* =========================
-               OFFLINE SCREEN
-            ========================= */
+            /* OFFLINE */
             if (isOffline)
               Container(
                 color: Colors.black,
@@ -457,23 +421,6 @@ class _WebScreenState
                 ),
               ),
           ],
-        ),
-
-        /* =========================
-           BOTTOM ADS
-        ========================= */
-        bottomNavigationBar: SafeArea(
-          child: SizedBox(
-            width: bannerAd
-                .size.width
-                .toDouble(),
-
-            height: bannerHeight,
-
-            child: AdWidget(
-              ad: bannerAd,
-            ),
-          ),
         ),
       ),
     );
