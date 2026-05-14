@@ -141,7 +141,7 @@ class WebScreen extends StatefulWidget {
 class _WebScreenState extends State<WebScreen>
     with WidgetsBindingObserver {
 
-  // (7.1)
+  // (7.1) CONTROLLER
   late final WebViewController controller;
   late StreamSubscription<List<ConnectivityResult>> netSub;
 
@@ -153,6 +153,10 @@ class _WebScreenState extends State<WebScreen>
 
   int openCount = 0;
   bool hasRequestedReview = false;
+
+  // 🔥 NEW (quan trọng)
+  bool isPageLoaded = false;
+  DateTime lastLoadedTime = DateTime.now();
 
 
   // =========================
@@ -189,13 +193,11 @@ class _WebScreenState extends State<WebScreen>
 
         if (isOffline) return NavigationDecision.prevent;
 
-        // ✅ INTERNAL
         if (_isInternal(uri)) {
           currentUrl = uri.toString();
           return NavigationDecision.navigate;
         }
 
-        // 🔥 ONLY BUYMEACOFFEE → SHOW DIALOG
         if (_isBuyMeCoffee(uri)) {
           final ok = await _showDonateDialog(uri.toString());
 
@@ -207,14 +209,22 @@ class _WebScreenState extends State<WebScreen>
           return NavigationDecision.prevent;
         }
 
-        // ✅ ALL OTHER EXTERNAL → OPEN ALWAYS
         await launchUrl(uri,
             mode: LaunchMode.externalApplication);
 
         return NavigationDecision.prevent;
       },
 
-      onPageFinished: (_) => _handleReview(),
+      // 🔥 FIX STATE LOAD
+      onPageStarted: (_) {
+        isPageLoaded = false;
+      },
+
+      onPageFinished: (_) {
+        isPageLoaded = true;
+        lastLoadedTime = DateTime.now();
+        _handleReview();
+      },
     );
   }
 
@@ -237,7 +247,7 @@ class _WebScreenState extends State<WebScreen>
 
 
   // =========================
-  // (7.5) DONATE DIALOG
+  // (7.5) DIALOG
   // =========================
   Future<bool> _showDonateDialog(String url) async {
     if (!mounted) return false;
@@ -246,9 +256,7 @@ class _WebScreenState extends State<WebScreen>
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text("Open external link"),
-        content: const Text(
-            "This link will open in your browser."
-        ),
+        content: const Text("Open this link in browser?"),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -256,12 +264,11 @@ class _WebScreenState extends State<WebScreen>
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text("Support"),
+            child: const Text("Open"),
           ),
         ],
       ),
-    ) ??
-        false;
+    ) ?? false;
   }
 
 
@@ -284,26 +291,51 @@ class _WebScreenState extends State<WebScreen>
 
 
   // =========================
-  // (7.7) RELOAD FIX
+  // (7.7) 🔥 SMART RELOAD
   // =========================
-  void _reload() async {
+  Future<void> _reload() async {
     try {
-      await controller.loadRequest(
-        currentUrl.isNotEmpty ? Uri.parse(currentUrl) : homeUri,
-      );
-    } catch (_) {}
+      await controller.runJavaScript("window.location.reload()");
+    } catch (_) {
+      try {
+        await controller.loadRequest(
+          currentUrl.isNotEmpty ? Uri.parse(currentUrl) : homeUri,
+        );
+      } catch (_) {}
+    }
   }
 
+
+  // =========================
+  // (7.8) 🔥 FIX iOS DEAD
+  // =========================
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
+      _checkWebViewAlive();
+    }
+  }
+
+  Future<void> _checkWebViewAlive() async {
+    await Future.delayed(const Duration(milliseconds: 500));
+
+    if (!mounted) return;
+
+    if (!isPageLoaded) {
+      _reload();
+      return;
+    }
+
+    final diff = DateTime.now().difference(lastLoadedTime).inSeconds;
+
+    if (diff > 30) {
       _reload();
     }
   }
 
 
   // =========================
-  // (7.8) REVIEW ⭐
+  // (7.9) REVIEW ⭐
   // =========================
   void _handleReview() {
     if (hasRequestedReview) return;
@@ -326,7 +358,7 @@ class _WebScreenState extends State<WebScreen>
 
 
   // =========================
-  // (7.9) FIREBASE
+  // (7.10) FIREBASE
   // =========================
   Future<void> _setupFirebase() async {
     final messaging = FirebaseMessaging.instance;
@@ -338,7 +370,7 @@ class _WebScreenState extends State<WebScreen>
 
 
   // =========================
-  // (7.10) BACK
+  // (7.11) BACK
   // =========================
   Future<void> _back() async {
     if (await controller.canGoBack()) {
@@ -348,7 +380,7 @@ class _WebScreenState extends State<WebScreen>
 
 
   // =========================
-  // (7.11) DISPOSE
+  // (7.12) DISPOSE
   // =========================
   @override
   void dispose() {
@@ -360,12 +392,8 @@ class _WebScreenState extends State<WebScreen>
 
 
   // =========================
-  // (7.12) UI
+  // (7.13) UI
   // =========================
-  @override
-  // =========================
-// (7.12) UI
-// =========================
   @override
   Widget build(BuildContext context) {
     return PopScope(
@@ -385,50 +413,20 @@ class _WebScreenState extends State<WebScreen>
               Container(
                 color: Colors.black.withValues(alpha: 0.85),
                 child: Center(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(
-                          Icons.wifi_off,
-                          size: 48,
-                          color: Colors.white70,
-                        ),
-                        const SizedBox(height: 16),
-                        const Text(
-                          "No Internet Connection",
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 18,
-                            fontWeight: FontWeight.w600,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: 8),
-                        const Text(
-                          "Check your connection and try again.",
-                          style: TextStyle(
-                            color: Colors.white70,
-                            fontSize: 14,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: 20),
-
-                        // Retry button (nhẹ, không ép user)
-                        ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.white,
-                            foregroundColor: Colors.black,
-                          ),
-                          onPressed: () {
-                            controller.reload();
-                          },
-                          child: const Text("Retry"),
-                        ),
-                      ],
-                    ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.wifi_off,
+                          size: 48, color: Colors.white70),
+                      const SizedBox(height: 12),
+                      const Text("No Internet",
+                          style: TextStyle(color: Colors.white)),
+                      const SizedBox(height: 12),
+                      ElevatedButton(
+                        onPressed: () => controller.reload(),
+                        child: const Text("Retry"),
+                      )
+                    ],
                   ),
                 ),
               ),
