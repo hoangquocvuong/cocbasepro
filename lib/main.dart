@@ -296,7 +296,7 @@ class _WebScreenState extends State<WebScreen>
         backgroundColor: const Color(0xFF1E88F0),
         body: Stack(
           children: [
-            Positioned.fill(
+            SafeArea(
               child: WebViewWidget(controller: controller),
             ),
 
@@ -307,8 +307,7 @@ class _WebScreenState extends State<WebScreen>
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.wifi_off,
-                          color: Colors.white, size: 70),
+                      Icon(Icons.wifi_off, color: Colors.white, size: 70),
                       SizedBox(height: 10),
                       Text(
                         "No Internet Connection",
