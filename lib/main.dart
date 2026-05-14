@@ -1,15 +1,13 @@
 import 'dart:async';
-import 'dart:developer';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'package:webview_flutter/webview_flutter.dart';
-import 'package:webview_flutter_android/webview_flutter_android.dart';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
-
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 
 import 'package:firebase_core/firebase_core.dart';
@@ -38,7 +36,7 @@ void loadInterstitial() {
         interstitialAd = ad;
       },
       onAdFailedToLoad: (error) {
-        debugPrint(error.toString());
+        debugPrint("Ad load failed: $error");
       },
     ),
   );
@@ -56,9 +54,7 @@ void main() async {
 
   await MobileAds.instance.initialize();
 
-  SystemChrome.setEnabledSystemUIMode(
-    SystemUiMode.edgeToEdge,
-  );
+  SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
 
   runApp(const MyApp());
 }
@@ -85,42 +81,28 @@ class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 
   @override
-  State<SplashScreen> createState() =>
-      _SplashScreenState();
+  State<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState
-    extends State<SplashScreen> {
-
+class _SplashScreenState extends State<SplashScreen> {
   @override
   void initState() {
     super.initState();
 
     loadInterstitial();
 
-    Future.delayed(
-      const Duration(milliseconds: 1400),
-          () {
+    Future.delayed(const Duration(milliseconds: 1400), () {
+      if (!mounted) return;
 
-        if (!mounted) return;
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const WebScreen()),
+      );
 
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (_) => const WebScreen(),
-          ),
-        );
-
-        Future.delayed(
-          const Duration(milliseconds: 800),
-              () {
-
-            interstitialAd?.show();
-
-          },
-        );
-      },
-    );
+      Future.delayed(const Duration(milliseconds: 800), () {
+        interstitialAd?.show();
+      });
+    });
   }
 
   @override
@@ -144,30 +126,22 @@ class WebScreen extends StatefulWidget {
   const WebScreen({super.key});
 
   @override
-  State<WebScreen> createState() =>
-      _WebScreenState();
+  State<WebScreen> createState() => _WebScreenState();
 }
 
-class _WebScreenState
-    extends State<WebScreen>
+class _WebScreenState extends State<WebScreen>
     with WidgetsBindingObserver {
-
   late final WebViewController controller;
+  late StreamSubscription<List<ConnectivityResult>> netSub;
 
-  late StreamSubscription<List<ConnectivityResult>>
-  netSub;
+  Timer? iosHeartbeat;
 
-  final refreshKey = GlobalKey<RefreshIndicatorState>();
-
-  final String homeUrl =
-      "https://www.cocbasepro.com";
+  final String homeUrl = "https://www.cocbasepro.com";
 
   bool isOffline = false;
-
   bool isLoading = true;
 
   int loadingProgress = 0;
-
   int openCount = 0;
 
   bool hasRequestedReview = false;
@@ -179,150 +153,77 @@ class _WebScreenState
     WidgetsBinding.instance.addObserver(this);
 
     controller = WebViewController()
-
-      ..setJavaScriptMode(
-        JavaScriptMode.unrestricted,
-      )
-
-      ..setBackgroundColor(
-        const Color(0xFF1E88F0),
-      )
-
+      ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..setBackgroundColor(const Color(0xFF1E88F0))
       ..setNavigationDelegate(
         NavigationDelegate(
-
           onProgress: (progress) {
-
-            setState(() {
-              loadingProgress = progress;
-            });
+            if (!mounted) return;
+            setState(() => loadingProgress = progress);
           },
 
           onPageStarted: (_) {
-
-            setState(() {
-              isLoading = true;
-            });
+            if (!mounted) return;
+            setState(() => isLoading = true);
           },
 
-          onPageFinished: (url) async {
+          onPageFinished: (_) async {
+            if (!mounted) return;
 
-            setState(() {
-              isLoading = false;
-            });
+            setState(() => isLoading = false);
 
             _handleReviewTrigger();
 
-            // 🔥 FIX IMAGE QUALITY
-            await controller.runJavaScript("""
-
-document.querySelectorAll('img').forEach(img=>{
-
-img.style.imageRendering='auto';
-
-img.style.backfaceVisibility='hidden';
-
-img.style.transform='translateZ(0)';
-
-});
-
-            """);
+            await _injectImageFix();
           },
 
-          onNavigationRequest:
-              (request) async {
+          onWebResourceError: (error) {
+            debugPrint("WebView error: ${error.description}");
+          },
 
-            final uri =
-            Uri.parse(request.url);
+          onNavigationRequest: (request) async {
+            final uri = Uri.parse(request.url);
 
             if (isOffline) {
-
-              return NavigationDecision
-                  .prevent;
+              return NavigationDecision.prevent;
             }
 
             if (_isInternal(uri)) {
-
-              return NavigationDecision
-                  .navigate;
+              return NavigationDecision.navigate;
             }
 
-            // whitelist
-            final host = uri.host;
-
-            if (
-            host.contains("youtube.com") ||
-                host.contains("youtu.be") ||
-                host.contains("facebook.com") ||
-                host.contains("play.google.com")
-            ) {
-
+            if (_isWhitelistExternal(uri)) {
               await launchUrl(
                 uri,
-                mode: LaunchMode
-                    .externalApplication,
+                mode: LaunchMode.externalApplication,
               );
-
-              return NavigationDecision
-                  .prevent;
+              return NavigationDecision.prevent;
             }
 
-            final ok =
-            await _showExternalDialog(
-              uri.toString(),
-            );
+            final ok = await _showExternalDialog(uri.toString());
 
             if (ok) {
-
               await launchUrl(
                 uri,
-                mode: LaunchMode
-                    .externalApplication,
+                mode: LaunchMode.externalApplication,
               );
             }
 
-            return NavigationDecision
-                .prevent;
+            return NavigationDecision.prevent;
           },
         ),
       )
+      ..loadRequest(Uri.parse(homeUrl));
 
-      ..loadRequest(
-        Uri.parse(homeUrl),
-      );
 
-    // Android optimize
-    if (controller.platform
-    is AndroidWebViewController) {
-
-      AndroidWebViewController
-          .enableDebugging(false);
-
-      final androidController =
-      controller.platform
-      as AndroidWebViewController;
-
-      androidController
-          .setMediaPlaybackRequiresUserGesture(
-        false,
-      );
-    }
-
-    // connectivity
-    netSub = Connectivity()
-        .onConnectivityChanged
-        .listen((results) {
-
-      final offline =
-      results.contains(
-        ConnectivityResult.none,
-      );
+    netSub = Connectivity().onConnectivityChanged.listen((results) {
+      final offline = results.contains(ConnectivityResult.none);
 
       if (offline == isOffline) return;
 
-      setState(() {
-        isOffline = offline;
-      });
+      if (!mounted) return;
+
+      setState(() => isOffline = offline);
 
       if (!offline) {
         controller.reload();
@@ -330,18 +231,37 @@ img.style.transform='translateZ(0)';
     });
 
     setupFirebase();
+
+    if (Platform.isIOS) {
+      startIOSHeartbeat();
+    }
+  }
+
+  /* =========================
+     iOS WKWEBVIEW RECOVER
+  ========================= */
+  void startIOSHeartbeat() {
+    iosHeartbeat?.cancel();
+
+    iosHeartbeat = Timer.periodic(
+      const Duration(seconds: 25),
+          (_) async {
+        try {
+          await controller.runJavaScript("document.readyState");
+        } catch (e) {
+          debugPrint("WKWebView recovered by reload");
+          controller.reload();
+        }
+      },
+    );
   }
 
   /* =========================
      APP RESUME
   ========================= */
   @override
-  void didChangeAppLifecycleState(
-      AppLifecycleState state) {
-
-    if (state ==
-        AppLifecycleState.resumed) {
-
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
       controller.runJavaScript(
         "window.dispatchEvent(new Event('focus'));",
       );
@@ -349,79 +269,100 @@ img.style.transform='translateZ(0)';
   }
 
   /* =========================
+     IMAGE QUALITY FIX
+  ========================= */
+  Future<void> _injectImageFix() async {
+    try {
+      await controller.runJavaScript("""
+document.querySelectorAll('img').forEach(img => {
+  img.style.imageRendering = 'auto';
+  img.style.backfaceVisibility = 'hidden';
+  img.style.webkitBackfaceVisibility = 'hidden';
+  img.style.transform = 'translateZ(0)';
+  img.style.webkitTransform = 'translateZ(0)';
+});
+""");
+    } catch (_) {}
+  }
+
+  /* =========================
      REVIEW
   ========================= */
   void _handleReviewTrigger() {
-
     if (hasRequestedReview) return;
 
     openCount++;
 
     if (openCount >= 4) {
-
       hasRequestedReview = true;
 
-      Future.delayed(
-        const Duration(seconds: 2),
-            () {
-          _requestReview();
-        },
-      );
+      Future.delayed(const Duration(seconds: 2), () {
+        _requestReview();
+      });
     }
   }
 
   Future<void> _requestReview() async {
-
     try {
-
-      final review =
-          InAppReview.instance;
+      final review = InAppReview.instance;
 
       if (await review.isAvailable()) {
-
         await review.requestReview();
       }
+    } catch (e) {
+      debugPrint("Review error: $e");
+    }
+  }
 
-    } catch (_) {}
+  /* =========================
+     FIREBASE
+  ========================= */
+  Future<void> setupFirebase() async {
+    try {
+      final messaging = FirebaseMessaging.instance;
+
+      await messaging.requestPermission();
+
+      await messaging.getToken();
+
+      debugPrint("FCM READY");
+    } catch (e) {
+      debugPrint("FCM error: $e");
+    }
   }
 
   /* =========================
      HELPERS
   ========================= */
   bool _isInternal(Uri uri) {
-
-    return uri.host
-        .contains("cocbasepro.com");
+    return uri.host.contains("cocbasepro.com");
   }
 
-  Future<bool> _showExternalDialog(
-      String url) async {
+  bool _isWhitelistExternal(Uri uri) {
+    final host = uri.host.toLowerCase();
 
-    final result =
-    await showDialog<bool>(
+    return host.contains("youtube.com") ||
+        host.contains("youtu.be") ||
+        host.contains("facebook.com") ||
+        host.contains("play.google.com") ||
+        host.contains("apps.apple.com");
+  }
 
+  Future<bool> _showExternalDialog(String url) async {
+    if (!mounted) return false;
+
+    final result = await showDialog<bool>(
       context: context,
-
       builder: (ctx) => AlertDialog(
-
-        title:
-        const Text("Open external link"),
-
+        title: const Text("Open external link"),
         content: Text(url),
-
         actions: [
-
           TextButton(
-            onPressed: () {
-              Navigator.pop(ctx, false);
-            },
+            onPressed: () => Navigator.pop(ctx, false),
             child: const Text("Cancel"),
           ),
-
           ElevatedButton(
-            onPressed: () {
-              Navigator.pop(ctx, true);
-            },
+            onPressed: () => Navigator.pop(ctx, true),
             child: const Text("Open"),
           ),
         ],
@@ -431,41 +372,23 @@ img.style.transform='translateZ(0)';
     return result ?? false;
   }
 
-  Future<void> setupFirebase() async {
-
-    final messaging =
-        FirebaseMessaging.instance;
-
-    await messaging.requestPermission();
-
-    final token =
-    await messaging.getToken();
-
-    debugPrint("FCM READY");
-  }
-
   Future<void> handleBack() async {
-
     if (await controller.canGoBack()) {
-
       await controller.goBack();
-
     } else {
-
       SystemNavigator.pop();
     }
   }
 
   Future<void> refreshPage() async {
-
     await controller.reload();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
 
-    WidgetsBinding.instance
-        .removeObserver(this);
+    iosHeartbeat?.cancel();
 
     netSub.cancel();
 
@@ -476,64 +399,38 @@ img.style.transform='translateZ(0)';
 
   @override
   Widget build(BuildContext context) {
-
     return PopScope(
-
       canPop: false,
-
-      onPopInvokedWithResult:
-          (didPop, _) async {
-
+      onPopInvokedWithResult: (didPop, _) async {
         if (!didPop) {
-
           await handleBack();
         }
       },
-
       child: Scaffold(
-
-        backgroundColor:
-        const Color(0xFF1E88F0),
-
+        backgroundColor: const Color(0xFF1E88F0),
         body: SafeArea(
-
           child: Stack(
-
             children: [
-
               RefreshIndicator(
-
                 onRefresh: refreshPage,
-
-                child: WebViewWidget(
-                  controller: controller,
-                ),
+                child: WebViewWidget(controller: controller),
               ),
 
-              // loading
               if (isLoading)
-
                 LinearProgressIndicator(
-                  value:
-                  loadingProgress / 100,
+                  value: loadingProgress / 100,
                   minHeight: 3,
                 ),
 
-              // offline
               if (isOffline)
-
                 Container(
-
                   color: Colors.white,
-
                   alignment: Alignment.center,
-
                   child: const Text(
                     "No Internet Connection",
                     style: TextStyle(
                       fontSize: 18,
-                      fontWeight:
-                      FontWeight.bold,
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
                 ),
