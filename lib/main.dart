@@ -245,10 +245,9 @@ class _WebScreenState extends State<WebScreen>
     return await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text("Open link"),
+        title: const Text("Open external link"),
         content: const Text(
-            "You’re about to open a Buy Me a Coffee page. "
-                "You can choose to support if you’d like."
+            "This link will open in your browser."
         ),
         actions: [
           TextButton(
@@ -364,6 +363,10 @@ class _WebScreenState extends State<WebScreen>
   // (7.12) UI
   // =========================
   @override
+  // =========================
+// (7.12) UI
+// =========================
+  @override
   Widget build(BuildContext context) {
     return PopScope(
       canPop: false,
@@ -380,11 +383,52 @@ class _WebScreenState extends State<WebScreen>
 
             if (isOffline)
               Container(
-                color: Colors.black,
-                child: const Center(
-                  child: Text(
-                    "No Internet",
-                    style: TextStyle(color: Colors.white),
+                color: Colors.black.withValues(alpha: 0.85),
+                child: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.wifi_off,
+                          size: 48,
+                          color: Colors.white70,
+                        ),
+                        const SizedBox(height: 16),
+                        const Text(
+                          "No Internet Connection",
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 8),
+                        const Text(
+                          "Check your connection and try again.",
+                          style: TextStyle(
+                            color: Colors.white70,
+                            fontSize: 14,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 20),
+
+                        // Retry button (nhẹ, không ép user)
+                        ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.white,
+                            foregroundColor: Colors.black,
+                          ),
+                          onPressed: () {
+                            controller.reload();
+                          },
+                          child: const Text("Retry"),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
