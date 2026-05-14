@@ -1,10 +1,11 @@
 import 'dart:async';
-import 'dart:developer';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'package:webview_flutter/webview_flutter.dart';
+
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
@@ -31,8 +32,12 @@ void loadInterstitial() {
     adUnitId: 'ca-app-pub-9371341402256787/5085734937',
     request: const AdRequest(),
     adLoadCallback: InterstitialAdLoadCallback(
-      onAdLoaded: (ad) => interstitialAd = ad,
-      onAdFailedToLoad: (error) => debugPrint(error.toString()),
+      onAdLoaded: (ad) {
+        interstitialAd = ad;
+      },
+      onAdFailedToLoad: (error) {
+        debugPrint("Ad load failed: $error");
+      },
     ),
   );
 }
@@ -47,9 +52,9 @@ void main() async {
 
   FirebaseMessaging.onBackgroundMessage(firebaseBgHandler);
 
-  SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-
   await MobileAds.instance.initialize();
+
+  SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
 
   runApp(const MyApp());
 }
@@ -86,7 +91,7 @@ class _SplashScreenState extends State<SplashScreen> {
 
     loadInterstitial();
 
-    Future.delayed(const Duration(milliseconds: 1200), () {
+    Future.delayed(const Duration(milliseconds: 1400), () {
       if (!mounted) return;
 
       Navigator.pushReplacement(
@@ -94,7 +99,7 @@ class _SplashScreenState extends State<SplashScreen> {
         MaterialPageRoute(builder: (_) => const WebScreen()),
       );
 
-      Future.delayed(const Duration(seconds: 1), () {
+      Future.delayed(const Duration(milliseconds: 800), () {
         interstitialAd?.show();
       });
     });
@@ -107,7 +112,7 @@ class _SplashScreenState extends State<SplashScreen> {
       body: Center(
         child: Image(
           image: AssetImage("assets/icon.png"),
-          width: 260,
+          width: 240,
         ),
       ),
     );
@@ -115,7 +120,7 @@ class _SplashScreenState extends State<SplashScreen> {
 }
 
 /* =========================
-   WEBVIEW FINAL FIXED
+   WEBVIEW
 ========================= */
 class WebScreen extends StatefulWidget {
   const WebScreen({super.key});
@@ -129,12 +134,16 @@ class _WebScreenState extends State<WebScreen>
   late final WebViewController controller;
   late StreamSubscription<List<ConnectivityResult>> netSub;
 
-  bool isOffline = false;
-  bool isDialogShowing = false;
+  Timer? iosHeartbeat;
 
   final String homeUrl = "https://www.cocbasepro.com";
 
+  bool isOffline = false;
+  bool isLoading = true;
+
+  int loadingProgress = 0;
   int openCount = 0;
+
   bool hasRequestedReview = false;
 
   @override
@@ -148,66 +157,143 @@ class _WebScreenState extends State<WebScreen>
       ..setBackgroundColor(const Color(0xFF1E88F0))
       ..setNavigationDelegate(
         NavigationDelegate(
+          onProgress: (progress) {
+            if (!mounted) return;
+            setState(() => loadingProgress = progress);
+          },
+
+          onPageStarted: (_) {
+            if (!mounted) return;
+            setState(() => isLoading = true);
+          },
+
+          onPageFinished: (_) async {
+            if (!mounted) return;
+
+            setState(() => isLoading = false);
+
+            _handleReviewTrigger();
+
+            await _injectImageFix();
+          },
+
+          onWebResourceError: (error) {
+            debugPrint("WebView error: ${error.description}");
+          },
+
           onNavigationRequest: (request) async {
             final uri = Uri.parse(request.url);
 
-            if (isOffline) return NavigationDecision.prevent;
+            if (isOffline) {
+              return NavigationDecision.prevent;
+            }
 
             if (_isInternal(uri)) {
               return NavigationDecision.navigate;
             }
 
-            // ✅ POPUP MỞ LINK NGOÀI
+            if (_isWhitelistExternal(uri)) {
+              await launchUrl(
+                uri,
+                mode: LaunchMode.externalApplication,
+              );
+              return NavigationDecision.prevent;
+            }
+
             final ok = await _showExternalDialog(uri.toString());
 
             if (ok) {
-              await launchUrl(uri,
-                  mode: LaunchMode.externalApplication);
+              await launchUrl(
+                uri,
+                mode: LaunchMode.externalApplication,
+              );
             }
 
             return NavigationDecision.prevent;
           },
-          onPageFinished: (url) {
-            _handleReviewTrigger();
-          },
         ),
       )
       ..loadRequest(Uri.parse(homeUrl));
+
 
     netSub = Connectivity().onConnectivityChanged.listen((results) {
       final offline = results.contains(ConnectivityResult.none);
 
       if (offline == isOffline) return;
 
+      if (!mounted) return;
+
       setState(() => isOffline = offline);
 
       if (!offline) {
-        controller.reload(); // ✅ FIX web chết
+        controller.reload();
       }
     });
 
     setupFirebase();
-  }
 
-  /* =========================
-     ✅ FIX WEBVIEW TREO
-  ========================= */
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      controller.reload(); // 🔥 FIX CHÍNH
+    if (Platform.isIOS) {
+      startIOSHeartbeat();
     }
   }
 
   /* =========================
-     ⭐ REVIEW (APPLE SAFE)
+     iOS WKWEBVIEW RECOVER
+  ========================= */
+  void startIOSHeartbeat() {
+    iosHeartbeat?.cancel();
+
+    iosHeartbeat = Timer.periodic(
+      const Duration(seconds: 25),
+          (_) async {
+        try {
+          await controller.runJavaScript("document.readyState");
+        } catch (e) {
+          debugPrint("WKWebView recovered by reload");
+          controller.reload();
+        }
+      },
+    );
+  }
+
+  /* =========================
+     APP RESUME
+  ========================= */
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      controller.runJavaScript(
+        "window.dispatchEvent(new Event('focus'));",
+      );
+    }
+  }
+
+  /* =========================
+     IMAGE QUALITY FIX
+  ========================= */
+  Future<void> _injectImageFix() async {
+    try {
+      await controller.runJavaScript("""
+document.querySelectorAll('img').forEach(img => {
+  img.style.imageRendering = 'auto';
+  img.style.backfaceVisibility = 'hidden';
+  img.style.webkitBackfaceVisibility = 'hidden';
+  img.style.transform = 'translateZ(0)';
+  img.style.webkitTransform = 'translateZ(0)';
+});
+""");
+    } catch (_) {}
+  }
+
+  /* =========================
+     REVIEW
   ========================= */
   void _handleReviewTrigger() {
     if (hasRequestedReview) return;
 
     openCount++;
 
-    if (openCount >= 3) {
+    if (openCount >= 4) {
       hasRequestedReview = true;
 
       Future.delayed(const Duration(seconds: 2), () {
@@ -229,16 +315,41 @@ class _WebScreenState extends State<WebScreen>
   }
 
   /* =========================
+     FIREBASE
+  ========================= */
+  Future<void> setupFirebase() async {
+    try {
+      final messaging = FirebaseMessaging.instance;
+
+      await messaging.requestPermission();
+
+      await messaging.getToken();
+
+      debugPrint("FCM READY");
+    } catch (e) {
+      debugPrint("FCM error: $e");
+    }
+  }
+
+  /* =========================
      HELPERS
   ========================= */
   bool _isInternal(Uri uri) {
     return uri.host.contains("cocbasepro.com");
   }
 
-  Future<bool> _showExternalDialog(String url) async {
-    if (!mounted || isDialogShowing) return false;
+  bool _isWhitelistExternal(Uri uri) {
+    final host = uri.host.toLowerCase();
 
-    isDialogShowing = true;
+    return host.contains("youtube.com") ||
+        host.contains("youtu.be") ||
+        host.contains("facebook.com") ||
+        host.contains("play.google.com") ||
+        host.contains("apps.apple.com");
+  }
+
+  Future<bool> _showExternalDialog(String url) async {
+    if (!mounted) return false;
 
     final result = await showDialog<bool>(
       context: context,
@@ -247,43 +358,42 @@ class _WebScreenState extends State<WebScreen>
         content: Text(url),
         actions: [
           TextButton(
-            onPressed: () =>
-                Navigator.of(ctx, rootNavigator: true).pop(false),
+            onPressed: () => Navigator.pop(ctx, false),
             child: const Text("Cancel"),
           ),
           ElevatedButton(
-            onPressed: () =>
-                Navigator.of(ctx, rootNavigator: true).pop(true),
+            onPressed: () => Navigator.pop(ctx, true),
             child: const Text("Open"),
           ),
         ],
       ),
     );
 
-    isDialogShowing = false;
     return result ?? false;
-  }
-
-  Future<void> setupFirebase() async {
-    final messaging = FirebaseMessaging.instance;
-
-    await messaging.requestPermission();
-
-    final token = await messaging.getToken();
-    log("FCM TOKEN: $token");
   }
 
   Future<void> handleBack() async {
     if (await controller.canGoBack()) {
       await controller.goBack();
+    } else {
+      SystemNavigator.pop();
     }
+  }
+
+  Future<void> refreshPage() async {
+    await controller.reload();
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+
+    iosHeartbeat?.cancel();
+
     netSub.cancel();
+
     interstitialAd?.dispose();
+
     super.dispose();
   }
 
@@ -292,12 +402,40 @@ class _WebScreenState extends State<WebScreen>
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) async {
-        if (!didPop) await handleBack();
+        if (!didPop) {
+          await handleBack();
+        }
       },
       child: Scaffold(
         backgroundColor: const Color(0xFF1E88F0),
         body: SafeArea(
-          child: WebViewWidget(controller: controller),
+          child: Stack(
+            children: [
+              RefreshIndicator(
+                onRefresh: refreshPage,
+                child: WebViewWidget(controller: controller),
+              ),
+
+              if (isLoading)
+                LinearProgressIndicator(
+                  value: loadingProgress / 100,
+                  minHeight: 3,
+                ),
+
+              if (isOffline)
+                Container(
+                  color: Colors.white,
+                  alignment: Alignment.center,
+                  child: const Text(
+                    "No Internet Connection",
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );
