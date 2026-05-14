@@ -92,14 +92,13 @@ class SplashScreen extends StatefulWidget {
 }
 
 class _SplashScreenState extends State<SplashScreen> {
-
   @override
   void initState() {
     super.initState();
 
     loadInterstitial();
 
-    Future.delayed(const Duration(milliseconds: 1200), () {
+    Future.delayed(const Duration(milliseconds: 2200), () {
       if (!mounted) return;
 
       Navigator.pushReplacement(
@@ -141,7 +140,6 @@ class WebScreen extends StatefulWidget {
 class _WebScreenState extends State<WebScreen>
     with WidgetsBindingObserver {
 
-  // (7.1) CONTROLLER
   late final WebViewController controller;
   late StreamSubscription<List<ConnectivityResult>> netSub;
 
@@ -154,19 +152,23 @@ class _WebScreenState extends State<WebScreen>
   int openCount = 0;
   bool hasRequestedReview = false;
 
-  // 🔥 NEW (quan trọng)
   bool isPageLoaded = false;
+  bool isReloading = false;
+
   DateTime lastLoadedTime = DateTime.now();
+  DateTime lastReloadTime = DateTime.now();
 
 
   // =========================
-  // (7.2) INIT
+  // INIT
   // =========================
   @override
   void initState() {
     super.initState();
 
     WidgetsBinding.instance.addObserver(this);
+
+    lastReloadTime = DateTime.now();
 
     controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
@@ -180,7 +182,7 @@ class _WebScreenState extends State<WebScreen>
 
 
   // =========================
-  // (7.3) NAVIGATION
+  // NAVIGATION
   // =========================
   NavigationDelegate _navigation() {
     return NavigationDelegate(
@@ -199,7 +201,7 @@ class _WebScreenState extends State<WebScreen>
         }
 
         if (_isBuyMeCoffee(uri)) {
-          final ok = await _showDonateDialog(uri.toString());
+          final ok = await _showDialog();
 
           if (ok) {
             await launchUrl(uri,
@@ -215,13 +217,13 @@ class _WebScreenState extends State<WebScreen>
         return NavigationDecision.prevent;
       },
 
-      // 🔥 FIX STATE LOAD
       onPageStarted: (_) {
         isPageLoaded = false;
       },
 
       onPageFinished: (_) {
         isPageLoaded = true;
+        isReloading = false;
         lastLoadedTime = DateTime.now();
         _handleReview();
       },
@@ -230,7 +232,7 @@ class _WebScreenState extends State<WebScreen>
 
 
   // =========================
-  // (7.4) FILTER
+  // FILTER
   // =========================
   bool _isFirebaseNoise(Uri uri) {
     final url = uri.toString().toLowerCase();
@@ -247,16 +249,16 @@ class _WebScreenState extends State<WebScreen>
 
 
   // =========================
-  // (7.5) DIALOG
+  // SIMPLE DIALOG (APPSTORE SAFE)
   // =========================
-  Future<bool> _showDonateDialog(String url) async {
+  Future<bool> _showDialog() async {
     if (!mounted) return false;
 
     return await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text("Open external link"),
-        content: const Text("Open this link in browser?"),
+        title: const Text("Open link"),
+        content: const Text("Open in browser?"),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -273,41 +275,63 @@ class _WebScreenState extends State<WebScreen>
 
 
   // =========================
-  // (7.6) CONNECTIVITY
+  // CONNECTIVITY
   // =========================
   void _setupConnectivity() {
     netSub = Connectivity().onConnectivityChanged.listen((results) {
       final offline = results.contains(ConnectivityResult.none);
 
       if (offline == isOffline) return;
-
       if (!mounted) return;
 
       setState(() => isOffline = offline);
 
-      if (!offline) _reload();
+      if (!offline) {
+        final diff = DateTime.now()
+            .difference(lastReloadTime)
+            .inSeconds;
+
+        if (diff > 5) {
+          _reload();
+        }
+      }
     });
   }
 
 
   // =========================
-  // (7.7) 🔥 SMART RELOAD
+  // SMART RELOAD (ANTI LOOP)
   // =========================
   Future<void> _reload() async {
+    if (isReloading) return;
+
+    final now = DateTime.now();
+    final diff = now.difference(lastReloadTime).inSeconds;
+
+    if (diff < 10) return;
+
+    isReloading = true;
+    lastReloadTime = now;
+
     try {
       await controller.runJavaScript("window.location.reload()");
     } catch (_) {
       try {
         await controller.loadRequest(
-          currentUrl.isNotEmpty ? Uri.parse(currentUrl) : homeUri,
+          currentUrl.isNotEmpty
+              ? Uri.parse(currentUrl)
+              : homeUri,
         );
       } catch (_) {}
     }
+
+    await Future.delayed(const Duration(seconds: 2));
+    isReloading = false;
   }
 
 
   // =========================
-  // (7.8) 🔥 FIX iOS DEAD
+  // FIX iOS DEAD
   // =========================
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
@@ -317,25 +341,25 @@ class _WebScreenState extends State<WebScreen>
   }
 
   Future<void> _checkWebViewAlive() async {
-    await Future.delayed(const Duration(milliseconds: 500));
+    await Future.delayed(const Duration(milliseconds: 800));
 
     if (!mounted) return;
 
-    if (!isPageLoaded) {
-      _reload();
-      return;
-    }
+    final diff = DateTime.now()
+        .difference(lastLoadedTime)
+        .inSeconds;
 
-    final diff = DateTime.now().difference(lastLoadedTime).inSeconds;
+    if (diff < 5) return;
+    if (!isPageLoaded) return;
 
-    if (diff > 30) {
+    if (diff > 45) {
       _reload();
     }
   }
 
 
   // =========================
-  // (7.9) REVIEW ⭐
+  // REVIEW
   // =========================
   void _handleReview() {
     if (hasRequestedReview) return;
@@ -358,7 +382,7 @@ class _WebScreenState extends State<WebScreen>
 
 
   // =========================
-  // (7.10) FIREBASE
+  // FIREBASE
   // =========================
   Future<void> _setupFirebase() async {
     final messaging = FirebaseMessaging.instance;
@@ -370,7 +394,7 @@ class _WebScreenState extends State<WebScreen>
 
 
   // =========================
-  // (7.11) BACK
+  // BACK
   // =========================
   Future<void> _back() async {
     if (await controller.canGoBack()) {
@@ -380,7 +404,7 @@ class _WebScreenState extends State<WebScreen>
 
 
   // =========================
-  // (7.12) DISPOSE
+  // DISPOSE
   // =========================
   @override
   void dispose() {
@@ -392,7 +416,7 @@ class _WebScreenState extends State<WebScreen>
 
 
   // =========================
-  // (7.13) UI
+  // UI
   // =========================
   @override
   Widget build(BuildContext context) {
