@@ -117,7 +117,7 @@ class _SplashScreenState extends State<SplashScreen> {
 }
 
 /* =========================
-   WEBVIEW PRO
+   WEBVIEW PRO MAX
 ========================= */
 class WebScreen extends StatefulWidget {
   const WebScreen({super.key});
@@ -129,12 +129,10 @@ class WebScreen extends StatefulWidget {
 class _WebScreenState extends State<WebScreen>
     with WidgetsBindingObserver {
   late final WebViewController controller;
-
   late StreamSubscription<List<ConnectivityResult>> netSub;
 
   bool isOffline = false;
-  bool hasLoadedOnce = false;
-  int progress = 0;
+  bool isDialogShowing = false;
 
   final String homeUrl = "https://www.cocbasepro.com";
 
@@ -151,26 +149,31 @@ class _WebScreenState extends State<WebScreen>
       ..setBackgroundColor(const Color(0xFF1E88F0))
       ..setNavigationDelegate(
         NavigationDelegate(
-          onProgress: (p) {
-            setState(() => progress = p);
-          },
-          onPageFinished: (_) {
-            hasLoadedOnce = true;
-            setState(() => progress = 100);
-          },
           onNavigationRequest: (request) async {
             final uri = Uri.parse(request.url);
 
+            // ❌ OFFLINE → chặn hết
+            if (isOffline) return NavigationDecision.prevent;
+
+            // ✅ internal
             if (_isInternal(uri)) {
               return NavigationDecision.navigate;
             }
 
-            final ok = await _showExternalDialog(uri.toString());
+            // ⭐ chỉ popup với BuyMeCoffee
+            if (_isBuyMeCoffee(uri)) {
+              final ok = await _showExternalDialog(uri.toString());
 
-            if (ok) {
-              await launchUrl(uri,
-                  mode: LaunchMode.externalApplication);
+              if (ok) {
+                await launchUrl(uri,
+                    mode: LaunchMode.externalApplication);
+              }
+              return NavigationDecision.prevent;
             }
+
+            // ✅ link ngoài khác → mở luôn
+            await launchUrl(uri,
+                mode: LaunchMode.externalApplication);
 
             return NavigationDecision.prevent;
           },
@@ -179,7 +182,7 @@ class _WebScreenState extends State<WebScreen>
       ..loadRequest(homeUri);
 
     /* =========================
-       CONNECTIVITY FIX
+       CONNECTIVITY FIX PRO
     ========================= */
     netSub = Connectivity().onConnectivityChanged.listen((results) {
       final offline = results.contains(ConnectivityResult.none);
@@ -187,7 +190,9 @@ class _WebScreenState extends State<WebScreen>
       if (offline != isOffline) {
         setState(() => isOffline = offline);
 
-        if (!offline && hasLoadedOnce) {
+        if (offline) {
+          _closeAllDialogs(); // 💥 đóng popup
+        } else {
           controller.reload();
         }
       }
@@ -200,32 +205,54 @@ class _WebScreenState extends State<WebScreen>
     return uri.host.contains("cocbasepro.com");
   }
 
+  bool _isBuyMeCoffee(Uri uri) {
+    return uri.host.contains("buymeacoffee.com");
+  }
+
+  /* =========================
+     DIALOG (ANTI BUG)
+  ========================= */
   Future<bool> _showExternalDialog(String url) async {
-    if (!mounted) return false;
+    if (!mounted || isDialogShowing || isOffline) return false;
+
+    isDialogShowing = true;
 
     final result = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text("Open External Link"),
-        content: Text(url),
+        title: const Text("Support Creator ❤️"),
+        content: Text("Open support link?\n\n$url"),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
+            onPressed: () =>
+                Navigator.of(ctx, rootNavigator: true).pop(false),
             child: const Text("Cancel"),
           ),
           ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
+            onPressed: () =>
+                Navigator.of(ctx, rootNavigator: true).pop(true),
             child: const Text("Open"),
           ),
         ],
       ),
     );
 
+    isDialogShowing = false;
     return result ?? false;
   }
 
+  void _closeAllDialogs() {
+    if (!mounted) return;
+
+    while (Navigator.canPop(context)) {
+      Navigator.pop(context);
+    }
+
+    isDialogShowing = false;
+  }
+
   /* =========================
-     FIREBASE
+     FIREBASE FIX
   ========================= */
   Future<void> setupFirebase() async {
     final messaging = FirebaseMessaging.instance;
@@ -234,13 +261,11 @@ class _WebScreenState extends State<WebScreen>
 
     final token = await messaging.getToken();
     log("FCM TOKEN: $token");
-  }
 
-  /* =========================
-     PULL TO REFRESH
-  ========================= */
-  Future<void> _refresh() async {
-    await controller.reload();
+    FirebaseMessaging.onMessage.listen((_) {
+      if (isOffline) return; // ❌ chặn khi offline
+      debugPrint("NOTIFICATION");
+    });
   }
 
   /* =========================
@@ -271,28 +296,10 @@ class _WebScreenState extends State<WebScreen>
         backgroundColor: const Color(0xFF1E88F0),
         body: Stack(
           children: [
-            RefreshIndicator(
-              onRefresh: _refresh,
+            Positioned.fill(
               child: WebViewWidget(controller: controller),
             ),
 
-            /* =========================
-               LOADING BAR
-            ========================= */
-            if (progress < 100)
-              Positioned(
-                top: 0,
-                left: 0,
-                right: 0,
-                child: LinearProgressIndicator(
-                  value: progress / 100,
-                  minHeight: 3,
-                ),
-              ),
-
-            /* =========================
-               OFFLINE SCREEN
-            ========================= */
             if (isOffline)
               Container(
                 color: Colors.black,
