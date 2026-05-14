@@ -1,212 +1,137 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
-<dict>
-
-	<!-- =========================
-	     PERFORMANCE
-	========================= -->
-	<key>CADisableMinimumFrameDurationOnPhone</key>
-	<true/>
-
-	<!-- =========================
-	     APP INFO
-	========================= -->
-	<key>CFBundleDevelopmentRegion</key>
-	<string>$(DEVELOPMENT_LANGUAGE)</string>
-
-	<key>CFBundleDisplayName</key>
-	<string>Coc Base Pro</string>
-
-	<key>CFBundleExecutable</key>
-	<string>$(EXECUTABLE_NAME)</string>
-
-	<key>CFBundleIdentifier</key>
-	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
-
-	<key>CFBundleInfoDictionaryVersion</key>
-	<string>6.0</string>
-
-	<key>CFBundleName</key>
-	<string>Coc Base Pro</string>
-
-	<key>CFBundlePackageType</key>
-	<string>APPL</string>
-
-	<key>CFBundleShortVersionString</key>
-	<string>$(FLUTTER_BUILD_NAME)</string>
-
-	<key>CFBundleSignature</key>
-	<string>????</string>
-
-	<key>CFBundleVersion</key>
-	<string>$(FLUTTER_BUILD_NUMBER)</string>
-
-	<key>LSRequiresIPhoneOS</key>
-	<true/>
-
-	<!-- =========================
-	     WKWEBVIEW OPTIMIZE
-	========================= -->
-	<key>WKAppBoundDomains</key>
-	<array>
-		<string>cocbasepro.com</string>
-		<string>www.cocbasepro.com</string>
-	</array>
-
-	<!-- =========================
-	     ADMOB
-	========================= -->
-	<key>GADApplicationIdentifier</key>
-	<string>ca-app-pub-9371341402256787~7637088103</string>
-
-	<key>NSUserTrackingUsageDescription</key>
-	<string>This identifier will be used to deliver personalized ads.</string>
-
-	<!-- =========================
-	     SKADNETWORK
-	========================= -->
-	<key>SKAdNetworkItems</key>
-	<array>
-
-		<dict>
-			<key>SKAdNetworkIdentifier</key>
-			<string>cstr6suwn9.skadnetwork</string>
-		</dict>
-
-		<dict>
-			<key>SKAdNetworkIdentifier</key>
-			<string>4fzdc2evr5.skadnetwork</string>
-		</dict>
-
-		<dict>
-			<key>SKAdNetworkIdentifier</key>
-			<string>2fnua5tdw4.skadnetwork</string>
-		</dict>
-
-		<dict>
-			<key>SKAdNetworkIdentifier</key>
-			<string>ydx93a7ass.skadnetwork</string>
-		</dict>
-
-		<dict>
-			<key>SKAdNetworkIdentifier</key>
-			<string>5a6flpkh64.skadnetwork</string>
-		</dict>
-
-		<dict>
-			<key>SKAdNetworkIdentifier</key>
-			<string>p78axxw29g.skadnetwork</string>
-		</dict>
-
-		<dict>
-			<key>SKAdNetworkIdentifier</key>
-			<string>v72qych5uu.skadnetwork</string>
-		</dict>
-
-		<dict>
-			<key>SKAdNetworkIdentifier</key>
-			<string>ludvb6z3bs.skadnetwork</string>
-		</dict>
-
-		<dict>
-			<key>SKAdNetworkIdentifier</key>
-			<string>cp8zw746q7.skadnetwork</string>
-		</dict>
-
-		<dict>
-			<key>SKAdNetworkIdentifier</key>
-			<string>3sh42y64q3.skadnetwork</string>
-		</dict>
-
-		<dict>
-			<key>SKAdNetworkIdentifier</key>
-			<string>c6k4g5qg8m.skadnetwork</string>
-		</dict>
-
-	</array>
-
-	<!-- =========================
-	     IOS SCENE
-	========================= -->
-	<key>UIApplicationSceneManifest</key>
 	<dict>
 
-		<key>UIApplicationSupportsMultipleScenes</key>
-		<false/>
+		<key>CADisableMinimumFrameDurationOnPhone</key>
+		<true/>
 
-		<key>UISceneConfigurations</key>
+		<key>CFBundleDevelopmentRegion</key>
+		<string>$(DEVELOPMENT_LANGUAGE)</string>
+
+		<key>CFBundleDisplayName</key>
+		<string>Coc Base Pro</string>
+
+		<key>CFBundleExecutable</key>
+		<string>$(EXECUTABLE_NAME)</string>
+
+		<key>CFBundleIdentifier</key>
+		<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+
+		<key>CFBundleInfoDictionaryVersion</key>
+		<string>6.0</string>
+
+		<key>CFBundleName</key>
+		<string>Coc Base Pro</string>
+
+		<key>CFBundlePackageType</key>
+		<string>APPL</string>
+
+		<key>CFBundleShortVersionString</key>
+		<string>$(FLUTTER_BUILD_NAME)</string>
+
+		<key>CFBundleSignature</key>
+		<string>????</string>
+
+		<key>CFBundleVersion</key>
+		<string>$(FLUTTER_BUILD_NUMBER)</string>
+
+		<key>LSRequiresIPhoneOS</key>
+		<true/>
+
+		<!-- =========================
+		     WEBVIEW FIX
+		========================= -->
+		<key>NSAppTransportSecurity</key>
 		<dict>
-
-			<key>UIWindowSceneSessionRoleApplication</key>
-			<array>
-
-				<dict>
-
-					<key>UISceneClassName</key>
-					<string>UIWindowScene</string>
-
-					<key>UISceneConfigurationName</key>
-					<string>flutter</string>
-
-					<key>UISceneDelegateClassName</key>
-					<string>$(PRODUCT_MODULE_NAME).SceneDelegate</string>
-
-					<key>UISceneStoryboardFile</key>
-					<string>Main</string>
-
-				</dict>
-
-			</array>
-
+			<key>NSAllowsArbitraryLoads</key>
+			<true/>
 		</dict>
 
+		<key>io.flutter.embedded_views_preview</key>
+		<true/>
+
+		<!-- =========================
+		     ADMOB
+		========================= -->
+		<key>GADApplicationIdentifier</key>
+		<string>ca-app-pub-9371341402256787~7637088103</string>
+
+		<key>NSUserTrackingUsageDescription</key>
+		<string>This identifier will be used to deliver personalized ads.</string>
+
+		<!-- =========================
+		     SKAdNetwork
+		========================= -->
+		<key>SKAdNetworkItems</key>
+		<array>
+			<dict>
+				<key>SKAdNetworkIdentifier</key>
+				<string>cstr6suwn9.skadnetwork</string>
+			</dict>
+		</array>
+
+		<!-- =========================
+		     iOS Scene
+		========================= -->
+		<key>UIApplicationSceneManifest</key>
+		<dict>
+			<key>UIApplicationSupportsMultipleScenes</key>
+			<false/>
+
+			<key>UISceneConfigurations</key>
+			<dict>
+				<key>UIWindowSceneSessionRoleApplication</key>
+				<array>
+					<dict>
+						<key>UISceneClassName</key>
+						<string>UIWindowScene</string>
+
+						<key>UISceneConfigurationName</key>
+						<string>flutter</string>
+
+						<key>UISceneDelegateClassName</key>
+						<string>$(PRODUCT_MODULE_NAME).SceneDelegate</string>
+
+						<key>UISceneStoryboardFile</key>
+						<string>Main</string>
+					</dict>
+				</array>
+			</dict>
+		</dict>
+
+		<key>UIApplicationSupportsIndirectInputEvents</key>
+		<true/>
+
+		<key>UILaunchStoryboardName</key>
+		<string>LaunchScreen</string>
+
+		<key>UIMainStoryboardFile</key>
+		<string>Main</string>
+
+		<key>UISupportedInterfaceOrientations</key>
+		<array>
+			<string>UIInterfaceOrientationPortrait</string>
+			<string>UIInterfaceOrientationLandscapeLeft</string>
+			<string>UIInterfaceOrientationLandscapeRight</string>
+		</array>
+
+		<key>UISupportedInterfaceOrientations~ipad</key>
+		<array>
+			<string>UIInterfaceOrientationPortrait</string>
+			<string>UIInterfaceOrientationPortraitUpsideDown</string>
+			<string>UIInterfaceOrientationLandscapeLeft</string>
+			<string>UIInterfaceOrientationLandscapeRight</string>
+		</array>
+
+		<key>UIStatusBarHidden</key>
+		<true/>
+
+		<key>UIViewControllerBasedStatusBarAppearance</key>
+		<false/>
+
+		<key>ITSAppUsesNonExemptEncryption</key>
+        <false/>
+
 	</dict>
-
-	<!-- =========================
-	     INPUT
-	========================= -->
-	<key>UIApplicationSupportsIndirectInputEvents</key>
-	<true/>
-
-	<!-- =========================
-	     LAUNCH
-	========================= -->
-	<key>UILaunchStoryboardName</key>
-	<string>LaunchScreen</string>
-
-	<key>UIMainStoryboardFile</key>
-	<string>Main</string>
-
-	<!-- =========================
-	     ORIENTATION
-	========================= -->
-	<key>UISupportedInterfaceOrientations</key>
-	<array>
-		<string>UIInterfaceOrientationPortrait</string>
-	</array>
-
-	<key>UISupportedInterfaceOrientations~ipad</key>
-	<array>
-		<string>UIInterfaceOrientationPortrait</string>
-		<string>UIInterfaceOrientationLandscapeLeft</string>
-		<string>UIInterfaceOrientationLandscapeRight</string>
-	</array>
-
-	<!-- =========================
-	     STATUS BAR
-	========================= -->
-	<key>UIStatusBarHidden</key>
-	<false/>
-
-	<key>UIViewControllerBasedStatusBarAppearance</key>
-	<false/>
-
-	<!-- =========================
-	     ENCRYPTION
-	========================= -->
-	<key>ITSAppUsesNonExemptEncryption</key>
-	<false/>
-
-</dict>
 </plist>
