@@ -12,6 +12,9 @@ import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 
+// ⭐ ADD
+import 'package:in_app_review/in_app_review.dart';
+
 /* =========================
    BACKGROUND NOTIFICATION
 ========================= */
@@ -117,7 +120,7 @@ class _SplashScreenState extends State<SplashScreen> {
 }
 
 /* =========================
-   WEBVIEW PRO MAX FIXED
+   WEBVIEW PRO MAX + REVIEW
 ========================= */
 class WebScreen extends StatefulWidget {
   const WebScreen({super.key});
@@ -139,6 +142,10 @@ class _WebScreenState extends State<WebScreen>
   final String homeUrl = "https://www.cocbasepro.com";
   Uri get homeUri => Uri.parse(homeUrl);
 
+  // ⭐ REVIEW CONTROL
+  int openCount = 0;
+  bool hasRequestedReview = false;
+
   @override
   void initState() {
     super.initState();
@@ -153,24 +160,18 @@ class _WebScreenState extends State<WebScreen>
           onNavigationRequest: (request) async {
             final uri = Uri.parse(request.url);
 
-            // 🚨🔥 FIX CỐT LÕI: CHẶN FIREBASE AUTO OPEN (.lp / dframe)
+            // 🔥 BLOCK FIREBASE
             if (_isFirebaseNoise(uri)) {
-              debugPrint("BLOCK FIREBASE NOISE: ${uri.toString()}");
               return NavigationDecision.prevent;
             }
 
-            // ❌ OFFLINE → chặn web ngoài
-            if (isOffline) {
-              return NavigationDecision.prevent;
-            }
+            if (isOffline) return NavigationDecision.prevent;
 
-            // 🌐 INTERNAL
             if (_isInternal(uri)) {
               currentUrl = uri.toString();
               return NavigationDecision.navigate;
             }
 
-            // ⭐ BUYMEACOFFEE → popup
             if (_isBuyMeCoffee(uri)) {
               final ok = await _showExternalDialog(uri.toString());
 
@@ -178,23 +179,23 @@ class _WebScreenState extends State<WebScreen>
                 await launchUrl(uri,
                     mode: LaunchMode.externalApplication);
               }
-
               return NavigationDecision.prevent;
             }
 
-            // 🌍 EXTERNAL → open outside app
             await launchUrl(uri,
                 mode: LaunchMode.externalApplication);
 
             return NavigationDecision.prevent;
           },
+
+          // ⭐ trigger review sau khi user dùng web
+          onPageFinished: (url) {
+            _handleReviewTrigger();
+          },
         ),
       )
       ..loadRequest(homeUri);
 
-    /* =========================
-       CONNECTIVITY FIX (SAFE)
-    ========================= */
     netSub = Connectivity().onConnectivityChanged.listen((results) {
       final offline = results.contains(ConnectivityResult.none);
 
@@ -211,18 +212,47 @@ class _WebScreenState extends State<WebScreen>
   }
 
   /* =========================
-     🔥 FIREBASE NOISE BLOCKER (IMPORTANT FIX)
+     ⭐ REVIEW LOGIC (SMART)
+  ========================= */
+  void _handleReviewTrigger() {
+    if (hasRequestedReview) return;
+
+    openCount++;
+
+    // 👉 chỉ trigger sau 3 lần load trang
+    if (openCount >= 3) {
+      hasRequestedReview = true;
+
+      Future.delayed(const Duration(seconds: 2), () {
+        _requestReview();
+      });
+    }
+  }
+
+  Future<void> _requestReview() async {
+    final review = InAppReview.instance;
+
+    if (await review.isAvailable()) {
+      review.requestReview();
+    } else {
+      final uri = Uri.parse(
+        "https://play.google.com/store/apps/details?id=YOUR_PACKAGE_NAME",
+      );
+
+      await launchUrl(uri,
+          mode: LaunchMode.externalApplication);
+    }
+  }
+
+  /* =========================
+     FIREBASE BLOCK
   ========================= */
   bool _isFirebaseNoise(Uri uri) {
     final url = uri.toString().toLowerCase();
 
     return uri.host.contains("firebaseio.com") ||
-        uri.host.contains("googleapis.com") ||
-        uri.host.contains("firebase") ||
         uri.path.contains(".lp") ||
         uri.query.contains("dframe") ||
-        url.contains("dframe=") ||
-        url.contains(".lp?") ||
         url.contains("firebase");
   }
 
@@ -234,9 +264,6 @@ class _WebScreenState extends State<WebScreen>
     return uri.host.contains("buymeacoffee.com");
   }
 
-  /* =========================
-     POPUP (GIỮ NGUYÊN UX)
-  ========================= */
   Future<bool> _showExternalDialog(String url) async {
     if (!mounted || isDialogShowing || isOffline) return false;
 
@@ -276,9 +303,6 @@ class _WebScreenState extends State<WebScreen>
     isDialogShowing = false;
   }
 
-  /* =========================
-     FIREBASE SETUP
-  ========================= */
   Future<void> setupFirebase() async {
     final messaging = FirebaseMessaging.instance;
 
@@ -289,7 +313,6 @@ class _WebScreenState extends State<WebScreen>
 
     FirebaseMessaging.onMessage.listen((_) {
       if (isOffline) return;
-      debugPrint("NOTIFICATION RECEIVED");
     });
   }
 
@@ -321,7 +344,6 @@ class _WebScreenState extends State<WebScreen>
             SafeArea(
               child: WebViewWidget(controller: controller),
             ),
-
             if (isOffline)
               Container(
                 color: Colors.black,
