@@ -12,7 +12,6 @@ import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 
-// ⭐ ADD
 import 'package:in_app_review/in_app_review.dart';
 
 /* =========================
@@ -44,11 +43,7 @@ void loadInterstitial() {
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  try {
-    await Firebase.initializeApp();
-  } catch (e) {
-    debugPrint("Firebase init error: $e");
-  }
+  await Firebase.initializeApp();
 
   FirebaseMessaging.onBackgroundMessage(firebaseBgHandler);
 
@@ -60,7 +55,7 @@ void main() async {
 }
 
 /* =========================
-   ROOT APP
+   APP
 ========================= */
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
@@ -120,7 +115,7 @@ class _SplashScreenState extends State<SplashScreen> {
 }
 
 /* =========================
-   WEBVIEW PRO MAX + REVIEW
+   WEBVIEW FINAL FIXED
 ========================= */
 class WebScreen extends StatefulWidget {
   const WebScreen({super.key});
@@ -137,12 +132,8 @@ class _WebScreenState extends State<WebScreen>
   bool isOffline = false;
   bool isDialogShowing = false;
 
-  String currentUrl = "";
-
   final String homeUrl = "https://www.cocbasepro.com";
-  Uri get homeUri => Uri.parse(homeUrl);
 
-  // ⭐ REVIEW CONTROL
   int openCount = 0;
   bool hasRequestedReview = false;
 
@@ -160,41 +151,28 @@ class _WebScreenState extends State<WebScreen>
           onNavigationRequest: (request) async {
             final uri = Uri.parse(request.url);
 
-            // 🔥 BLOCK FIREBASE
-            if (_isFirebaseNoise(uri)) {
-              return NavigationDecision.prevent;
-            }
-
             if (isOffline) return NavigationDecision.prevent;
 
             if (_isInternal(uri)) {
-              currentUrl = uri.toString();
               return NavigationDecision.navigate;
             }
 
-            if (_isBuyMeCoffee(uri)) {
-              final ok = await _showExternalDialog(uri.toString());
+            // ✅ POPUP MỞ LINK NGOÀI
+            final ok = await _showExternalDialog(uri.toString());
 
-              if (ok) {
-                await launchUrl(uri,
-                    mode: LaunchMode.externalApplication);
-              }
-              return NavigationDecision.prevent;
+            if (ok) {
+              await launchUrl(uri,
+                  mode: LaunchMode.externalApplication);
             }
-
-            await launchUrl(uri,
-                mode: LaunchMode.externalApplication);
 
             return NavigationDecision.prevent;
           },
-
-          // ⭐ trigger review sau khi user dùng web
           onPageFinished: (url) {
             _handleReviewTrigger();
           },
         ),
       )
-      ..loadRequest(homeUri);
+      ..loadRequest(Uri.parse(homeUrl));
 
     netSub = Connectivity().onConnectivityChanged.listen((results) {
       final offline = results.contains(ConnectivityResult.none);
@@ -203,8 +181,8 @@ class _WebScreenState extends State<WebScreen>
 
       setState(() => isOffline = offline);
 
-      if (offline) {
-        _closeAllDialogs();
+      if (!offline) {
+        controller.reload(); // ✅ FIX web chết
       }
     });
 
@@ -212,14 +190,23 @@ class _WebScreenState extends State<WebScreen>
   }
 
   /* =========================
-     ⭐ REVIEW LOGIC (SMART)
+     ✅ FIX WEBVIEW TREO
+  ========================= */
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      controller.reload(); // 🔥 FIX CHÍNH
+    }
+  }
+
+  /* =========================
+     ⭐ REVIEW (APPLE SAFE)
   ========================= */
   void _handleReviewTrigger() {
     if (hasRequestedReview) return;
 
     openCount++;
 
-    // 👉 chỉ trigger sau 3 lần load trang
     if (openCount >= 3) {
       hasRequestedReview = true;
 
@@ -230,50 +217,34 @@ class _WebScreenState extends State<WebScreen>
   }
 
   Future<void> _requestReview() async {
-    final review = InAppReview.instance;
+    try {
+      final review = InAppReview.instance;
 
-    if (await review.isAvailable()) {
-      review.requestReview();
-    } else {
-      final uri = Uri.parse(
-        "https://play.google.com/store/apps/details?id=YOUR_PACKAGE_NAME",
-      );
-
-      await launchUrl(uri,
-          mode: LaunchMode.externalApplication);
+      if (await review.isAvailable()) {
+        await review.requestReview();
+      }
+    } catch (e) {
+      debugPrint("Review error: $e");
     }
   }
 
   /* =========================
-     FIREBASE BLOCK
+     HELPERS
   ========================= */
-  bool _isFirebaseNoise(Uri uri) {
-    final url = uri.toString().toLowerCase();
-
-    return uri.host.contains("firebaseio.com") ||
-        uri.path.contains(".lp") ||
-        uri.query.contains("dframe") ||
-        url.contains("firebase");
-  }
-
   bool _isInternal(Uri uri) {
     return uri.host.contains("cocbasepro.com");
   }
 
-  bool _isBuyMeCoffee(Uri uri) {
-    return uri.host.contains("buymeacoffee.com");
-  }
-
   Future<bool> _showExternalDialog(String url) async {
-    if (!mounted || isDialogShowing || isOffline) return false;
+    if (!mounted || isDialogShowing) return false;
 
     isDialogShowing = true;
 
     final result = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text("Support Creator ❤️"),
-        content: Text("Open link?\n\n$url"),
+        title: const Text("Open external link"),
+        content: Text(url),
         actions: [
           TextButton(
             onPressed: () =>
@@ -293,16 +264,6 @@ class _WebScreenState extends State<WebScreen>
     return result ?? false;
   }
 
-  void _closeAllDialogs() {
-    if (!mounted) return;
-
-    while (Navigator.canPop(context)) {
-      Navigator.pop(context);
-    }
-
-    isDialogShowing = false;
-  }
-
   Future<void> setupFirebase() async {
     final messaging = FirebaseMessaging.instance;
 
@@ -310,10 +271,6 @@ class _WebScreenState extends State<WebScreen>
 
     final token = await messaging.getToken();
     log("FCM TOKEN: $token");
-
-    FirebaseMessaging.onMessage.listen((_) {
-      if (isOffline) return;
-    });
   }
 
   Future<void> handleBack() async {
@@ -339,29 +296,8 @@ class _WebScreenState extends State<WebScreen>
       },
       child: Scaffold(
         backgroundColor: const Color(0xFF1E88F0),
-        body: Stack(
-          children: [
-            SafeArea(
-              child: WebViewWidget(controller: controller),
-            ),
-            if (isOffline)
-              Container(
-                color: Colors.black,
-                child: const Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.wifi_off, color: Colors.white, size: 70),
-                      SizedBox(height: 10),
-                      Text(
-                        "No Internet Connection",
-                        style: TextStyle(color: Colors.white),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-          ],
+        body: SafeArea(
+          child: WebViewWidget(controller: controller),
         ),
       ),
     );
