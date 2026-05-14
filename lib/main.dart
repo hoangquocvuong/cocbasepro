@@ -117,7 +117,7 @@ class _SplashScreenState extends State<SplashScreen> {
 }
 
 /* =========================
-   WEBVIEW PRO MAX
+   WEBVIEW PRO MAX FIXED
 ========================= */
 class WebScreen extends StatefulWidget {
   const WebScreen({super.key});
@@ -134,8 +134,9 @@ class _WebScreenState extends State<WebScreen>
   bool isOffline = false;
   bool isDialogShowing = false;
 
-  final String homeUrl = "https://www.cocbasepro.com";
+  String currentUrl = "";
 
+  final String homeUrl = "https://www.cocbasepro.com";
   Uri get homeUri => Uri.parse(homeUrl);
 
   @override
@@ -152,15 +153,24 @@ class _WebScreenState extends State<WebScreen>
           onNavigationRequest: (request) async {
             final uri = Uri.parse(request.url);
 
-            // ❌ OFFLINE → chặn hết
-            if (isOffline) return NavigationDecision.prevent;
+            // 🚨🔥 FIX CỐT LÕI: CHẶN FIREBASE AUTO OPEN (.lp / dframe)
+            if (_isFirebaseNoise(uri)) {
+              debugPrint("BLOCK FIREBASE NOISE: ${uri.toString()}");
+              return NavigationDecision.prevent;
+            }
 
-            // ✅ internal
+            // ❌ OFFLINE → chặn web ngoài
+            if (isOffline) {
+              return NavigationDecision.prevent;
+            }
+
+            // 🌐 INTERNAL
             if (_isInternal(uri)) {
+              currentUrl = uri.toString();
               return NavigationDecision.navigate;
             }
 
-            // ⭐ chỉ popup với BuyMeCoffee
+            // ⭐ BUYMEACOFFEE → popup
             if (_isBuyMeCoffee(uri)) {
               final ok = await _showExternalDialog(uri.toString());
 
@@ -168,10 +178,11 @@ class _WebScreenState extends State<WebScreen>
                 await launchUrl(uri,
                     mode: LaunchMode.externalApplication);
               }
+
               return NavigationDecision.prevent;
             }
 
-            // ✅ link ngoài khác → mở luôn
+            // 🌍 EXTERNAL → open outside app
             await launchUrl(uri,
                 mode: LaunchMode.externalApplication);
 
@@ -182,23 +193,37 @@ class _WebScreenState extends State<WebScreen>
       ..loadRequest(homeUri);
 
     /* =========================
-       CONNECTIVITY FIX PRO
+       CONNECTIVITY FIX (SAFE)
     ========================= */
     netSub = Connectivity().onConnectivityChanged.listen((results) {
       final offline = results.contains(ConnectivityResult.none);
 
-      if (offline != isOffline) {
-        setState(() => isOffline = offline);
+      if (offline == isOffline) return;
 
-        if (offline) {
-          _closeAllDialogs(); // 💥 đóng popup
-        } else {
-          controller.reload();
-        }
+      setState(() => isOffline = offline);
+
+      if (offline) {
+        _closeAllDialogs();
       }
     });
 
     setupFirebase();
+  }
+
+  /* =========================
+     🔥 FIREBASE NOISE BLOCKER (IMPORTANT FIX)
+  ========================= */
+  bool _isFirebaseNoise(Uri uri) {
+    final url = uri.toString().toLowerCase();
+
+    return uri.host.contains("firebaseio.com") ||
+        uri.host.contains("googleapis.com") ||
+        uri.host.contains("firebase") ||
+        uri.path.contains(".lp") ||
+        uri.query.contains("dframe") ||
+        url.contains("dframe=") ||
+        url.contains(".lp?") ||
+        url.contains("firebase");
   }
 
   bool _isInternal(Uri uri) {
@@ -210,7 +235,7 @@ class _WebScreenState extends State<WebScreen>
   }
 
   /* =========================
-     DIALOG (ANTI BUG)
+     POPUP (GIỮ NGUYÊN UX)
   ========================= */
   Future<bool> _showExternalDialog(String url) async {
     if (!mounted || isDialogShowing || isOffline) return false;
@@ -221,7 +246,7 @@ class _WebScreenState extends State<WebScreen>
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text("Support Creator ❤️"),
-        content: Text("Open support link?\n\n$url"),
+        content: Text("Open link?\n\n$url"),
         actions: [
           TextButton(
             onPressed: () =>
@@ -252,7 +277,7 @@ class _WebScreenState extends State<WebScreen>
   }
 
   /* =========================
-     FIREBASE FIX
+     FIREBASE SETUP
   ========================= */
   Future<void> setupFirebase() async {
     final messaging = FirebaseMessaging.instance;
@@ -263,14 +288,11 @@ class _WebScreenState extends State<WebScreen>
     log("FCM TOKEN: $token");
 
     FirebaseMessaging.onMessage.listen((_) {
-      if (isOffline) return; // ❌ chặn khi offline
-      debugPrint("NOTIFICATION");
+      if (isOffline) return;
+      debugPrint("NOTIFICATION RECEIVED");
     });
   }
 
-  /* =========================
-     BACK BUTTON
-  ========================= */
   Future<void> handleBack() async {
     if (await controller.canGoBack()) {
       await controller.goBack();
