@@ -28,7 +28,9 @@ InterstitialAd? interstitialAd;
 void loadInterstitial() {
   InterstitialAd.load(
     adUnitId: 'ca-app-pub-9371341402256787/5085734937',
-    request: const AdRequest(),
+    request: const AdRequest(
+      nonPersonalizedAds: true,
+    ),
     adLoadCallback: InterstitialAdLoadCallback(
       onAdLoaded: (ad) => interstitialAd = ad,
       onAdFailedToLoad: (error) {
@@ -84,7 +86,7 @@ class _SplashScreenState extends State<SplashScreen> {
 
     loadInterstitial();
 
-    Future.delayed(const Duration(milliseconds: 2200), () {
+    Future.delayed(const Duration(milliseconds: 1200), () {
       if (!mounted) return;
 
       Navigator.pushReplacement(
