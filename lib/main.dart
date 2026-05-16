@@ -146,7 +146,7 @@ class _WebScreenState extends State<WebScreen>
 
   bool isOffline = false;
   bool isReloading = false;
-
+  bool isHomePage = true;
   String currentUrl = '';
 
   int openCount = 0;
@@ -259,8 +259,17 @@ class _WebScreenState extends State<WebScreen>
         return NavigationDecision.prevent;
       },
 
-      onPageFinished: (_) {
+      onPageFinished: (url) {
+
         isReloading = false;
+
+        setState(() {
+
+          isHomePage =
+              url == homeUrl ||
+                  url == '$homeUrl/';
+        });
+
         _handleReview();
       },
     );
@@ -457,6 +466,193 @@ class _WebScreenState extends State<WebScreen>
       },
     );
   }
+  Widget _homeNav() {
+    return BottomNavigationBar(
+      type:
+      BottomNavigationBarType.fixed,
+
+      onTap: (index) async {
+
+        switch(index){
+
+        // HOME
+          case 0:
+            await controller
+                .runJavaScript("""
+window.scrollTo({
+  top:0,
+  behavior:'smooth'
+});
+""");
+            break;
+
+        // EVENT
+          case 1:
+            await controller
+                .runJavaScript("""
+openEventPopup();
+""");
+            break;
+
+        // TH
+          case 2:
+            await controller
+                .runJavaScript("""
+document.querySelectorAll(
+'.bottom-nav .nav-item'
+)[2]?.click();
+""");
+            break;
+
+        // BH
+          case 3:
+            await controller
+                .runJavaScript("""
+document.querySelectorAll(
+'.bottom-nav .nav-item'
+)[3]?.click();
+""");
+            break;
+
+        // CH
+          case 4:
+            await controller
+                .runJavaScript("""
+document.querySelectorAll(
+'.bottom-nav .nav-item'
+)[4]?.click();
+""");
+            break;
+        }
+      },
+
+      items: const [
+
+        BottomNavigationBarItem(
+          icon: Icon(Icons.home),
+          label: 'Home',
+        ),
+
+        BottomNavigationBarItem(
+          icon: Icon(Icons.event),
+          label: 'Event',
+        ),
+
+        BottomNavigationBarItem(
+          icon: Icon(Icons.castle),
+          label: 'TH',
+        ),
+
+        BottomNavigationBarItem(
+          icon: Icon(Icons.build),
+          label: 'BH',
+        ),
+
+        BottomNavigationBarItem(
+          icon: Icon(Icons.shield),
+          label: 'CH',
+        ),
+      ],
+    );
+  }
+  Widget _articleNav() {
+    return BottomNavigationBar(
+      type:
+      BottomNavigationBarType.fixed,
+
+      onTap: (index) async {
+
+        switch(index){
+
+        // NEWS
+          case 0:
+            await controller
+                .runJavaScript("""
+document.getElementById(
+'nav-news-btn'
+)?.click();
+""");
+            break;
+
+        // DONATE
+          case 1:
+            await controller
+                .runJavaScript("""
+document.querySelector(
+'[data-popup="donate"]'
+)?.click();
+""");
+            break;
+
+        // HOME
+          case 2:
+            await controller
+                .loadRequest(
+              Uri.parse(homeUrl),
+            );
+            break;
+
+        // SAVED
+          case 3:
+            await controller
+                .runJavaScript("""
+document.getElementById(
+'bookmark-target'
+)?.click();
+""");
+            break;
+
+        // STATS
+          case 4:
+            await controller
+                .runJavaScript("""
+document.querySelector(
+'[data-popup="top"]'
+)?.click();
+""");
+            break;
+
+        // SETTINGS
+          case 5:
+            _showSettings();
+            break;
+        }
+      },
+
+      items: const [
+
+        BottomNavigationBarItem(
+          icon: Icon(Icons.article),
+          label: 'News',
+        ),
+
+        BottomNavigationBarItem(
+          icon: Icon(Icons.favorite),
+          label: 'Donate',
+        ),
+
+        BottomNavigationBarItem(
+          icon: Icon(Icons.home),
+          label: 'Home',
+        ),
+
+        BottomNavigationBarItem(
+          icon: Icon(Icons.bookmark),
+          label: 'Saved',
+        ),
+
+        BottomNavigationBarItem(
+          icon: Icon(Icons.bar_chart),
+          label: 'Stats',
+        ),
+
+        BottomNavigationBarItem(
+          icon: Icon(Icons.settings),
+          label: 'Settings',
+        ),
+      ],
+    );
+  }
   // =========================
 // (7.13) UI
 // =========================
@@ -482,76 +678,10 @@ class _WebScreenState extends State<WebScreen>
         // ======================
         bottomNavigationBar:
         Platform.isIOS
-            ? BottomNavigationBar(
-          type:
-          BottomNavigationBarType.fixed,
-
-          onTap: (index) async {
-
-            switch (index) {
-
-            // HOME
-              case 0:
-                await controller.loadRequest(
-                  Uri.parse(
-                    'https://www.cocbasepro.com/',
-                  ),
-                );
-                break;
-
-            // WAR
-              case 1:
-                await controller.loadRequest(
-                  Uri.parse(
-                    'https://www.cocbasepro.com/search/label/War',
-                  ),
-                );
-                break;
-
-            // SAVED
-              case 2:
-                await controller
-                    .runJavaScript("""
-document.getElementById(
-'bookmark-target'
-)?.click();
-""");
-                break;
-
-            // SETTINGS
-              case 3:
-                _showSettings();
-                break;
-            }
-          },
-
-          items: const [
-
-            BottomNavigationBarItem(
-              icon: Icon(Icons.home),
-              label: 'Home',
-            ),
-
-            BottomNavigationBarItem(
-              icon: Icon(Icons.shield),
-              label: 'War',
-            ),
-
-            BottomNavigationBarItem(
-              icon:
-              Icon(Icons.bookmark),
-              label: 'Saved',
-            ),
-
-            BottomNavigationBarItem(
-              icon:
-              Icon(Icons.settings),
-              label: 'Settings',
-            ),
-          ],
-        )
+            ? (isHomePage
+            ? _homeNav()
+            : _articleNav())
             : null,
-
         // ======================
         // BODY
         // ======================
