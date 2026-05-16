@@ -72,7 +72,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return const MaterialApp(
       debugShowCheckedModeBanner: false,
-      home: SplashScreen(),
+      home: WebScreen(),
     );
   }
 }
@@ -151,6 +151,8 @@ class _WebScreenState extends State<WebScreen>
   Color navIconColor = Colors.black;
   Timer? themeTimer;
   bool lastDarkMode = false;
+  bool pageLoaded = false;
+
   String currentUrl = '';
 
   int openCount = 0;
@@ -277,7 +279,7 @@ class _WebScreenState extends State<WebScreen>
         isReloading = false;
 
         setState(() {
-
+          pageLoaded = true;
           isHomePage =
               url == homeUrl ||
                   url == '$homeUrl/';
@@ -823,7 +825,8 @@ document.querySelector(
         // NATIVE BOTTOM NAV
         // ======================
         bottomNavigationBar:
-        Platform.isIOS
+        Platform.isIOS &&
+            pageLoaded
             ? (isHomePage
             ? _homeNav()
             : _articleNav())
@@ -834,11 +837,40 @@ document.querySelector(
         body: Stack(
           children: [
 
+            // WEBVIEW
             SafeArea(
-              child: WebViewWidget(
-                controller: controller,
+              child: AnimatedOpacity(
+                opacity:
+                pageLoaded ? 1 : 0,
+
+                duration:
+                const Duration(
+                  milliseconds: 250,
+                ),
+
+                child: WebViewWidget(
+                  controller: controller,
+                ),
               ),
             ),
+
+            // SPLASH LOADING
+            if (!pageLoaded)
+              Container(
+                color:
+                const Color(
+                  0xFF1E88F0,
+                ),
+
+                child: const Center(
+                  child: Image(
+                    image: AssetImage(
+                      'assets/icon.png',
+                    ),
+                    width: 180,
+                  ),
+                ),
+              ),
 
             // OFFLINE SCREEN
             if (isOffline)
