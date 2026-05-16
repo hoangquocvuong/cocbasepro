@@ -147,6 +147,8 @@ class _WebScreenState extends State<WebScreen>
   bool isOffline = false;
   bool isReloading = false;
   bool isHomePage = true;
+  Color navBgColor = Colors.white;
+  Color navIconColor = Colors.black;
   String currentUrl = '';
 
   int openCount = 0;
@@ -259,7 +261,7 @@ class _WebScreenState extends State<WebScreen>
         return NavigationDecision.prevent;
       },
 
-      onPageFinished: (url) {
+      onPageFinished: (url) async {
 
         isReloading = false;
 
@@ -269,6 +271,8 @@ class _WebScreenState extends State<WebScreen>
               url == homeUrl ||
                   url == '$homeUrl/';
         });
+
+        await _syncNavTheme();
 
         _handleReview();
       },
@@ -466,8 +470,76 @@ class _WebScreenState extends State<WebScreen>
       },
     );
   }
+
+  Future<void> _syncNavTheme() async {
+    try {
+
+      final result =
+      await controller
+          .runJavaScriptReturningResult("""
+(() => {
+
+  const body =
+      getComputedStyle(
+        document.body
+      );
+
+  const bg =
+      body.backgroundColor;
+
+  const dark =
+      document.documentElement
+          .classList
+          .contains('dark');
+
+  return JSON.stringify({
+    bg,
+    dark
+  });
+})();
+""");
+
+      final data =
+      result.toString();
+
+      final isDark =
+      data.contains(
+        '"dark":true',
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+
+        navBgColor =
+        isDark
+            ? const Color(
+            0xFF181818)
+            : Colors.white;
+
+        navIconColor =
+        isDark
+            ? Colors.white
+            : Colors.black87;
+      });
+
+    } catch (_) {}
+  }
+
   Widget _homeNav() {
     return BottomNavigationBar(
+      backgroundColor:
+      navBgColor,
+
+      selectedItemColor:
+      navIconColor,
+
+      unselectedItemColor:
+      navIconColor
+          .withValues(
+        alpha: 0.7,
+      ),
+
       type:
       BottomNavigationBarType.fixed,
 
@@ -557,17 +629,22 @@ document.querySelectorAll(
   }
   Widget _articleNav() {
     return BottomNavigationBar(
-      type:
-      BottomNavigationBarType.fixed,
+      type: BottomNavigationBarType.fixed,
 
       onTap: (index) async {
 
         switch(index){
 
-        // NEWS
+        // HOME
           case 0:
-            await controller
-                .runJavaScript("""
+            await controller.loadRequest(
+              Uri.parse(homeUrl),
+            );
+            break;
+
+        // NEWS
+          case 1:
+            await controller.runJavaScript("""
 document.getElementById(
 'nav-news-btn'
 )?.click();
@@ -575,27 +652,17 @@ document.getElementById(
             break;
 
         // DONATE
-          case 1:
-            await controller
-                .runJavaScript("""
+          case 2:
+            await controller.runJavaScript("""
 document.querySelector(
 '[data-popup="donate"]'
 )?.click();
 """);
             break;
 
-        // HOME
-          case 2:
-            await controller
-                .loadRequest(
-              Uri.parse(homeUrl),
-            );
-            break;
-
         // SAVED
           case 3:
-            await controller
-                .runJavaScript("""
+            await controller.runJavaScript("""
 document.getElementById(
 'bookmark-target'
 )?.click();
@@ -604,8 +671,7 @@ document.getElementById(
 
         // STATS
           case 4:
-            await controller
-                .runJavaScript("""
+            await controller.runJavaScript("""
 document.querySelector(
 '[data-popup="top"]'
 )?.click();
@@ -622,6 +688,11 @@ document.querySelector(
       items: const [
 
         BottomNavigationBarItem(
+          icon: Icon(Icons.home),
+          label: 'Home',
+        ),
+
+        BottomNavigationBarItem(
           icon: Icon(Icons.article),
           label: 'News',
         ),
@@ -629,11 +700,6 @@ document.querySelector(
         BottomNavigationBarItem(
           icon: Icon(Icons.favorite),
           label: 'Donate',
-        ),
-
-        BottomNavigationBarItem(
-          icon: Icon(Icons.home),
-          label: 'Home',
         ),
 
         BottomNavigationBarItem(
