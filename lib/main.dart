@@ -3,7 +3,7 @@
 // =========================
 import 'dart:async';
 import 'dart:developer';
-
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -178,10 +178,28 @@ class _WebScreenState extends State<WebScreen>
   // =========================
   void _createWebView() {
     controller = WebViewController()
-      ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setBackgroundColor(const Color(0xFF1E88F0))
-      ..setNavigationDelegate(_navigation())
-      ..loadRequest(Uri.parse(currentUrl));
+      ..setJavaScriptMode(
+        JavaScriptMode.unrestricted,
+      )
+
+    // APP MODE FOR IOS
+      ..setUserAgent(
+        Platform.isIOS
+            ? 'CocBaseProApp-iOS'
+            : null,
+      )
+
+      ..setBackgroundColor(
+        const Color(0xFF1E88F0),
+      )
+
+      ..setNavigationDelegate(
+        _navigation(),
+      )
+
+      ..loadRequest(
+        Uri.parse(currentUrl),
+      );
   }
 
   // =========================
@@ -378,6 +396,7 @@ class _WebScreenState extends State<WebScreen>
     }
   }
 
+
   // =========================
   // (7.12) DISPOSE
   // =========================
@@ -389,52 +408,214 @@ class _WebScreenState extends State<WebScreen>
     super.dispose();
   }
 
+// =========================
+// SETTINGS SHEET
+// =========================
+  void _showSettings() {
+    showModalBottomSheet(
+      context: context,
+      builder: (_) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+
+              ListTile(
+                leading:
+                const Icon(Icons.refresh),
+
+                title:
+                const Text('Reload'),
+
+                onTap: () {
+                  controller.reload();
+                  Navigator.pop(context);
+                },
+              ),
+
+              ListTile(
+                leading:
+                const Icon(Icons.star),
+
+                title:
+                const Text('Rate App'),
+
+                onTap: () async {
+                  final review =
+                      InAppReview.instance;
+
+                  if (await review
+                      .isAvailable()) {
+                    await review
+                        .requestReview();
+                  }
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
   // =========================
-  // (7.13) UI
-  // =========================
+// (7.13) UI
+// =========================
   @override
   Widget build(BuildContext context) {
+
     return PopScope(
       canPop: false,
-      onPopInvokedWithResult: (didPop, _) async {
-        if (!didPop) await _back();
+
+      onPopInvokedWithResult:
+          (didPop, _) async {
+        if (!didPop) {
+          await _back();
+        }
       },
+
       child: Scaffold(
-        backgroundColor: const Color(0xFF1E88F0),
-        body: Stack(
-          children: [
-            SafeArea(
-              child: WebViewWidget(controller: controller),
+        backgroundColor:
+        const Color(0xFF1E88F0),
+
+        // ======================
+        // NATIVE BOTTOM NAV
+        // ======================
+        bottomNavigationBar:
+        Platform.isIOS
+            ? BottomNavigationBar(
+          type:
+          BottomNavigationBarType.fixed,
+
+          onTap: (index) async {
+
+            switch (index) {
+
+            // HOME
+              case 0:
+                await controller.loadRequest(
+                  Uri.parse(
+                    'https://www.cocbasepro.com/',
+                  ),
+                );
+                break;
+
+            // WAR
+              case 1:
+                await controller.loadRequest(
+                  Uri.parse(
+                    'https://www.cocbasepro.com/search/label/War',
+                  ),
+                );
+                break;
+
+            // SAVED
+              case 2:
+                await controller
+                    .runJavaScript("""
+document.getElementById(
+'bookmark-target'
+)?.click();
+""");
+                break;
+
+            // SETTINGS
+              case 3:
+                _showSettings();
+                break;
+            }
+          },
+
+          items: const [
+
+            BottomNavigationBarItem(
+              icon: Icon(Icons.home),
+              label: 'Home',
             ),
 
+            BottomNavigationBarItem(
+              icon: Icon(Icons.shield),
+              label: 'War',
+            ),
+
+            BottomNavigationBarItem(
+              icon:
+              Icon(Icons.bookmark),
+              label: 'Saved',
+            ),
+
+            BottomNavigationBarItem(
+              icon:
+              Icon(Icons.settings),
+              label: 'Settings',
+            ),
+          ],
+        )
+            : null,
+
+        // ======================
+        // BODY
+        // ======================
+        body: Stack(
+          children: [
+
+            SafeArea(
+              child: WebViewWidget(
+                controller: controller,
+              ),
+            ),
+
+            // OFFLINE SCREEN
             if (isOffline)
               Container(
-                color: Colors.black.withValues(alpha: 0.85),
+                color: Colors.black
+                    .withValues(
+                  alpha: 0.85,
+                ),
+
                 child: Center(
                   child: Column(
-                    mainAxisSize: MainAxisSize.min,
+                    mainAxisSize:
+                    MainAxisSize.min,
+
                     children: [
+
                       const Icon(
                         Icons.wifi_off,
                         size: 48,
-                        color: Colors.white70,
+                        color:
+                        Colors.white70,
                       ),
-                      const SizedBox(height: 12),
+
+                      const SizedBox(
+                        height: 12,
+                      ),
+
                       const Text(
                         'No Internet',
-                        style: TextStyle(color: Colors.white),
+                        style: TextStyle(
+                          color:
+                          Colors.white,
+                        ),
                       ),
-                      const SizedBox(height: 12),
+
+                      const SizedBox(
+                        height: 12,
+                      ),
+
                       ElevatedButton(
                         onPressed: () {
                           controller.reload();
                         },
-                        child: const Text('Retry'),
-                      )
+
+                        child:
+                        const Text(
+                          'Retry',
+                        ),
+                      ),
                     ],
                   ),
                 ),
-              )
+              ),
           ],
         ),
       ),
