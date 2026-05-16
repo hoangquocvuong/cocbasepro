@@ -149,6 +149,8 @@ class _WebScreenState extends State<WebScreen>
   bool isHomePage = true;
   Color navBgColor = Colors.white;
   Color navIconColor = Colors.black;
+  Timer? themeTimer;
+  bool lastDarkMode = false;
   String currentUrl = '';
 
   int openCount = 0;
@@ -173,6 +175,15 @@ class _WebScreenState extends State<WebScreen>
 
     _setupConnectivity();
     _setupFirebase();
+    themeTimer =
+        Timer.periodic(
+          const Duration(
+            milliseconds: 500,
+          ),
+              (_) {
+            _watchThemeChange();
+          },
+        );
   }
 
   // =========================
@@ -419,6 +430,7 @@ class _WebScreenState extends State<WebScreen>
     netSub.cancel();
     interstitialAd?.dispose();
     super.dispose();
+    themeTimer?.cancel();
   }
 
 // =========================
@@ -528,6 +540,64 @@ class _WebScreenState extends State<WebScreen>
       );
     }
   }
+
+  Future<void> _watchThemeChange() async {
+    try {
+
+      final result =
+      await controller
+          .runJavaScriptReturningResult("""
+(() => {
+
+  const mode =
+      document.documentElement
+          .getAttribute('data-mode') ||
+      document.body
+          .getAttribute('data-mode');
+
+  const prefersDark =
+      window.matchMedia(
+        '(prefers-color-scheme: dark)'
+      ).matches;
+
+  const isDark =
+      mode === 'dark'
+      || (!mode && prefersDark);
+
+  return isDark;
+})();
+""");
+
+      final isDark =
+      result
+          .toString()
+          .contains('true');
+
+      // chỉ update khi đổi mode
+      if (isDark != lastDarkMode &&
+          mounted) {
+
+        lastDarkMode = isDark;
+
+        setState(() {
+          navBgColor =
+          isDark
+              ? const Color(0xFF0F172A)
+              : Colors.white
+              .withValues(
+            alpha: 0.92,
+          );
+
+          navIconColor =
+          isDark
+              ? Colors.white70
+              : Colors.black87;
+        });
+      }
+
+    } catch (_) {}
+  }
+
 
   Widget _homeNav() {
     return BottomNavigationBar(
