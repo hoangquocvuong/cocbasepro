@@ -1,45 +1,49 @@
-// main.dart
-// Full fixed version:
-// - No reload when returning to app
-// - WebView state preserved
-// - Recover only if WebView actually dies
-// - Connectivity handling
-// - Firebase + AdMob + Review kept
-
+// =========================
+// (0) IMPORTS
+// =========================
 import 'dart:async';
 import 'dart:developer';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
+
 import 'package:google_mobile_ads/google_mobile_ads.dart';
+
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+
 import 'package:in_app_review/in_app_review.dart';
 
+// =========================
+// (1) FIREBASE BACKGROUND
+// =========================
 Future<void> firebaseBgHandler(RemoteMessage message) async {
   await Firebase.initializeApp();
 }
 
+// =========================
+// (2) INTERSTITIAL AD
+// =========================
 InterstitialAd? interstitialAd;
 
 void loadInterstitial() {
   InterstitialAd.load(
     adUnitId: 'ca-app-pub-9371341402256787/5085734937',
-    request: const AdRequest(
-      nonPersonalizedAds: true,
-    ),
+    request: const AdRequest(nonPersonalizedAds: true),
     adLoadCallback: InterstitialAdLoadCallback(
       onAdLoaded: (ad) => interstitialAd = ad,
-      onAdFailedToLoad: (error) {
-        debugPrint(error.toString());
-      },
+      onAdFailedToLoad: (error) => debugPrint(error.toString()),
     ),
   );
 }
 
+// =========================
+// (3) MAIN
+// =========================
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -53,13 +57,14 @@ void main() async {
 
   await MobileAds.instance.initialize();
 
-  SystemChrome.setEnabledSystemUIMode(
-    SystemUiMode.edgeToEdge,
-  );
+  SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
 
   runApp(const MyApp());
 }
 
+// =========================
+// (4) APP ROOT
+// =========================
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
@@ -72,6 +77,9 @@ class MyApp extends StatelessWidget {
   }
 }
 
+// =========================
+// (5) SPLASH SCREEN
+// =========================
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 
@@ -80,28 +88,24 @@ class SplashScreen extends StatefulWidget {
 }
 
 class _SplashScreenState extends State<SplashScreen> {
+
   @override
   void initState() {
     super.initState();
 
     loadInterstitial();
 
-    Future.delayed(const Duration(milliseconds: 1200), () {
+    Future.delayed(const Duration(milliseconds: 1600), () {
       if (!mounted) return;
 
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(
-          builder: (_) => const WebScreen(),
-        ),
+        MaterialPageRoute(builder: (_) => const WebScreen()),
       );
 
-      Future.delayed(
-        const Duration(milliseconds: 800),
-            () {
-          interstitialAd?.show();
-        },
-      );
+      Future.delayed(const Duration(milliseconds: 800), () {
+        interstitialAd?.show();
+      });
     });
   }
 
@@ -119,6 +123,9 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 }
 
+// =========================
+// (6) WEB SCREEN
+// =========================
 class WebScreen extends StatefulWidget {
   const WebScreen({super.key});
 
@@ -126,249 +133,303 @@ class WebScreen extends StatefulWidget {
   State<WebScreen> createState() => _WebScreenState();
 }
 
+// =========================
+// (7) STATE
+// =========================
 class _WebScreenState extends State<WebScreen>
     with WidgetsBindingObserver {
 
-  late final WebViewController controller;
-  late final StreamSubscription<List<ConnectivityResult>> netSub;
+  late WebViewController controller;
+  late StreamSubscription<List<ConnectivityResult>> netSub;
 
-  final homeUrl='https://www.cocbasepro.com';
+  final homeUrl = 'https://www.cocbasepro.com';
 
-  bool isOffline=false;
-  bool isReloading=false;
+  bool isOffline = false;
+  bool isReloading = false;
 
-  String currentUrl='';
+  String currentUrl = '';
 
-  int openCount=0;
-  bool hasRequestedReview=false;
+  int openCount = 0;
+  bool hasRequestedReview = false;
 
-  DateTime lastReloadTime=DateTime.now();
+  // ===== FIX WEBVIEW DIE =====
+  bool isCheckingAlive = false;
+  DateTime lastPaused = DateTime.now();
 
+  // =========================
+  // (7.1) INIT
+  // =========================
   @override
-  void initState(){
+  void initState() {
     super.initState();
 
     WidgetsBinding.instance.addObserver(this);
 
-    currentUrl=homeUrl;
+    currentUrl = homeUrl;
 
-    controller=WebViewController()
-      ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setBackgroundColor(const Color(0xFF1E88F0))
-      ..setNavigationDelegate(_navigation())
-      ..loadRequest(Uri.parse(homeUrl));
+    _createWebView();
 
     _setupConnectivity();
     _setupFirebase();
   }
 
-  NavigationDelegate _navigation(){
+  // =========================
+  // (7.2) CREATE WEBVIEW
+  // =========================
+  void _createWebView() {
+    controller = WebViewController()
+      ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..setBackgroundColor(const Color(0xFF1E88F0))
+      ..setNavigationDelegate(_navigation())
+      ..loadRequest(Uri.parse(currentUrl));
+  }
+
+  // =========================
+  // (7.3) NAVIGATION
+  // =========================
+  NavigationDelegate _navigation() {
     return NavigationDelegate(
-      onNavigationRequest:(request) async {
+      onNavigationRequest: (request) async {
+        final uri = Uri.parse(request.url);
 
-        final uri=Uri.parse(request.url);
-
-        if(uri.host.contains('firebaseio.com')){
+        if (uri.host.contains('firebaseio.com')) {
           return NavigationDecision.prevent;
         }
 
-        if(isOffline){
+        if (isOffline) {
           return NavigationDecision.prevent;
         }
 
-        if(uri.host.contains('cocbasepro.com')){
-          currentUrl=uri.toString();
+        if (uri.host.contains('cocbasepro.com')) {
+          currentUrl = uri.toString();
           return NavigationDecision.navigate;
         }
 
-        if(uri.host.toLowerCase().contains('buymeacoffee')){
-
-          final ok=await showDialog<bool>(
-            context:context,
-            builder:(ctx)=>AlertDialog(
-              title:const Text('Open link'),
-              content:const Text('Open in browser?'),
-              actions:[
+        // BUY ME A COFFEE -> CONFIRM
+        if (uri.host.toLowerCase().contains('buymeacoffee')) {
+          final ok = await showDialog<bool>(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              title: const Text('Open link'),
+              content: const Text('Open in browser?'),
+              actions: [
                 TextButton(
-                  onPressed:()=>Navigator.pop(ctx,false),
-                  child:const Text('Cancel'),
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: const Text('Cancel'),
                 ),
                 ElevatedButton(
-                  onPressed:()=>Navigator.pop(ctx,true),
-                  child:const Text('Open'),
+                  onPressed: () => Navigator.pop(ctx, true),
+                  child: const Text('Open'),
                 )
               ],
             ),
-          )??false;
+          ) ??
+              false;
 
-          if(ok){
-            await launchUrl(
-              uri,
-              mode:LaunchMode.externalApplication,
-            );
+          if (ok) {
+            await launchUrl(uri,
+                mode: LaunchMode.externalApplication);
           }
 
           return NavigationDecision.prevent;
         }
 
-        await launchUrl(
-          uri,
-          mode:LaunchMode.externalApplication,
-        );
+        // OTHER LINKS -> OPEN DIRECT
+        await launchUrl(uri,
+            mode: LaunchMode.externalApplication);
 
         return NavigationDecision.prevent;
       },
 
-      onPageFinished:(_){
-        isReloading=false;
+      onPageFinished: (_) {
+        isReloading = false;
         _handleReview();
       },
     );
   }
 
-  void _setupConnectivity(){
-    netSub=Connectivity().onConnectivityChanged.listen((results){
-      final offline=results.contains(ConnectivityResult.none);
+  // =========================
+  // (7.4) CONNECTIVITY
+  // =========================
+  void _setupConnectivity() {
+    netSub =
+        Connectivity().onConnectivityChanged.listen((results) {
+          final offline = results.contains(ConnectivityResult.none);
 
-      if(offline==isOffline||!mounted)return;
+          if (offline == isOffline || !mounted) return;
 
-      setState(() {
-        isOffline=offline;
-      });
-    });
+          setState(() {
+            isOffline = offline;
+          });
+        });
   }
 
+  // =========================
+  // (7.5) LIFECYCLE FIX
+  // =========================
   @override
-  void didChangeAppLifecycleState(AppLifecycleState state){
-    if(state==AppLifecycleState.resumed){
-      _checkAlive();
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused) {
+      lastPaused = DateTime.now();
+    }
+
+    if (state == AppLifecycleState.resumed) {
+      final diff =
+          DateTime.now().difference(lastPaused).inSeconds;
+
+      if (diff > 8) {
+        _safeCheckAlive();
+      }
     }
   }
 
-  Future<void> _checkAlive() async{
-    await Future.delayed(const Duration(milliseconds:500));
+  // =========================
+  // (7.6) SAFE CHECK
+  // =========================
+  Future<void> _safeCheckAlive() async {
+    if (isCheckingAlive) return;
 
-    if(!mounted)return;
+    isCheckingAlive = true;
+    await _checkAlive();
+    isCheckingAlive = false;
+  }
 
-    try{
-      await controller.runJavaScript('document.title');
-    }catch(_){
-      await _reload();
+  // =========================
+// (7.7) CHECK WEBVIEW DIE (FAST + STABLE)
+// =========================
+  Future<void> _checkAlive() async {
+    await Future.delayed(const Duration(milliseconds: 700));
+
+    if (!mounted) return;
+
+    bool isDead = false;
+
+    try {
+      final result = await controller
+          .runJavaScriptReturningResult('1+1')
+          .timeout(const Duration(seconds: 2));
+
+      // WebView sống thì phải trả về "2"
+      if (result.toString() != '2') {
+        isDead = true;
+      }
+
+    } catch (_) {
+      isDead = true;
+    }
+
+    if (isDead) {
+      await _forceRecreateWebView();
     }
   }
 
-  Future<void> _reload() async{
+  // =========================
+  // (7.8) FORCE RECREATE
+  // =========================
+  Future<void> _forceRecreateWebView() async {
+    if (!mounted) return;
 
-    if(isReloading)return;
-
-    final diff=DateTime.now()
-        .difference(lastReloadTime)
-        .inSeconds;
-
-    if(diff<10)return;
-
-    isReloading=true;
-    lastReloadTime=DateTime.now();
-
-    try{
-      await controller.loadRequest(
-        Uri.parse(currentUrl),
-      );
-    }catch(_){}
-
-    await Future.delayed(
-      const Duration(seconds:2),
-    );
-
-    isReloading=false;
+    try {
+      _createWebView();
+      setState(() {});
+    } catch (_) {}
   }
 
-  void _handleReview(){
-
-    if(hasRequestedReview)return;
+  // =========================
+  // (7.9) REVIEW
+  // =========================
+  void _handleReview() {
+    if (hasRequestedReview) return;
 
     openCount++;
 
-    if(openCount>=3){
-      hasRequestedReview=true;
+    if (openCount >= 3) {
+      hasRequestedReview = true;
       _requestReview();
     }
   }
 
-  Future<void> _requestReview() async{
-    final review=InAppReview.instance;
+  Future<void> _requestReview() async {
+    final review = InAppReview.instance;
 
-    if(await review.isAvailable()){
+    if (await review.isAvailable()) {
       await review.requestReview();
     }
   }
 
-  Future<void> _setupFirebase() async{
-    final messaging=FirebaseMessaging.instance;
+  // =========================
+  // (7.10) FIREBASE
+  // =========================
+  Future<void> _setupFirebase() async {
+    final messaging = FirebaseMessaging.instance;
 
     await messaging.requestPermission();
 
-    final token=await messaging.getToken();
+    final token = await messaging.getToken();
     log('FCM:$token');
   }
 
-  Future<void> _back() async{
-    if(await controller.canGoBack()){
+  // =========================
+  // (7.11) BACK
+  // =========================
+  Future<void> _back() async {
+    if (await controller.canGoBack()) {
       await controller.goBack();
     }
   }
 
+  // =========================
+  // (7.12) DISPOSE
+  // =========================
   @override
-  void dispose(){
+  void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     netSub.cancel();
     interstitialAd?.dispose();
     super.dispose();
   }
 
+  // =========================
+  // (7.13) UI
+  // =========================
   @override
-  Widget build(BuildContext context){
+  Widget build(BuildContext context) {
     return PopScope(
-      canPop:false,
-      onPopInvokedWithResult:(didPop,_) async {
-        if(!didPop){
-          await _back();
-        }
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) async {
+        if (!didPop) await _back();
       },
-      child:Scaffold(
-        backgroundColor:const Color(0xFF1E88F0),
-        body:Stack(
-          children:[
+      child: Scaffold(
+        backgroundColor: const Color(0xFF1E88F0),
+        body: Stack(
+          children: [
             SafeArea(
-              child:WebViewWidget(
-                controller:controller,
-              ),
+              child: WebViewWidget(controller: controller),
             ),
-            if(isOffline)
+
+            if (isOffline)
               Container(
-                color:Colors.black.withValues(alpha:0.85),
-                child:Center(
-                  child:Column(
-                    mainAxisSize:MainAxisSize.min,
-                    children:[
+                color: Colors.black.withValues(alpha: 0.85),
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
                       const Icon(
                         Icons.wifi_off,
-                        size:48,
-                        color:Colors.white70,
+                        size: 48,
+                        color: Colors.white70,
                       ),
-                      const SizedBox(height:12),
+                      const SizedBox(height: 12),
                       const Text(
                         'No Internet',
-                        style:TextStyle(
-                          color:Colors.white,
-                        ),
+                        style: TextStyle(color: Colors.white),
                       ),
-                      const SizedBox(height:12),
+                      const SizedBox(height: 12),
                       ElevatedButton(
-                        onPressed:(){
+                        onPressed: () {
                           controller.reload();
                         },
-                        child:const Text('Retry'),
+                        child: const Text('Retry'),
                       )
                     ],
                   ),
