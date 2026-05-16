@@ -479,51 +479,54 @@ class _WebScreenState extends State<WebScreen>
           .runJavaScriptReturningResult("""
 (() => {
 
-  const body =
-      getComputedStyle(
-        document.body
-      );
-
-  const bg =
-      body.backgroundColor;
-
-  const dark =
+  // kiểm tra mode thật của blog
+  const mode =
       document.documentElement
-          .classList
-          .contains('dark');
+          .getAttribute('data-mode') ||
+      document.body
+          .getAttribute('data-mode');
 
-  return JSON.stringify({
-    bg,
-    dark
-  });
+  // fallback theo system
+  const prefersDark =
+      window.matchMedia(
+        '(prefers-color-scheme: dark)'
+      ).matches;
+
+  const isDark =
+      mode === 'dark'
+      || (!mode && prefersDark);
+
+  return isDark ? 'dark' : 'light';
 })();
 """);
 
-      final data =
-      result.toString();
-
       final isDark =
-      data.contains(
-        '"dark":true',
-      );
+      result
+          .toString()
+          .contains('dark');
 
       if (!mounted) return;
 
       setState(() {
 
+        // giống website
         navBgColor =
         isDark
-            ? const Color(
-            0xFF181818)
-            : Colors.white;
+            ? const Color(0xFF0F172A)
+            : Colors.white
+            .withValues(alpha: 0.92);
 
         navIconColor =
         isDark
-            ? Colors.white
+            ? Colors.white70
             : Colors.black87;
       });
 
-    } catch (_) {}
+    } catch (e) {
+      debugPrint(
+        'Theme sync error: $e',
+      );
+    }
   }
 
   Widget _homeNav() {
@@ -629,7 +632,20 @@ document.querySelectorAll(
   }
   Widget _articleNav() {
     return BottomNavigationBar(
-      type: BottomNavigationBarType.fixed,
+      backgroundColor:
+      navBgColor,
+
+      selectedItemColor:
+      navIconColor,
+
+      unselectedItemColor:
+      navIconColor
+          .withValues(
+        alpha: 0.7,
+      ),
+
+      type:
+      BottomNavigationBarType.fixed,
 
       onTap: (index) async {
 
@@ -686,32 +702,26 @@ document.querySelector(
       },
 
       items: const [
-
         BottomNavigationBarItem(
           icon: Icon(Icons.home),
           label: 'Home',
         ),
-
         BottomNavigationBarItem(
           icon: Icon(Icons.article),
           label: 'News',
         ),
-
         BottomNavigationBarItem(
           icon: Icon(Icons.favorite),
           label: 'Donate',
         ),
-
         BottomNavigationBarItem(
           icon: Icon(Icons.bookmark),
           label: 'Saved',
         ),
-
         BottomNavigationBarItem(
           icon: Icon(Icons.bar_chart),
           label: 'Stats',
         ),
-
         BottomNavigationBarItem(
           icon: Icon(Icons.settings),
           label: 'Settings',
