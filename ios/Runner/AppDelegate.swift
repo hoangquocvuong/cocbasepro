@@ -1,9 +1,10 @@
-import Flutter
 import UIKit
+import Flutter
 import FirebaseCore
+import FirebaseMessaging
 
 @main
-@objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
+@objc class AppDelegate: FlutterAppDelegate {
 
   override func application(
     _ application: UIApplication,
@@ -14,17 +15,23 @@ import FirebaseCore
       FirebaseApp.configure()
     }
 
+    GeneratedPluginRegistrant.register(with: self)
+
     return super.application(
       application,
       didFinishLaunchingWithOptions: launchOptions
     )
   }
 
-  func didInitializeImplicitFlutterEngine(
-    _ engineBridge: FlutterImplicitEngineBridge
+  override func application(
+    _ application: UIApplication,
+    didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
   ) {
-    GeneratedPluginRegistrant.register(
-      with: engineBridge.pluginRegistry
+    Messaging.messaging().apnsToken = deviceToken
+
+    super.application(
+      application,
+      didRegisterForRemoteNotificationsWithDeviceToken: deviceToken
     )
   }
 }
