@@ -470,13 +470,24 @@ document.readyState
   Future<void> _setupFirebase() async {
     final messaging = FirebaseMessaging.instance;
 
-    await messaging.requestPermission();
+    final settings =
+    await messaging.requestPermission(
+      alert: true,
+      badge: true,
+      sound: true,
+      provisional: false,
+    );
+
+    debugPrint(
+      'Permission: ${settings.authorizationStatus}',
+    );
 
     await messaging.subscribeToTopic('all');
 
     final token = await messaging.getToken();
 
     log('FCM:$token');
+    debugPrint('FCM TOKEN: $token');
   }
 
   // =========================
