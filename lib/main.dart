@@ -681,19 +681,19 @@ document.readyState
 
   Future<void> _syncNewsBadge() async {
     try {
-
       final result =
       await controller
           .runJavaScriptReturningResult("""
 (() => {
-  return window.unread || 0;
+  return Number(window.unread || 0);
 })();
 """);
 
       final count =
           int.tryParse(
             result.toString().replaceAll('"', ''),
-          ) ?? 0;
+          ) ??
+              0;
 
       if (!mounted) return;
 
@@ -702,7 +702,6 @@ document.readyState
           unreadNews = count;
         });
       }
-
     } catch (_) {}
   }
 
