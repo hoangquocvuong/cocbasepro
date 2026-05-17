@@ -152,6 +152,9 @@ class _WebScreenState extends State<WebScreen>
   Timer? themeTimer;
   bool lastDarkMode = false;
   bool pageLoaded = false;
+  int unreadNews = 0;
+  Timer? newsTimer;
+  bool appJustResumed = false;
 
   String currentUrl = '';
 
@@ -163,8 +166,8 @@ class _WebScreenState extends State<WebScreen>
   DateTime lastPaused = DateTime.now();
 
   // =========================
-  // (7.1) INIT
-  // =========================
+// (7.1) INIT
+// =========================
   @override
   void initState() {
     super.initState();
@@ -177,15 +180,24 @@ class _WebScreenState extends State<WebScreen>
 
     _setupConnectivity();
     _setupFirebase();
-    themeTimer =
-        Timer.periodic(
-          const Duration(
-            milliseconds: 500,
-          ),
-              (_) {
-            _watchThemeChange();
-          },
-        );
+
+    // THEME WATCHER
+    themeTimer = Timer.periodic(
+      const Duration(
+        milliseconds: 500,
+      ),
+          (_) {
+        _watchThemeChange();
+      },
+    );
+
+    // NEWS BADGE WATCHER
+    newsTimer = Timer.periodic(
+      const Duration(seconds: 2),
+          (_) {
+        _syncNewsBadge();
+      },
+    );
   }
 
   // =========================
@@ -311,19 +323,36 @@ class _WebScreenState extends State<WebScreen>
   // =========================
   // (7.5) LIFECYCLE FIX
   // =========================
+
   @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
+  void didChangeAppLifecycleState(
+      AppLifecycleState state) {
+
     if (state == AppLifecycleState.paused) {
       lastPaused = DateTime.now();
     }
 
     if (state == AppLifecycleState.resumed) {
-      final diff =
-          DateTime.now().difference(lastPaused).inSeconds;
 
-      if (diff > 8) {
+      appJustResumed = true;
+
+      final diff =
+          DateTime.now()
+              .difference(lastPaused)
+              .inMinutes;
+
+      // chỉ check nếu ngủ lâu
+      if (diff >= 10) {
         _safeCheckAlive();
       }
+
+      // resume xong reset cờ
+      Future.delayed(
+        const Duration(seconds: 5),
+            () {
+          appJustResumed = false;
+        },
+      );
     }
   }
 
@@ -342,19 +371,30 @@ class _WebScreenState extends State<WebScreen>
 // (7.7) CHECK WEBVIEW DIE (FAST + STABLE)
 // =========================
   Future<void> _checkAlive() async {
-    await Future.delayed(const Duration(milliseconds: 700));
+    await Future.delayed(
+      const Duration(milliseconds: 700),
+    );
 
     if (!mounted) return;
 
     bool isDead = false;
 
     try {
-      final result = await controller
-          .runJavaScriptReturningResult('1+1')
-          .timeout(const Duration(seconds: 2));
 
-      // WebView sống thì phải trả về "2"
-      if (result.toString() != '2') {
+      final result =
+      await controller
+          .runJavaScriptReturningResult("""
+document.readyState
+""")
+          .timeout(
+        const Duration(seconds: 4),
+      );
+
+      final state =
+      result.toString();
+
+      if (!state.contains('complete') &&
+          !state.contains('interactive')) {
         isDead = true;
       }
 
@@ -371,11 +411,34 @@ class _WebScreenState extends State<WebScreen>
   // (7.8) FORCE RECREATE
   // =========================
   Future<void> _forceRecreateWebView() async {
+
     if (!mounted) return;
 
+    // tránh recreate giả sau resume
+    if (appJustResumed) {
+
+      await Future.delayed(
+        const Duration(seconds: 2),
+      );
+
+      try {
+        await controller
+            .runJavaScriptReturningResult(
+          'document.readyState',
+        );
+
+        return;
+      } catch (_) {}
+    }
+
     try {
+
+      setState(() {
+        pageLoaded = false;
+      });
+
       _createWebView();
-      setState(() {});
+
     } catch (_) {}
   }
 
@@ -409,7 +472,10 @@ class _WebScreenState extends State<WebScreen>
 
     await messaging.requestPermission();
 
+    await messaging.subscribeToTopic('all');
+
     final token = await messaging.getToken();
+
     log('FCM:$token');
   }
 
@@ -429,10 +495,12 @@ class _WebScreenState extends State<WebScreen>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+
     netSub.cancel();
     interstitialAd?.dispose();
-    super.dispose();
     themeTimer?.cancel();
+    newsTimer?.cancel();
+    super.dispose();
   }
 
 // =========================
@@ -594,6 +662,33 @@ class _WebScreenState extends State<WebScreen>
           isDark
               ? Colors.white70
               : Colors.black87;
+        });
+      }
+
+    } catch (_) {}
+  }
+
+  Future<void> _syncNewsBadge() async {
+    try {
+
+      final result =
+      await controller
+          .runJavaScriptReturningResult("""
+(() => {
+  return window.unread || 0;
+})();
+""");
+
+      final count =
+          int.tryParse(
+            result.toString().replaceAll('"', ''),
+          ) ?? 0;
+
+      if (!mounted) return;
+
+      if (count != unreadNews) {
+        setState(() {
+          unreadNews = count;
         });
       }
 
@@ -773,13 +868,25 @@ document.querySelector(
         }
       },
 
-      items: const [
+      items: [
         BottomNavigationBarItem(
           icon: Icon(Icons.home),
           label: 'Home',
         ),
         BottomNavigationBarItem(
-          icon: Icon(Icons.article),
+          icon: Badge(
+            isLabelVisible: unreadNews > 0,
+
+            label: Text(
+              unreadNews > 9
+                  ? '9+'
+                  : unreadNews.toString(),
+            ),
+
+            child: Icon(
+              Icons.article,
+            ),
+          ),
           label: 'News',
         ),
         BottomNavigationBarItem(
