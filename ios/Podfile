@@ -14,9 +14,7 @@ def flutter_root
     __FILE__
   )
 
-  unless File.exist?(generated_xcode_build_settings_path)
-    raise "#{generated_xcode_build_settings_path} must exist."
-  end
+  raise "#{generated_xcode_build_settings_path} must exist." unless File.exist?(generated_xcode_build_settings_path)
 
   File.foreach(generated_xcode_build_settings_path) do |line|
     matches = line.match(/FLUTTER_ROOT\=(.*)/)
@@ -27,20 +25,16 @@ def flutter_root
 end
 
 require File.expand_path(
-  File.join(
-    'packages',
-    'flutter_tools',
-    'bin',
-    'podhelper'
-  ),
+  File.join('packages', 'flutter_tools', 'bin', 'podhelper'),
   flutter_root
 )
 
 flutter_ios_podfile_setup
 
 target 'Runner' do
-  use_frameworks!
-  use_modular_headers!
+  # ❌ bỏ 2 dòng này
+  # use_frameworks!
+  # use_modular_headers!
 
   flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
 end
