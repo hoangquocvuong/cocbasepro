@@ -112,7 +112,7 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   Widget build(BuildContext context) {
     return const Scaffold(
-      backgroundColor: Color(0xFF00C853),
+      backgroundColor: Color(0xFF1E88F0),
       body: Center(
         child: Image(
           image: AssetImage('assets/icon.png'),
@@ -211,7 +211,7 @@ class _WebScreenState extends State<WebScreen>
       )
 
       ..setBackgroundColor(
-        const Color(0xFF00C853),
+        const Color(0xFF1E88F0),
       )
 
     // 🔥 JS CHANNEL (giữ nguyên)
