@@ -112,7 +112,7 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   Widget build(BuildContext context) {
     return const Scaffold(
-      backgroundColor: Color(0xFF1E88F0),
+      backgroundColor: Color(0xFF00C853),
       body: Center(
         child: Image(
           image: AssetImage('assets/icon.png'),
@@ -154,6 +154,7 @@ class _WebScreenState extends State<WebScreen>
   bool pageLoaded = false;
   int unreadNews = 0;
   Timer? newsTimer;
+  Timer? _badgeDebounce;
   bool appJustResumed = false;
 
   String currentUrl = '';
@@ -210,23 +211,31 @@ class _WebScreenState extends State<WebScreen>
       )
 
       ..setBackgroundColor(
-        const Color(0xFF1E88F0),
+        const Color(0xFF00C853),
       )
 
     // 🔥 JS CHANNEL (giữ nguyên)
       ..addJavaScriptChannel(
         'Flutter',
         onMessageReceived: (message) {
-          final count = int.tryParse(message.message) ?? 0;
+          final newCount = int.tryParse(message.message) ?? 0;
 
-          if (!mounted) return;
+          _badgeDebounce?.cancel();
 
-          setState(() {
-            unreadNews = count;
-          });
+          _badgeDebounce = Timer(
+            const Duration(milliseconds: 300),
+                () {
+              if (!mounted) return;
 
-          debugPrint("🔥 JS=${message.message}");
-          debugPrint("🔥 unreadNews=$unreadNews");
+              if (newCount == unreadNews) return;
+
+              setState(() {
+                unreadNews = newCount;
+              });
+
+              debugPrint("🔥 badge updated = $unreadNews");
+            },
+          );
         },
       )
 
@@ -310,13 +319,15 @@ class _WebScreenState extends State<WebScreen>
           );
 
           // ===== SEND BADGE FROM WEBVIEW =====
+          await Future.delayed(const Duration(milliseconds: 800));
+
           await controller.runJavaScript("""
-if(window.Flutter && window.Flutter.postMessage){
-  const count =
-    document.getElementById('news-count')?.textContent || "0";
+(() => {
+  const el = document.getElementById('news-count');
+  const count = el ? el.textContent : "0";
 
   window.Flutter.postMessage(count);
-}
+})();
 """);
 
 
@@ -459,10 +470,10 @@ document.readyState
 
     try {
 
-      setState(() {
-        pageLoaded = false;
-        unreadNews = 0; // 👈 thêm dòng này
-      });
+      // chỉ reset khi thật sự reload home
+      if (isHomePage) {
+        unreadNews = 0;
+      }
 
       _createWebView();
 
@@ -944,7 +955,7 @@ document.querySelector(
 
       child: Scaffold(
         backgroundColor:
-        const Color(0xFF1E88F0),
+        const Color(0xFF00C853),
 
         // ======================
         // NATIVE BOTTOM NAV
