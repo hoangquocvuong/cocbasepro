@@ -219,10 +219,6 @@ class _WebScreenState extends State<WebScreen>
     'Flutter',
     onMessageReceived: (message) {
 
-    debugPrint(
-    "Unread news: ${message.message}"
-    );
-
     final count =
     int.tryParse(
     message.message,
@@ -231,6 +227,14 @@ class _WebScreenState extends State<WebScreen>
     setState(() {
     unreadNews = count;
     });
+
+    debugPrint(
+    "🔥 JS=${message.message}"
+    );
+
+    debugPrint(
+    "🔥 unreadNews=$unreadNews"
+    );
     },
     )
 
@@ -310,12 +314,29 @@ class _WebScreenState extends State<WebScreen>
           isHomePage =
               url == homeUrl ||
                   url == '$homeUrl/';
-
-          unreadNews = 7; // TEST BADGE
         });
 
-        await _syncNavTheme();
+        await Future.delayed(
+            Duration(milliseconds:500)
+        );
 
+        await controller.runJavaScript("""
+if(
+ window.Flutter &&
+ window.Flutter.postMessage
+){
+ const count=
+ document.getElementById(
+   'news-count'
+ )?.textContent || "0";
+
+ window.Flutter.postMessage(
+   count
+ );
+}
+""");
+
+        await _syncNavTheme();
 
         _handleReview();
       },
