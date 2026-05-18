@@ -14,7 +14,6 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 
 import 'package:firebase_core/firebase_core.dart';
-import 'firebase_options.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 
 import 'package:in_app_review/in_app_review.dart';
@@ -22,13 +21,8 @@ import 'package:in_app_review/in_app_review.dart';
 // =========================
 // (1) FIREBASE BACKGROUND
 // =========================
-Future<void> firebaseBgHandler(
-    RemoteMessage message) async {
-
-  await Firebase.initializeApp(
-    options:
-    DefaultFirebaseOptions.currentPlatform,
-  );
+Future<void> firebaseBgHandler(RemoteMessage message) async {
+  await Firebase.initializeApp();
 }
 
 // =========================
@@ -54,9 +48,7 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   try {
-    await Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform,
-    );
+    await Firebase.initializeApp();
   } catch (e) {
     debugPrint('Firebase error: $e');
   }
@@ -478,24 +470,10 @@ document.readyState
   Future<void> _setupFirebase() async {
     final messaging = FirebaseMessaging.instance;
 
-    final settings =
-    await messaging.requestPermission(
-      alert: true,
-      badge: true,
-      sound: true,
-      provisional: false,
-    );
-
-    debugPrint(
-      'Permission: ${settings.authorizationStatus}',
-    );
-
-    await messaging.subscribeToTopic('all');
+    await messaging.requestPermission();
 
     final token = await messaging.getToken();
-
     log('FCM:$token');
-    debugPrint('FCM TOKEN: $token');
   }
 
   // =========================
@@ -689,19 +667,19 @@ document.readyState
 
   Future<void> _syncNewsBadge() async {
     try {
+
       final result =
       await controller
           .runJavaScriptReturningResult("""
 (() => {
-  return Number(window.unread || 0);
+  return window.unread || 0;
 })();
 """);
 
       final count =
           int.tryParse(
             result.toString().replaceAll('"', ''),
-          ) ??
-              0;
+          ) ?? 0;
 
       if (!mounted) return;
 
@@ -710,6 +688,7 @@ document.readyState
           unreadNews = count;
         });
       }
+
     } catch (_) {}
   }
 
