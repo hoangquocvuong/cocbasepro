@@ -216,15 +216,23 @@ class _WebScreenState extends State<WebScreen>
 
     // 🔥 THÊM ĐOẠN NÀY Ở ĐÂY
       ..addJavaScriptChannel(
-        'Flutter',
-        onMessageReceived: (message) {
-          final count = int.tryParse(message.message) ?? 0;
+    'Flutter',
+    onMessageReceived: (message) {
 
-          setState(() {
-            unreadNews = count;
-          });
-        },
-      )
+    debugPrint(
+    "Unread news: ${message.message}"
+    );
+
+    final count =
+    int.tryParse(
+    message.message,
+    ) ?? 0;
+
+    setState(() {
+    unreadNews = count;
+    });
+    },
+    )
 
       ..setNavigationDelegate(
         _navigation(),
@@ -305,11 +313,6 @@ class _WebScreenState extends State<WebScreen>
 
         await _syncNavTheme();
 
-
-        // 🔥 THÊM ĐOẠN NÀY
-        await controller.runJavaScript("""
-    syncUnreadToFlutter(window.NEWS_STATE?.data?.length || 0);
-  """);
 
         _handleReview();
       },
