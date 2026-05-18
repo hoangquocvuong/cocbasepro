@@ -14,6 +14,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 
 import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 
 import 'package:in_app_review/in_app_review.dart';
@@ -21,8 +22,13 @@ import 'package:in_app_review/in_app_review.dart';
 // =========================
 // (1) FIREBASE BACKGROUND
 // =========================
-Future<void> firebaseBgHandler(RemoteMessage message) async {
-  await Firebase.initializeApp();
+Future<void> firebaseBgHandler(
+    RemoteMessage message) async {
+
+  await Firebase.initializeApp(
+    options:
+    DefaultFirebaseOptions.currentPlatform,
+  );
 }
 
 // =========================
@@ -48,7 +54,9 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   try {
-    await Firebase.initializeApp();
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
   } catch (e) {
     debugPrint('Firebase error: $e');
   }

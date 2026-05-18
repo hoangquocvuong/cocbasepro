@@ -1,0 +1,67 @@
+{
+  "project_info": {
+    "project_number": "27868110886",
+    "project_id": "cocbaseapp",
+    "storage_bucket": "cocbaseapp.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:27868110886:android:7a578c5aa1e7085ea006e7",
+        "android_client_info": {
+          "package_name": "com.cocbase.appbase"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBAMEfA87PRcioPaPHNCYQfrLOHgAZhVnQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:27868110886:android:c64d1b0a89a9d373a006e7",
+        "android_client_info": {
+          "package_name": "com.cocbasepro"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBAMEfA87PRcioPaPHNCYQfrLOHgAZhVnQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:27868110886:android:f7f6a85122057109a006e7",
+        "android_client_info": {
+          "package_name": "com.example.cocbasepro"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBAMEfA87PRcioPaPHNCYQfrLOHgAZhVnQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
