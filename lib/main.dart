@@ -306,9 +306,12 @@ class _WebScreenState extends State<WebScreen>
 
         setState(() {
           pageLoaded = true;
+
           isHomePage =
               url == homeUrl ||
                   url == '$homeUrl/';
+
+          unreadNews = 7; // TEST BADGE
         });
 
         await _syncNavTheme();
@@ -480,15 +483,47 @@ document.readyState
   }
 
   // =========================
-  // (7.10) FIREBASE
   // =========================
   Future<void> _setupFirebase() async {
-    final messaging = FirebaseMessaging.instance;
+    final messaging =
+        FirebaseMessaging.instance;
 
-    await messaging.requestPermission();
+    final settings =
+    await messaging.requestPermission(
+      alert: true,
+      badge: true,
+      sound: true,
+    );
 
-    final token = await messaging.getToken();
-    log('FCM:$token');
+    log(
+      'Permission: ${settings.authorizationStatus}',
+    );
+
+    await messaging.subscribeToTopic(
+      'all',
+    );
+
+    log(
+      'Subscribed topic: all',
+    );
+
+    final token =
+    await messaging.getToken();
+
+    log(
+      'FCM TOKEN: $token',
+    );
+
+    FirebaseMessaging.onMessage.listen(
+          (RemoteMessage message) {
+
+        log(
+            'Foreground: '
+                '${message.notification?.title}'
+        );
+
+      },
+    );
   }
 
   // =========================
