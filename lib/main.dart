@@ -161,6 +161,7 @@ class _WebScreenState extends State<WebScreen>
   int openCount = 0;
   bool hasRequestedReview = false;
 
+
   // ===== FIX WEBVIEW DIE =====
   bool isCheckingAlive = false;
   DateTime lastPaused = DateTime.now();
@@ -195,8 +196,8 @@ class _WebScreenState extends State<WebScreen>
   }
 
   // =========================
-  // (7.2) CREATE WEBVIEW
-  // =========================
+// (7.2) CREATE WEBVIEW
+// =========================
   void _createWebView() {
     controller = WebViewController()
       ..setJavaScriptMode(
@@ -205,46 +206,34 @@ class _WebScreenState extends State<WebScreen>
 
     // APP MODE FOR IOS
       ..setUserAgent(
-        Platform.isIOS
-            ? 'CocBaseProApp-iOS'
-            : null,
+        Platform.isIOS ? 'CocBaseProApp-iOS' : null,
       )
 
       ..setBackgroundColor(
         const Color(0xFF1E88F0),
       )
 
-    // 🔥 THÊM ĐOẠN NÀY Ở ĐÂY
+    // 🔥 JS CHANNEL (giữ nguyên)
       ..addJavaScriptChannel(
-    'Flutter',
-    onMessageReceived: (message) {
+        'Flutter',
+        onMessageReceived: (message) {
+          final count = int.tryParse(message.message) ?? 0;
 
-    final count =
-    int.tryParse(
-    message.message,
-    ) ?? 0;
+          if (!mounted) return;
 
-    setState(() {
-    unreadNews = count;
-    });
+          setState(() {
+            unreadNews = count;
+          });
 
-    debugPrint(
-    "🔥 JS=${message.message}"
-    );
-
-    debugPrint(
-    "🔥 unreadNews=$unreadNews"
-    );
-    },
-    )
-
-      ..setNavigationDelegate(
-        _navigation(),
+          debugPrint("🔥 JS=${message.message}");
+          debugPrint("🔥 unreadNews=$unreadNews");
+        },
       )
 
-      ..loadRequest(
-        Uri.parse(currentUrl),
-      );
+      ..setNavigationDelegate(_navigation())
+
+      ..loadRequest(Uri.parse(currentUrl));
+
   }
 
   // =========================
@@ -304,43 +293,41 @@ class _WebScreenState extends State<WebScreen>
         return NavigationDecision.prevent;
       },
 
-      onPageFinished: (url) async {
+        onPageFinished: (url) async {
 
-        isReloading = false;
+          isReloading = false;
 
-        setState(() {
-          pageLoaded = true;
+          setState(() {
+            pageLoaded = true;
 
-          isHomePage =
-              url == homeUrl ||
-                  url == '$homeUrl/';
-        });
+            isHomePage =
+                url == homeUrl ||
+                    url == '$homeUrl/';
+          });
 
-        await Future.delayed(
-            Duration(milliseconds:500)
-        );
+          await Future.delayed(
+            const Duration(milliseconds: 500),
+          );
 
-        await controller.runJavaScript("""
-if(
- window.Flutter &&
- window.Flutter.postMessage
-){
- const count=
- document.getElementById(
-   'news-count'
- )?.textContent || "0";
+          // ===== SEND BADGE FROM WEBVIEW =====
+          await controller.runJavaScript("""
+if(window.Flutter && window.Flutter.postMessage){
+  const count =
+    document.getElementById('news-count')?.textContent || "0";
 
- window.Flutter.postMessage(
-   count
- );
+  window.Flutter.postMessage(count);
 }
 """);
 
-        await _syncNavTheme();
 
-        _handleReview();
-      },
+          // ===== THEME SYNC =====
+          await _syncNavTheme();
+
+          // ===== REVIEW =====
+          _handleReview();
+        }
     );
+
   }
 
   // =========================
@@ -474,6 +461,7 @@ document.readyState
 
       setState(() {
         pageLoaded = false;
+        unreadNews = 0; // 👈 thêm dòng này
       });
 
       _createWebView();
@@ -876,17 +864,9 @@ document.getElementById(
 """);
             break;
 
-        // DONATE
-          case 2:
-            await controller.runJavaScript("""
-document.querySelector(
-'[data-popup="donate"]'
-)?.click();
-""");
-            break;
 
         // SAVED
-          case 3:
+          case 2:
             await controller.runJavaScript("""
 document.getElementById(
 'bookmark-target'
@@ -895,7 +875,7 @@ document.getElementById(
             break;
 
         // STATS
-          case 4:
+          case 3:
             await controller.runJavaScript("""
 document.querySelector(
 '[data-popup="top"]'
@@ -904,7 +884,7 @@ document.querySelector(
             break;
 
         // SETTINGS
-          case 5:
+          case 4:
             _showSettings();
             break;
         }
@@ -930,10 +910,6 @@ document.querySelector(
             ),
           ),
           label: 'News',
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.favorite),
-          label: 'Donate',
         ),
         BottomNavigationBarItem(
           icon: Icon(Icons.bookmark),
