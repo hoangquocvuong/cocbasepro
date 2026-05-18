@@ -191,13 +191,7 @@ class _WebScreenState extends State<WebScreen>
       },
     );
 
-    // NEWS BADGE WATCHER
-    newsTimer = Timer.periodic(
-      const Duration(seconds: 2),
-          (_) {
-        _syncNewsBadge();
-      },
-    );
+
   }
 
   // =========================
@@ -218,6 +212,20 @@ class _WebScreenState extends State<WebScreen>
 
       ..setBackgroundColor(
         const Color(0xFF1E88F0),
+      )
+
+    // 🔥 THÊM ĐOẠN NÀY Ở ĐÂY
+      ..addJavaScriptChannel(
+        'UnreadChannel',
+        onMessageReceived: (message) {
+          final count = int.tryParse(message.message) ?? 0;
+
+          if (!mounted) return;
+
+          setState(() {
+            unreadNews = count;
+          });
+        },
       )
 
       ..setNavigationDelegate(
@@ -665,32 +673,6 @@ document.readyState
     } catch (_) {}
   }
 
-  Future<void> _syncNewsBadge() async {
-    try {
-
-      final result =
-      await controller
-          .runJavaScriptReturningResult("""
-(() => {
-  return window.unread || 0;
-})();
-""");
-
-      final count =
-          int.tryParse(
-            result.toString().replaceAll('"', ''),
-          ) ?? 0;
-
-      if (!mounted) return;
-
-      if (count != unreadNews) {
-        setState(() {
-          unreadNews = count;
-        });
-      }
-
-    } catch (_) {}
-  }
 
 
   Widget _homeNav() {
