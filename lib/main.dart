@@ -1052,7 +1052,7 @@ document.querySelector(
             if (!pageLoaded)
               Container(
                 color:
-                const Color(0xFF046826),
+                const Color(0xFF1E88F0),
 
                 child: const Center(
                   child: Image(
