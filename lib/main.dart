@@ -112,7 +112,7 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   Widget build(BuildContext context) {
     return const Scaffold(
-      backgroundColor: Color(0xFF04170D),
+      backgroundColor: Color(0xFF1E88F0),
       body: Center(
         child: Image(
           image: AssetImage('assets/icon.png'),
@@ -211,7 +211,7 @@ class _WebScreenState extends State<WebScreen>
       )
 
       ..setBackgroundColor(
-        const Color(0xFF04170D),
+        const Color(0xFF1E88F0),
       )
 
     // 🔥 JS CHANNEL (giữ nguyên)
@@ -1052,7 +1052,7 @@ document.querySelector(
             if (!pageLoaded)
               Container(
                 color:
-                const Color(0xFF04170D),
+                const Color(0xFF1E88F0),
 
                 child: const Center(
                   child: Image(
