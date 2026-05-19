@@ -57,28 +57,7 @@ void main() async {
 
   await MobileAds.instance.initialize();
 
-  SystemChrome.setSystemUIOverlayStyle(
-    const SystemUiOverlayStyle(
-
-      // TOP SAFE AREA / STATUS BAR
-      statusBarColor: Color(0xFF04170D),
-
-      // Android icons
-      statusBarIconBrightness: Brightness.light,
-
-      // iOS icons
-      statusBarBrightness: Brightness.dark,
-
-      // Bottom area
-      systemNavigationBarColor: Color(0xFF04170D),
-    ),
-  );
-
-  SystemChrome.setEnabledSystemUIMode(
-    SystemUiMode.edgeToEdge,
-  );
-
-  runApp(const MyApp());
+  SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
 
   runApp(const MyApp());
 }
