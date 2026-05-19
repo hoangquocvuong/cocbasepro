@@ -57,7 +57,28 @@ void main() async {
 
   await MobileAds.instance.initialize();
 
-  SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+  SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(
+
+      // TOP SAFE AREA / STATUS BAR
+      statusBarColor: Color(0xFF04170D),
+
+      // Android icons
+      statusBarIconBrightness: Brightness.light,
+
+      // iOS icons
+      statusBarBrightness: Brightness.dark,
+
+      // Bottom area
+      systemNavigationBarColor: Color(0xFF04170D),
+    ),
+  );
+
+  SystemChrome.setEnabledSystemUIMode(
+    SystemUiMode.edgeToEdge,
+  );
+
+  runApp(const MyApp());
 
   runApp(const MyApp());
 }
@@ -112,7 +133,7 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   Widget build(BuildContext context) {
     return const Scaffold(
-      backgroundColor: Color(0xFF1E88F0),
+      backgroundColor: Color(0xFF04170D),
       body: Center(
         child: Image(
           image: AssetImage('assets/icon.png'),
@@ -211,7 +232,7 @@ class _WebScreenState extends State<WebScreen>
       )
 
       ..setBackgroundColor(
-        const Color(0xFF1E88F0),
+        const Color(0xFF04170D),
       )
 
     // 🔥 JS CHANNEL (giữ nguyên)
@@ -318,17 +339,8 @@ class _WebScreenState extends State<WebScreen>
             const Duration(milliseconds: 500),
           );
 
-          // ===== SEND BADGE FROM WEBVIEW =====
-          await Future.delayed(const Duration(milliseconds: 800));
-
-          await controller.runJavaScript("""
-(() => {
-  const el = document.getElementById('news-count');
-  const count = el ? el.textContent : "0";
-
-  window.Flutter.postMessage(count);
-})();
-""");
+          // ===== REFRESH BADGE =====
+          await _refreshNewsBadge();
 
 
           // ===== THEME SYNC =====
@@ -470,11 +482,6 @@ document.readyState
 
     try {
 
-      // chỉ reset khi thật sự reload home
-      if (isHomePage) {
-        unreadNews = 0;
-      }
-
       _createWebView();
 
     } catch (_) {}
@@ -555,12 +562,84 @@ document.readyState
     }
   }
 
+  // =========================
+// REFRESH NEWS BADGE
+// =========================
+  Future<void> _refreshNewsBadge() async {
+
+    for (int i = 0; i < 10; i++) {
+
+      try {
+
+        final result =
+        await controller
+            .runJavaScriptReturningResult("""
+(() => {
+
+  const el =
+      document.getElementById(
+        'news-count'
+      );
+
+  if(!el) return -1;
+
+  const txt =
+      (el.textContent || '')
+      .replace(/[^0-9]/g,'');
+
+  return txt
+      ? parseInt(txt,10)
+      : 0;
+
+})();
+""");
+
+        final count =
+        int.tryParse(
+          result
+              .toString()
+              .replaceAll(
+            RegExp(r'[^0-9-]'),
+            '',
+          ),
+        );
+
+        if(count != null &&
+            count >= 0){
+
+          if(!mounted) return;
+
+          if(count != unreadNews){
+
+            setState(() {
+              unreadNews = count;
+            });
+
+          }
+
+          debugPrint(
+              "🔥 badge refreshed = $unreadNews"
+          );
+
+          return;
+        }
+
+      } catch (_) {}
+
+      await Future.delayed(
+        const Duration(
+          milliseconds: 500,
+        ),
+      );
+    }
+  }
 
   // =========================
   // (7.12) DISPOSE
   // =========================
   @override
   void dispose() {
+    _badgeDebounce?.cancel();
     WidgetsBinding.instance.removeObserver(this);
 
     netSub.cancel();
@@ -994,9 +1073,7 @@ document.querySelector(
             if (!pageLoaded)
               Container(
                 color:
-                const Color(
-                  0xFF1E88F0,
-                ),
+                const Color(0xFF04170D),
 
                 child: const Center(
                   child: Image(
