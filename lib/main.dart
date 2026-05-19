@@ -1013,7 +1013,7 @@ document.querySelector(
 
       child: Scaffold(
         backgroundColor:
-        const Color(0xFF00C853),
+        const Color(0xFF1E88F0),
 
         // ======================
         // NATIVE BOTTOM NAV
@@ -1052,7 +1052,7 @@ document.querySelector(
             if (!pageLoaded)
               Container(
                 color:
-                const Color(0xFF1E88F0),
+                const Color(0xFF046826),
 
                 child: const Center(
                   child: Image(
