@@ -10,7 +10,7 @@
 		<string>$(DEVELOPMENT_LANGUAGE)</string>
 
 		<key>CFBundleDisplayName</key>
-		<string>Coc Base Pro</string>
+		<string>Base Layout Pro</string>
 
 		<key>CFBundleExecutable</key>
 		<string>$(EXECUTABLE_NAME)</string>

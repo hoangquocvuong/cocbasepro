@@ -1059,7 +1059,7 @@ document.querySelector(
                     image: AssetImage(
                       'assets/icon.png',
                     ),
-                    width: 180,
+                    width: 280,
                   ),
                 ),
               ),
