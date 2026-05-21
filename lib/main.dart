@@ -1147,7 +1147,6 @@ document.querySelector(
             ),
 
             // SPLASH / RESTORE LOADING
-            // SPLASH / RESTORE LOADING
             if (!pageLoaded)
         Container(
         width: double.infinity,
@@ -1171,14 +1170,64 @@ document.querySelector(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   SizedBox(
-                    width: 280,
-                    height: 280,
+                    width: 300,
+                    height: 300,
                     child: CustomPaint(
                       painter: SplashHeroPainter(),
                     ),
                   ),
 
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 18),
+
+                  Text(
+                    isInitialLaunch
+                        ? 'Launching app...'
+                        : 'Restoring session...',
+                    style: const TextStyle(
+                      color: Color(0xFFB7FF00),
+                      fontSize: 25,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 0.3,
+                    ),
+                  ),
+
+                  const SizedBox(height: 8),
+
+                  Text(
+                    isInitialLaunch
+                        ? 'Loading latest Clash layouts'
+                        : 'Refreshing latest content',
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.72),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+
+                  const SizedBox(height: 24),
+
+                  Container(
+                    width: 250,
+                    height: 12,
+                    padding: const EdgeInsets.all(2),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(
+                        color: const Color(0xFFB7FF00).withValues(alpha: 0.42),
+                      ),
+                      color: Colors.black.withValues(alpha: 0.38),
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(999),
+                      child: LinearProgressIndicator(
+                        minHeight: 8,
+                        backgroundColor: Colors.white.withValues(alpha: 0.06),
+                        color: const Color(0xFFB7FF00),
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 36),
 
                   RichText(
                     textAlign: TextAlign.center,
@@ -1190,7 +1239,7 @@ document.querySelector(
                             color: Color(0xFFEFFFF5),
                             fontSize: 31,
                             fontWeight: FontWeight.w900,
-                            letterSpacing: 2.2,
+                            letterSpacing: 2.1,
                           ),
                         ),
                         TextSpan(
@@ -1199,7 +1248,7 @@ document.querySelector(
                             color: Color(0xFFB7FF00),
                             fontSize: 31,
                             fontWeight: FontWeight.w900,
-                            letterSpacing: 2.2,
+                            letterSpacing: 2.1,
                           ),
                         ),
                       ],
@@ -1209,13 +1258,13 @@ document.querySelector(
                   const SizedBox(height: 14),
 
                   Container(
-                    width: 190,
+                    width: 210,
                     height: 1,
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
                         colors: [
                           Colors.transparent,
-                          const Color(0xFFB7FF00).withValues(alpha: 0.8),
+                          const Color(0xFFB7FF00).withValues(alpha: 0.9),
                           Colors.transparent,
                         ],
                       ),
@@ -1225,9 +1274,7 @@ document.querySelector(
                   const SizedBox(height: 18),
 
                   Text(
-                    isInitialLaunch
-                        ? 'Smart layouts. Fast copy. Better defense.'
-                        : 'Refreshing latest layouts and content',
+                    'Smart layouts. Fast copy. Better defense.',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       color: const Color(0xFFB7FF00).withValues(alpha: 0.95),
@@ -1239,9 +1286,9 @@ document.querySelector(
 
                   const SizedBox(height: 30),
 
-                  Row(
+                  const Row(
                     mainAxisAlignment: MainAxisAlignment.center,
-                    children: const [
+                    children: [
                       _SplashFeature(
                         icon: Icons.verified_user_outlined,
                         label: 'PROTECT',
@@ -1258,67 +1305,6 @@ document.querySelector(
                       ),
                     ],
                   ),
-
-                  const SizedBox(height: 34),
-
-                  Text(
-                    isInitialLaunch
-                        ? 'Launching app...'
-                        : 'Restoring session...',
-                    style: const TextStyle(
-                      color: Color(0xFFB7FF00),
-                      fontSize: 24,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 0.3,
-                    ),
-                  ),
-
-                  const SizedBox(height: 8),
-
-                  Text(
-                    isInitialLaunch
-                        ? 'Loading latest Clash layouts'
-                        : 'Refreshing latest content',
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.7),
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-
-                  const SizedBox(height: 26),
-
-                  Container(
-                    width: 250,
-                    height: 12,
-                    padding: const EdgeInsets.all(2),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(999),
-                      border: Border.all(
-                        color: const Color(0xFFB7FF00).withValues(alpha: 0.4),
-                      ),
-                      color: Colors.black.withValues(alpha: 0.35),
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(999),
-                      child: LinearProgressIndicator(
-                        minHeight: 8,
-                        backgroundColor: Colors.white.withValues(alpha: 0.06),
-                        color: const Color(0xFFB7FF00),
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 26),
-
-                  const SizedBox(
-                    width: 46,
-                    height: 46,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2.5,
-                      color: Color(0xFFB7FF00),
-                    ),
-                  ),
                 ],
               ),
             ),
@@ -1326,8 +1312,8 @@ document.querySelector(
         ),
       ),
       ],
-      ),
         ),
+      ),
       ),
     );
 
@@ -1376,57 +1362,94 @@ class SplashHeroPainter extends CustomPainter {
     final glowPaint = Paint()
       ..shader = RadialGradient(
         colors: [
-          const Color(0xFFB7FF00).withValues(alpha: 0.42),
-          const Color(0xFFB7FF00).withValues(alpha: 0.12),
+          const Color(0xFFB7FF00).withValues(alpha: 0.45),
+          const Color(0xFFB7FF00).withValues(alpha: 0.16),
           Colors.transparent,
         ],
-      ).createShader(Rect.fromCircle(center: c, radius: 135));
+      ).createShader(
+        Rect.fromCircle(
+          center: c,
+          radius: 145,
+        ),
+      );
 
-    canvas.drawCircle(c, 135, glowPaint);
+    canvas.drawCircle(c, 145, glowPaint);
 
     final ringPaint = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.2
+      ..strokeWidth = 1.15
       ..color = const Color(0xFFB7FF00).withValues(alpha: 0.32);
 
-    canvas.drawCircle(c, 118, ringPaint);
-    canvas.drawCircle(c, 96, ringPaint);
-    canvas.drawCircle(c, 76, ringPaint);
+    canvas.drawCircle(c, 126, ringPaint);
+    canvas.drawCircle(c, 108, ringPaint);
+    canvas.drawCircle(c, 88, ringPaint);
+    canvas.drawCircle(c, 68, ringPaint);
 
     final arcPaint = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 3
+      ..strokeWidth = 3.2
       ..strokeCap = StrokeCap.round
-      ..color = const Color(0xFFB7FF00).withValues(alpha: 0.85);
+      ..color = const Color(0xFFB7FF00).withValues(alpha: 0.9);
 
     canvas.drawArc(
-      Rect.fromCircle(center: c, radius: 120),
-      -2.8,
-      1.2,
+      Rect.fromCircle(center: c, radius: 128),
+      -2.95,
+      1.1,
       false,
       arcPaint,
     );
 
     canvas.drawArc(
-      Rect.fromCircle(center: c, radius: 104),
-      0.25,
-      1.0,
+      Rect.fromCircle(center: c, radius: 116),
+      0.2,
+      0.95,
       false,
       arcPaint,
     );
 
-    final shield = Path()
-      ..moveTo(c.dx, c.dy - 72)
-      ..lineTo(c.dx + 62, c.dy - 45)
-      ..lineTo(c.dx + 50, c.dy + 36)
-      ..quadraticBezierTo(c.dx, c.dy + 88, c.dx - 50, c.dy + 36)
-      ..lineTo(c.dx - 62, c.dy - 45)
+    // ===== OUTER SHIELD - giống ảnh hơn =====
+    final outerShield = Path()
+      ..moveTo(c.dx, c.dy - 88)
+      ..cubicTo(
+        c.dx - 24,
+        c.dy - 68,
+        c.dx - 56,
+        c.dy - 58,
+        c.dx - 78,
+        c.dy - 52,
+      )
+      ..lineTo(c.dx - 68, c.dy + 34)
+      ..cubicTo(
+        c.dx - 54,
+        c.dy + 72,
+        c.dx - 24,
+        c.dy + 96,
+        c.dx,
+        c.dy + 108,
+      )
+      ..cubicTo(
+        c.dx + 24,
+        c.dy + 96,
+        c.dx + 54,
+        c.dy + 72,
+        c.dx + 68,
+        c.dy + 34,
+      )
+      ..lineTo(c.dx + 78, c.dy - 52)
+      ..cubicTo(
+        c.dx + 56,
+        c.dy - 58,
+        c.dx + 24,
+        c.dy - 68,
+        c.dx,
+        c.dy - 88,
+      )
       ..close();
 
     canvas.drawShadow(
-      shield,
+      outerShield,
       const Color(0xFFB7FF00),
-      24,
+      28,
       true,
     );
 
@@ -1435,39 +1458,97 @@ class SplashHeroPainter extends CustomPainter {
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
         colors: [
-          Color(0xFFEFFFF5),
+          Color(0xFFFFFFFF),
           Color(0xFFB7FF00),
-          Color(0xFF05240D),
+          Color(0xFF173F13),
+          Color(0xFF020804),
         ],
-      ).createShader(Rect.fromCircle(center: c, radius: 90));
+      ).createShader(
+        Rect.fromCircle(
+          center: c,
+          radius: 110,
+        ),
+      );
 
-    canvas.drawPath(shield, shieldPaint);
+    canvas.drawPath(outerShield, shieldPaint);
 
+    // ===== INNER DARK SHIELD =====
     final innerShield = Path()
-      ..moveTo(c.dx, c.dy - 54)
-      ..lineTo(c.dx + 44, c.dy - 34)
-      ..lineTo(c.dx + 36, c.dy + 26)
-      ..quadraticBezierTo(c.dx, c.dy + 64, c.dx - 36, c.dy + 26)
-      ..lineTo(c.dx - 44, c.dy - 34)
+      ..moveTo(c.dx, c.dy - 65)
+      ..cubicTo(
+        c.dx - 19,
+        c.dy - 50,
+        c.dx - 43,
+        c.dy - 42,
+        c.dx - 58,
+        c.dy - 38,
+      )
+      ..lineTo(c.dx - 50, c.dy + 24)
+      ..cubicTo(
+        c.dx - 40,
+        c.dy + 53,
+        c.dx - 18,
+        c.dy + 72,
+        c.dx,
+        c.dy + 82,
+      )
+      ..cubicTo(
+        c.dx + 18,
+        c.dy + 72,
+        c.dx + 40,
+        c.dy + 53,
+        c.dx + 50,
+        c.dy + 24,
+      )
+      ..lineTo(c.dx + 58, c.dy - 38)
+      ..cubicTo(
+        c.dx + 43,
+        c.dy - 42,
+        c.dx + 19,
+        c.dy - 50,
+        c.dx,
+        c.dy - 65,
+      )
       ..close();
 
     canvas.drawPath(
       innerShield,
       Paint()
-        ..color = const Color(0xFF020A04).withValues(alpha: 0.78),
+        ..shader = LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            const Color(0xFF123F17).withValues(alpha: 0.95),
+            const Color(0xFF061509).withValues(alpha: 0.98),
+            const Color(0xFF000000).withValues(alpha: 0.95),
+          ],
+        ).createShader(
+          Rect.fromCircle(center: c, radius: 80),
+        ),
     );
 
-    final borderPaint = Paint()
+    final whiteBorder = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 3
-      ..color = Colors.white.withValues(alpha: 0.75);
+      ..strokeWidth = 4.2
+      ..strokeJoin = StrokeJoin.round
+      ..color = Colors.white.withValues(alpha: 0.82);
 
-    canvas.drawPath(shield, borderPaint);
+    canvas.drawPath(outerShield, whiteBorder);
 
-    const box = 18.0;
+    final greenBorder = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.2
+      ..strokeJoin = StrokeJoin.round
+      ..color = const Color(0xFFB7FF00).withValues(alpha: 0.95);
+
+    canvas.drawPath(innerShield, greenBorder);
+
+    // ===== GRID 3x3 =====
+    const box = 18.5;
     const gap = 8.0;
+
     final startX = c.dx - (box * 1.5 + gap);
-    final startY = c.dy - 24;
+    final startY = c.dy - 28;
 
     for (int y = 0; y < 3; y++) {
       for (int x = 0; x < 3; x++) {
@@ -1478,17 +1559,31 @@ class SplashHeroPainter extends CustomPainter {
             box,
             box,
           ),
-          const Radius.circular(4),
+          const Radius.circular(4.5),
         );
 
         canvas.drawRRect(
           rect,
           Paint()
-            ..color = const Color(0xFFB7FF00)
+            ..color = const Color(0xFFB7FF00).withValues(alpha: 0.35)
             ..maskFilter = const MaskFilter.blur(
               BlurStyle.normal,
-              1.2,
+              6,
             ),
+        );
+
+        canvas.drawRRect(
+          rect,
+          Paint()
+            ..shader = const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Color(0xFFE8FF4A),
+                Color(0xFFB7FF00),
+                Color(0xFF5CCB00),
+              ],
+            ).createShader(rect.outerRect),
         );
       }
     }
@@ -1496,35 +1591,45 @@ class SplashHeroPainter extends CustomPainter {
     final dotPaint = Paint()
       ..color = const Color(0xFFB7FF00).withValues(alpha: 0.85);
 
-    for (int i = 0; i < 18; i++) {
-      final angle = i * 0.65;
-      final radius = 88 + (i % 4) * 10;
+    for (int i = 0; i < 22; i++) {
+      final angle = i * 0.58;
+      final radius = 92 + (i % 5) * 9;
       final p = Offset(
-        c.dx + radius * mathCos(angle),
-        c.dy + radius * mathSin(angle),
+        c.dx + radius * MathHelper.cos(angle),
+        c.dy + radius * MathHelper.sin(angle),
       );
-      canvas.drawCircle(p, 2.2, dotPaint);
+
+      canvas.drawCircle(p, 2.1, dotPaint);
     }
 
     final sparkle = Paint()
-      ..color = Colors.white.withValues(alpha: 0.85)
+      ..color = Colors.white.withValues(alpha: 0.9)
       ..strokeWidth = 2;
 
     void star(Offset p, double r) {
-      canvas.drawLine(Offset(p.dx - r, p.dy), Offset(p.dx + r, p.dy), sparkle);
-      canvas.drawLine(Offset(p.dx, p.dy - r), Offset(p.dx, p.dy + r), sparkle);
+      canvas.drawLine(
+        Offset(p.dx - r, p.dy),
+        Offset(p.dx + r, p.dy),
+        sparkle,
+      );
+      canvas.drawLine(
+        Offset(p.dx, p.dy - r),
+        Offset(p.dx, p.dy + r),
+        sparkle,
+      );
     }
 
-    star(Offset(c.dx - 78, c.dy - 65), 9);
-    star(Offset(c.dx + 72, c.dy + 32), 8);
-    star(Offset(c.dx + 42, c.dy - 86), 6);
+    star(Offset(c.dx - 74, c.dy - 60), 9);
+    star(Offset(c.dx + 68, c.dy + 34), 8);
+    star(Offset(c.dx + 38, c.dy - 86), 6);
   }
 
-  double mathSin(double v) => MathHelper.sin(v);
-  double mathCos(double v) => MathHelper.cos(v);
-
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(
+      covariant CustomPainter oldDelegate,
+      ) {
+    return false;
+  }
 }
 
 class MathHelper {
