@@ -32,3 +32,27 @@ Runner/GeneratedPluginRegistrant.*
 !default.mode2v3
 !default.pbxuser
 !default.perspectivev3
+
+# Flutter / Dart
+.dart_tool/
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+.packages
+
+# Android
+android/.gradle/
+android/app/build/
+android/build/
+.gradle/
+
+# Generated
+*.log
+*.tmp
+*.lock
+
+# IDE
+.idea/
+.vscode/
