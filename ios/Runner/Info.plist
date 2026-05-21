@@ -10,7 +10,7 @@
 		<string>$(DEVELOPMENT_LANGUAGE)</string>
 
 		<key>CFBundleDisplayName</key>
-		<string>Base Layout Pro</string>
+		<string>Base Pro</string>
 
 		<key>CFBundleExecutable</key>
 		<string>$(EXECUTABLE_NAME)</string>
@@ -22,7 +22,7 @@
 		<string>6.0</string>
 
 		<key>CFBundleName</key>
-		<string>Coc Base Pro</string>
+		<string>Base Pro</string>
 
 		<key>CFBundlePackageType</key>
 		<string>APPL</string>

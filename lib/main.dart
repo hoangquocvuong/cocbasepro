@@ -41,11 +41,30 @@ void loadInterstitial() {
   );
 }
 
-// =========================
-// (3) MAIN
-// =========================
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // ===== STATUS BAR STYLE =====
+  SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(
+
+      // TOP STATUS BAR
+      statusBarColor: Colors.transparent,
+
+      // ANDROID ICONS
+      statusBarIconBrightness: Brightness.light,
+
+      // IOS ICONS
+      statusBarBrightness: Brightness.dark,
+
+      // ANDROID NAVIGATION BAR
+      systemNavigationBarColor:
+      Color(0xFF050505),
+
+      systemNavigationBarIconBrightness:
+      Brightness.light,
+    ),
+  );
 
   try {
     await Firebase.initializeApp();
@@ -53,11 +72,15 @@ void main() async {
     debugPrint('Firebase error: $e');
   }
 
-  FirebaseMessaging.onBackgroundMessage(firebaseBgHandler);
+  FirebaseMessaging.onBackgroundMessage(
+    firebaseBgHandler,
+  );
 
   await MobileAds.instance.initialize();
 
-  SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+  SystemChrome.setEnabledSystemUIMode(
+    SystemUiMode.edgeToEdge,
+  );
 
   runApp(const MyApp());
 }
@@ -112,7 +135,7 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   Widget build(BuildContext context) {
     return const Scaffold(
-      backgroundColor: Color(0xFF1E88F0),
+      backgroundColor: Color(0xFF050505),
       body: Center(
         child: Image(
           image: AssetImage('assets/icon.png'),
@@ -156,6 +179,7 @@ class _WebScreenState extends State<WebScreen>
   Timer? newsTimer;
   Timer? _badgeDebounce;
   bool appJustResumed = false;
+  bool showResumeOverlay = false;
 
   String currentUrl = '';
 
@@ -211,7 +235,7 @@ class _WebScreenState extends State<WebScreen>
       )
 
       ..setBackgroundColor(
-        const Color(0xFF1E88F0),
+        const Color(0xFF050505),
       )
 
     // 🔥 JS CHANNEL (giữ nguyên)
@@ -308,6 +332,7 @@ class _WebScreenState extends State<WebScreen>
 
           setState(() {
             pageLoaded = true;
+            showResumeOverlay = false;
 
             isHomePage =
                 url == homeUrl ||
@@ -371,6 +396,13 @@ class _WebScreenState extends State<WebScreen>
 
       // chỉ check nếu ngủ lâu
       if (diff >= 10) {
+
+        if(mounted){
+          setState(() {
+            showResumeOverlay = true;
+          });
+        }
+
         _safeCheckAlive();
       }
 
@@ -408,30 +440,31 @@ class _WebScreenState extends State<WebScreen>
     bool isDead = false;
 
     try {
-
       final result =
-      await controller
-          .runJavaScriptReturningResult("""
+      await controller.runJavaScriptReturningResult("""
 document.readyState
-""")
-          .timeout(
+""").timeout(
         const Duration(seconds: 4),
       );
 
-      final state =
-      result.toString();
+      final state = result.toString();
 
       if (!state.contains('complete') &&
           !state.contains('interactive')) {
         isDead = true;
       }
-
     } catch (_) {
       isDead = true;
     }
 
     if (isDead) {
       await _forceRecreateWebView();
+    }
+
+    if (mounted) {
+      setState(() {
+        showResumeOverlay = false;
+      });
     }
   }
 
@@ -450,10 +483,15 @@ document.readyState
       );
 
       try {
-        await controller
-            .runJavaScriptReturningResult(
+        await controller.runJavaScriptReturningResult(
           'document.readyState',
         );
+
+        if (mounted) {
+          setState(() {
+            showResumeOverlay = false;
+          });
+        }
 
         return;
       } catch (_) {}
@@ -461,9 +499,24 @@ document.readyState
 
     try {
 
+      if (mounted) {
+        setState(() {
+          pageLoaded = false;
+          showResumeOverlay = true;
+        });
+      }
+
       _createWebView();
 
-    } catch (_) {}
+    } catch (_) {
+
+      if (mounted) {
+        setState(() {
+          showResumeOverlay = false;
+        });
+      }
+
+    }
   }
 
   // =========================
@@ -1013,7 +1066,7 @@ document.querySelector(
 
       child: Scaffold(
         backgroundColor:
-        const Color(0xFF1E88F0),
+        const Color(0xFF050505),
 
         // ======================
         // NATIVE BOTTOM NAV
@@ -1048,18 +1101,92 @@ document.querySelector(
               ),
             ),
 
-            // SPLASH LOADING
+            // SPLASH / RESTORE LOADING
             if (!pageLoaded)
               Container(
-                color:
-                const Color(0xFF1E88F0),
 
-                child: const Center(
-                  child: Image(
-                    image: AssetImage(
-                      'assets/icon.png',
-                    ),
-                    width: 280,
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Color(0xFF101A08),
+                      Color(0xFF050505),
+                      Color(0xFF000000),
+                    ],
+                  ),
+                ),
+
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+
+                    children: [
+
+                      // LOGO
+                      Container(
+                        width: 130,
+                        height: 130,
+
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(30),
+
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.white.withValues(alpha: 0.15),
+                              blurRadius: 40,
+                              spreadRadius: 2,
+                            ),
+                            BoxShadow(
+                              color: const Color(0xFFB7FF00)
+                                  .withValues(alpha: 0.18),
+                              blurRadius: 50,
+                              spreadRadius: 3,
+                            ),
+                          ],
+                        ),
+
+                        child: const Image(
+                          image: AssetImage(
+                            'assets/icon.png',
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(height: 30),
+
+                      const Text(
+                        'Restoring session...',
+                        style: TextStyle(
+                          color: Color(0xFFE8FFB0),
+                          fontSize: 24,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.3,
+                        ),
+                      ),
+
+                      const SizedBox(height: 12),
+
+                      Text(
+                        'Refreshing latest layouts and content',
+                        style: TextStyle(
+                          color: const Color(0xFFB7FF00),
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+
+                      const SizedBox(height: 32),
+
+                      const SizedBox(
+                        width: 36,
+                        height: 36,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 3,
+                          color: Color(0xFFB7FF00),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -1067,7 +1194,7 @@ document.querySelector(
             // OFFLINE SCREEN
             if (isOffline)
               Container(
-                color: Colors.black
+                color: const Color(0xFF050505)
                     .withValues(
                   alpha: 0.85,
                 ),
@@ -1082,8 +1209,7 @@ document.querySelector(
                       const Icon(
                         Icons.wifi_off,
                         size: 48,
-                        color:
-                        Colors.white70,
+                        color: Color(0xFFB7FF00),
                       ),
 
                       const SizedBox(
@@ -1093,8 +1219,7 @@ document.querySelector(
                       const Text(
                         'No Internet',
                         style: TextStyle(
-                          color:
-                          Colors.white,
+                          color: Color(0xFFE8FFB0),
                         ),
                       ),
 
