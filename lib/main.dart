@@ -1170,23 +1170,24 @@ document.querySelector(
 
                       // LOGO
                       Container(
-                        width: 240,
-                        height: 240,
+                        width: 180,
+                        height: 180,
 
                         decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(30),
+                          borderRadius: BorderRadius.circular(22),
 
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.white.withValues(alpha: 0.15),
-                              blurRadius: 65,
-                              spreadRadius: 6,
+                              color: Colors.white.withValues(alpha: 0.12),
+                              blurRadius: 45,
+                              spreadRadius: 3,
                             ),
+
                             BoxShadow(
                               color: const Color(0xFFB7FF00)
-                                  .withValues(alpha: 0.18),
-                              blurRadius: 90,
-                              spreadRadius: 10,
+                                  .withValues(alpha: 0.15),
+                              blurRadius: 60,
+                              spreadRadius: 6,
                             ),
                           ],
                         ),
