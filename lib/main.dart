@@ -49,13 +49,14 @@ void main() async {
     const SystemUiOverlayStyle(
 
       // TOP STATUS BAR
-      statusBarColor: Colors.transparent,
+      statusBarColor:
+      Color(0xFF101A08),
 
       // ANDROID ICONS
       statusBarIconBrightness: Brightness.light,
 
       // IOS ICONS
-      statusBarBrightness: Brightness.dark,
+      statusBarBrightness: Brightness.light,
 
       // ANDROID NAVIGATION BAR
       systemNavigationBarColor:
@@ -180,6 +181,7 @@ class _WebScreenState extends State<WebScreen>
   Timer? _badgeDebounce;
   bool appJustResumed = false;
   bool showResumeOverlay = false;
+  bool isInitialLaunch = true;
 
   String currentUrl = '';
 
@@ -333,7 +335,7 @@ class _WebScreenState extends State<WebScreen>
           setState(() {
             pageLoaded = true;
             showResumeOverlay = false;
-
+            isInitialLaunch = false;
             isHomePage =
                 url == homeUrl ||
                     url == '$homeUrl/';
@@ -1155,8 +1157,10 @@ document.querySelector(
 
                       const SizedBox(height: 30),
 
-                      const Text(
-                        'Restoring session...',
+                      Text(
+                        isInitialLaunch
+                            ? 'Launching app...'
+                            : 'Restoring session...',
                         style: TextStyle(
                           color: Color(0xFFE8FFB0),
                           fontSize: 24,
@@ -1168,7 +1172,9 @@ document.querySelector(
                       const SizedBox(height: 12),
 
                       Text(
-                        'Refreshing latest layouts and content',
+                        isInitialLaunch
+                            ? 'Loading latest Clash layouts'
+                            : 'Refreshing latest layouts and content',
                         style: TextStyle(
                           color: const Color(0xFFB7FF00),
                           fontSize: 14,
