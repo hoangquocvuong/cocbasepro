@@ -1124,7 +1124,7 @@ document.querySelector(
 
                 child: Container(
                   color:
-                  const Color(0xFF101A08),
+                  const Color(0xFF1E88F0),
                 ),
               ),
 
