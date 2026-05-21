@@ -1083,8 +1083,51 @@ document.querySelector(
         // ======================
         // BODY
         // ======================
-        body: Stack(
-          children: [
+        // ======================
+// BODY
+// ======================
+        body: AnnotatedRegion<SystemUiOverlayStyle>(
+          value: const SystemUiOverlayStyle(
+
+            // TOP SAFE AREA
+            statusBarColor:
+            Color(0xFF101A08),
+
+            // ANDROID ICON
+            statusBarIconBrightness:
+            Brightness.light,
+
+            // IOS ICON
+            statusBarBrightness:
+            Brightness.dark,
+
+            // NAV BAR
+            systemNavigationBarColor:
+            Color(0xFF050505),
+
+            systemNavigationBarIconBrightness:
+            Brightness.light,
+          ),
+
+          child: Stack(
+            children: [
+
+              // ===== TOP SAFE AREA BG =====
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                height:
+                MediaQuery.of(context)
+                    .padding
+                    .top,
+
+                child: Container(
+                  color:
+                  const Color(0xFF101A08),
+                ),
+              ),
+
 
             // WEBVIEW
             SafeArea(
@@ -1127,8 +1170,8 @@ document.querySelector(
 
                       // LOGO
                       Container(
-                        width: 130,
-                        height: 130,
+                        width: 240,
+                        height: 240,
 
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(30),
@@ -1136,14 +1179,14 @@ document.querySelector(
                           boxShadow: [
                             BoxShadow(
                               color: Colors.white.withValues(alpha: 0.15),
-                              blurRadius: 40,
-                              spreadRadius: 2,
+                              blurRadius: 65,
+                              spreadRadius: 6,
                             ),
                             BoxShadow(
                               color: const Color(0xFFB7FF00)
                                   .withValues(alpha: 0.18),
-                              blurRadius: 50,
-                              spreadRadius: 3,
+                              blurRadius: 90,
+                              spreadRadius: 10,
                             ),
                           ],
                         ),
@@ -1249,6 +1292,7 @@ document.querySelector(
               ),
           ],
         ),
+      ),
       ),
     );
   }
