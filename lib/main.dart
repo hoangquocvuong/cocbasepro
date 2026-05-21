@@ -176,6 +176,7 @@ class _WebScreenState extends State<WebScreen>
   Timer? themeTimer;
   bool lastDarkMode = false;
   bool pageLoaded = false;
+  bool minSplashFinished = false;
   int unreadNews = 0;
   Timer? newsTimer;
   Timer? _badgeDebounce;
@@ -219,8 +220,19 @@ class _WebScreenState extends State<WebScreen>
       },
     );
 
+    Future.delayed(
+      const Duration(milliseconds: 2000),
+          () {
+        if (!mounted) return;
+
+        setState(() {
+          minSplashFinished = true;
+        });
+      },
+    );
 
   }
+
 
   // =========================
 // (7.2) CREATE WEBVIEW
@@ -1133,7 +1145,9 @@ document.querySelector(
             SafeArea(
               child: AnimatedOpacity(
                 opacity:
-                pageLoaded ? 1 : 0,
+                (pageLoaded && minSplashFinished)
+                    ? 1
+                    : 0,
 
                 duration:
                 const Duration(
@@ -1147,7 +1161,7 @@ document.querySelector(
             ),
 
             // SPLASH / RESTORE LOADING
-            if (!pageLoaded)
+              if (!pageLoaded || !minSplashFinished)
         Container(
         width: double.infinity,
         height: double.infinity,
@@ -1170,8 +1184,8 @@ document.querySelector(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   SizedBox(
-                    width: 300,
-                    height: 300,
+                    width: 240,
+                    height: 240,
                     child: CustomPaint(
                       painter: SplashHeroPainter(),
                     ),
@@ -1290,18 +1304,23 @@ document.querySelector(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       _SplashFeature(
-                        icon: Icons.verified_user_outlined,
-                        label: 'PROTECT',
+                        icon: Icons.shield_outlined,
+                        label: 'DEFEND',
                       ),
-                      SizedBox(width: 34),
+                      SizedBox(width: 24),
                       _SplashFeature(
                         icon: Icons.grid_view_rounded,
-                        label: 'ORGANIZE',
+                        label: 'LAYOUT',
                       ),
-                      SizedBox(width: 34),
+                      SizedBox(width: 24),
+                      _SplashFeature(
+                        icon: Icons.content_copy_rounded,
+                        label: 'COPY',
+                      ),
+                      SizedBox(width: 24),
                       _SplashFeature(
                         icon: Icons.flash_on_rounded,
-                        label: 'PERFORM',
+                        label: 'FAST',
                       ),
                     ],
                   ),
@@ -1369,21 +1388,21 @@ class SplashHeroPainter extends CustomPainter {
       ).createShader(
         Rect.fromCircle(
           center: c,
-          radius: 145,
+          radius: 118,
         ),
       );
 
-    canvas.drawCircle(c, 145, glowPaint);
+    canvas.drawCircle(c, 118, glowPaint);
 
     final ringPaint = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.15
       ..color = const Color(0xFFB7FF00).withValues(alpha: 0.32);
 
-    canvas.drawCircle(c, 126, ringPaint);
-    canvas.drawCircle(c, 108, ringPaint);
+    canvas.drawCircle(c, 102, ringPaint);
     canvas.drawCircle(c, 88, ringPaint);
-    canvas.drawCircle(c, 68, ringPaint);
+    canvas.drawCircle(c, 72, ringPaint);
+    canvas.drawCircle(c, 56, ringPaint);
 
     final arcPaint = Paint()
       ..style = PaintingStyle.stroke
@@ -1392,7 +1411,7 @@ class SplashHeroPainter extends CustomPainter {
       ..color = const Color(0xFFB7FF00).withValues(alpha: 0.9);
 
     canvas.drawArc(
-      Rect.fromCircle(center: c, radius: 128),
+      Rect.fromCircle(center: c, radius: 104),
       -2.95,
       1.1,
       false,
@@ -1400,7 +1419,7 @@ class SplashHeroPainter extends CustomPainter {
     );
 
     canvas.drawArc(
-      Rect.fromCircle(center: c, radius: 116),
+      Rect.fromCircle(center: c, radius: 94),
       0.2,
       0.95,
       false,
@@ -1409,7 +1428,7 @@ class SplashHeroPainter extends CustomPainter {
 
     // ===== OUTER SHIELD - giống ảnh hơn =====
     final outerShield = Path()
-      ..moveTo(c.dx, c.dy - 88)
+      ..moveTo(c.dx, c.dy - 72)
       ..cubicTo(
         c.dx - 24,
         c.dy - 68,
@@ -1425,7 +1444,7 @@ class SplashHeroPainter extends CustomPainter {
         c.dx - 24,
         c.dy + 96,
         c.dx,
-        c.dy + 108,
+        c.dy + 88,
       )
       ..cubicTo(
         c.dx + 24,
@@ -1442,7 +1461,7 @@ class SplashHeroPainter extends CustomPainter {
         c.dx + 24,
         c.dy - 68,
         c.dx,
-        c.dy - 88,
+        c.dy - 72,
       )
       ..close();
 
