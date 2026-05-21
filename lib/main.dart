@@ -1147,154 +1147,395 @@ document.querySelector(
             ),
 
             // SPLASH / RESTORE LOADING
+            // SPLASH / RESTORE LOADING
             if (!pageLoaded)
-              Container(
-
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Color(0xFF101A08),
-                      Color(0xFF050505),
-                      Color(0xFF000000),
-                    ],
+        Container(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Color(0xFF020804),
+              Color(0xFF061006),
+              Color(0xFF000000),
+            ],
+          ),
+        ),
+        child: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              physics: const NeverScrollableScrollPhysics(),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox(
+                    width: 280,
+                    height: 280,
+                    child: CustomPaint(
+                      painter: SplashHeroPainter(),
+                    ),
                   ),
-                ),
 
-                child: Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
+                  const SizedBox(height: 20),
 
-                    children: [
-
-                      // LOGO
-                      Container(
-                        width: 180,
-                        height: 180,
-
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(22),
-
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.white.withValues(alpha: 0.12),
-                              blurRadius: 45,
-                              spreadRadius: 3,
-                            ),
-
-                            BoxShadow(
-                              color: const Color(0xFFB7FF00)
-                                  .withValues(alpha: 0.15),
-                              blurRadius: 60,
-                              spreadRadius: 6,
-                            ),
-                          ],
-                        ),
-
-                        child: const Image(
-                          image: AssetImage(
-                            'assets/icon.png',
+                  RichText(
+                    textAlign: TextAlign.center,
+                    text: const TextSpan(
+                      children: [
+                        TextSpan(
+                          text: 'BASE LAYOUT ',
+                          style: TextStyle(
+                            color: Color(0xFFEFFFF5),
+                            fontSize: 31,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 2.2,
                           ),
                         ),
-                      ),
-
-                      const SizedBox(height: 30),
-
-                      Text(
-                        isInitialLaunch
-                            ? 'Launching app...'
-                            : 'Restoring session...',
-                        style: TextStyle(
-                          color: Color(0xFFE8FFB0),
-                          fontSize: 24,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 0.3,
+                        TextSpan(
+                          text: 'PRO',
+                          style: TextStyle(
+                            color: Color(0xFFB7FF00),
+                            fontSize: 31,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 2.2,
+                          ),
                         ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 14),
+
+                  Container(
+                    width: 190,
+                    height: 1,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          Colors.transparent,
+                          const Color(0xFFB7FF00).withValues(alpha: 0.8),
+                          Colors.transparent,
+                        ],
                       ),
+                    ),
+                  ),
 
-                      const SizedBox(height: 12),
+                  const SizedBox(height: 18),
 
-                      Text(
-                        isInitialLaunch
-                            ? 'Loading latest Clash layouts'
-                            : 'Refreshing latest layouts and content',
-                        style: TextStyle(
-                          color: const Color(0xFFB7FF00),
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                        ),
+                  Text(
+                    isInitialLaunch
+                        ? 'Smart layouts. Fast copy. Better defense.'
+                        : 'Refreshing latest layouts and content',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: const Color(0xFFB7FF00).withValues(alpha: 0.95),
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.4,
+                    ),
+                  ),
+
+                  const SizedBox(height: 30),
+
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: const [
+                      _SplashFeature(
+                        icon: Icons.verified_user_outlined,
+                        label: 'PROTECT',
                       ),
-
-                      const SizedBox(height: 32),
-
-                      const SizedBox(
-                        width: 36,
-                        height: 36,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 3,
-                          color: Color(0xFFB7FF00),
-                        ),
+                      SizedBox(width: 34),
+                      _SplashFeature(
+                        icon: Icons.grid_view_rounded,
+                        label: 'ORGANIZE',
+                      ),
+                      SizedBox(width: 34),
+                      _SplashFeature(
+                        icon: Icons.flash_on_rounded,
+                        label: 'PERFORM',
                       ),
                     ],
                   ),
-                ),
-              ),
 
-            // OFFLINE SCREEN
-            if (isOffline)
-              Container(
-                color: const Color(0xFF050505)
-                    .withValues(
-                  alpha: 0.85,
-                ),
+                  const SizedBox(height: 34),
 
-                child: Center(
-                  child: Column(
-                    mainAxisSize:
-                    MainAxisSize.min,
-
-                    children: [
-
-                      const Icon(
-                        Icons.wifi_off,
-                        size: 48,
-                        color: Color(0xFFB7FF00),
-                      ),
-
-                      const SizedBox(
-                        height: 12,
-                      ),
-
-                      const Text(
-                        'No Internet',
-                        style: TextStyle(
-                          color: Color(0xFFE8FFB0),
-                        ),
-                      ),
-
-                      const SizedBox(
-                        height: 12,
-                      ),
-
-                      ElevatedButton(
-                        onPressed: () {
-                          controller.reload();
-                        },
-
-                        child:
-                        const Text(
-                          'Retry',
-                        ),
-                      ),
-                    ],
+                  Text(
+                    isInitialLaunch
+                        ? 'Launching app...'
+                        : 'Restoring session...',
+                    style: const TextStyle(
+                      color: Color(0xFFB7FF00),
+                      fontSize: 24,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 0.3,
+                    ),
                   ),
-                ),
+
+                  const SizedBox(height: 8),
+
+                  Text(
+                    isInitialLaunch
+                        ? 'Loading latest Clash layouts'
+                        : 'Refreshing latest content',
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.7),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+
+                  const SizedBox(height: 26),
+
+                  Container(
+                    width: 250,
+                    height: 12,
+                    padding: const EdgeInsets.all(2),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(
+                        color: const Color(0xFFB7FF00).withValues(alpha: 0.4),
+                      ),
+                      color: Colors.black.withValues(alpha: 0.35),
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(999),
+                      child: LinearProgressIndicator(
+                        minHeight: 8,
+                        backgroundColor: Colors.white.withValues(alpha: 0.06),
+                        color: const Color(0xFFB7FF00),
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 26),
+
+                  const SizedBox(
+                    width: 46,
+                    height: 46,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.5,
+                      color: Color(0xFFB7FF00),
+                    ),
+                  ),
+                ],
               ),
-          ],
+            ),
+          ),
         ),
       ),
+      ],
+      ),
+        ),
       ),
     );
+
+  }
+
+}
+
+class _SplashFeature extends StatelessWidget {
+  final IconData icon;
+  final String label;
+
+  const _SplashFeature({
+    required this.icon,
+    required this.label,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Icon(
+          icon,
+          color: const Color(0xFFB7FF00),
+          size: 34,
+        ),
+        const SizedBox(height: 8),
+        Text(
+          label,
+          style: TextStyle(
+            color: Colors.white.withValues(alpha: 0.78),
+            fontSize: 11,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 1.4,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class SplashHeroPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final c = Offset(size.width / 2, size.height / 2);
+
+    final glowPaint = Paint()
+      ..shader = RadialGradient(
+        colors: [
+          const Color(0xFFB7FF00).withValues(alpha: 0.42),
+          const Color(0xFFB7FF00).withValues(alpha: 0.12),
+          Colors.transparent,
+        ],
+      ).createShader(Rect.fromCircle(center: c, radius: 135));
+
+    canvas.drawCircle(c, 135, glowPaint);
+
+    final ringPaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.2
+      ..color = const Color(0xFFB7FF00).withValues(alpha: 0.32);
+
+    canvas.drawCircle(c, 118, ringPaint);
+    canvas.drawCircle(c, 96, ringPaint);
+    canvas.drawCircle(c, 76, ringPaint);
+
+    final arcPaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 3
+      ..strokeCap = StrokeCap.round
+      ..color = const Color(0xFFB7FF00).withValues(alpha: 0.85);
+
+    canvas.drawArc(
+      Rect.fromCircle(center: c, radius: 120),
+      -2.8,
+      1.2,
+      false,
+      arcPaint,
+    );
+
+    canvas.drawArc(
+      Rect.fromCircle(center: c, radius: 104),
+      0.25,
+      1.0,
+      false,
+      arcPaint,
+    );
+
+    final shield = Path()
+      ..moveTo(c.dx, c.dy - 72)
+      ..lineTo(c.dx + 62, c.dy - 45)
+      ..lineTo(c.dx + 50, c.dy + 36)
+      ..quadraticBezierTo(c.dx, c.dy + 88, c.dx - 50, c.dy + 36)
+      ..lineTo(c.dx - 62, c.dy - 45)
+      ..close();
+
+    canvas.drawShadow(
+      shield,
+      const Color(0xFFB7FF00),
+      24,
+      true,
+    );
+
+    final shieldPaint = Paint()
+      ..shader = const LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [
+          Color(0xFFEFFFF5),
+          Color(0xFFB7FF00),
+          Color(0xFF05240D),
+        ],
+      ).createShader(Rect.fromCircle(center: c, radius: 90));
+
+    canvas.drawPath(shield, shieldPaint);
+
+    final innerShield = Path()
+      ..moveTo(c.dx, c.dy - 54)
+      ..lineTo(c.dx + 44, c.dy - 34)
+      ..lineTo(c.dx + 36, c.dy + 26)
+      ..quadraticBezierTo(c.dx, c.dy + 64, c.dx - 36, c.dy + 26)
+      ..lineTo(c.dx - 44, c.dy - 34)
+      ..close();
+
+    canvas.drawPath(
+      innerShield,
+      Paint()
+        ..color = const Color(0xFF020A04).withValues(alpha: 0.78),
+    );
+
+    final borderPaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 3
+      ..color = Colors.white.withValues(alpha: 0.75);
+
+    canvas.drawPath(shield, borderPaint);
+
+    const box = 18.0;
+    const gap = 8.0;
+    final startX = c.dx - (box * 1.5 + gap);
+    final startY = c.dy - 24;
+
+    for (int y = 0; y < 3; y++) {
+      for (int x = 0; x < 3; x++) {
+        final rect = RRect.fromRectAndRadius(
+          Rect.fromLTWH(
+            startX + x * (box + gap),
+            startY + y * (box + gap),
+            box,
+            box,
+          ),
+          const Radius.circular(4),
+        );
+
+        canvas.drawRRect(
+          rect,
+          Paint()
+            ..color = const Color(0xFFB7FF00)
+            ..maskFilter = const MaskFilter.blur(
+              BlurStyle.normal,
+              1.2,
+            ),
+        );
+      }
+    }
+
+    final dotPaint = Paint()
+      ..color = const Color(0xFFB7FF00).withValues(alpha: 0.85);
+
+    for (int i = 0; i < 18; i++) {
+      final angle = i * 0.65;
+      final radius = 88 + (i % 4) * 10;
+      final p = Offset(
+        c.dx + radius * mathCos(angle),
+        c.dy + radius * mathSin(angle),
+      );
+      canvas.drawCircle(p, 2.2, dotPaint);
+    }
+
+    final sparkle = Paint()
+      ..color = Colors.white.withValues(alpha: 0.85)
+      ..strokeWidth = 2;
+
+    void star(Offset p, double r) {
+      canvas.drawLine(Offset(p.dx - r, p.dy), Offset(p.dx + r, p.dy), sparkle);
+      canvas.drawLine(Offset(p.dx, p.dy - r), Offset(p.dx, p.dy + r), sparkle);
+    }
+
+    star(Offset(c.dx - 78, c.dy - 65), 9);
+    star(Offset(c.dx + 72, c.dy + 32), 8);
+    star(Offset(c.dx + 42, c.dy - 86), 6);
+  }
+
+  double mathSin(double v) => MathHelper.sin(v);
+  double mathCos(double v) => MathHelper.cos(v);
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class MathHelper {
+  static double sin(double x) => _sin(x);
+  static double cos(double x) => _sin(x + 1.57079632679);
+
+  static double _sin(double x) {
+    const pi = 3.14159265359;
+    x = x % (2 * pi);
+    if (x > pi) x -= 2 * pi;
+    if (x < -pi) x += 2 * pi;
+    return x - (x * x * x) / 6 + (x * x * x * x * x) / 120;
   }
 }
