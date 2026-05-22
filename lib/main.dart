@@ -1310,45 +1310,24 @@ document.querySelector(
                     ),
                   ),
 
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 28),
 
                   // ===== FEATURES =====
-                  const Wrap(
-                    alignment: WrapAlignment.center,
-                    spacing: 20,
-                    runSpacing: 18,
-                    children: [
-
-                      _SplashFeature(
-                        icon: Icons.shield_outlined,
-                        label: 'DEFEND',
-                      ),
-
-                      _SplashFeature(
-                        icon: Icons.grid_view_rounded,
-                        label: 'LAYOUT',
-                      ),
-
-                      _SplashFeature(
-                        icon: Icons.content_copy_rounded,
-                        label: 'COPY',
-                      ),
-
-                      _SplashFeature(
-                        icon: Icons.flash_on_rounded,
-                        label: 'FAST',
-                      ),
-
-                      _SplashFeature(
-                        icon: Icons.link_rounded,
-                        label: 'LINK',
-                      ),
-
-                      _SplashFeature(
-                        icon: Icons.star_border_rounded,
-                        label: 'PRO',
-                      ),
-                    ],
+                  const SizedBox(
+                    width: 300,
+                    child: Wrap(
+                      alignment: WrapAlignment.center,
+                      spacing: 18,
+                      runSpacing: 18,
+                      children: [
+                        _SplashFeature(icon: Icons.shield_outlined, label: 'DEFEND'),
+                        _SplashFeature(icon: Icons.grid_view_rounded, label: 'LAYOUT'),
+                        _SplashFeature(icon: Icons.content_copy_rounded, label: 'COPY'),
+                        _SplashFeature(icon: Icons.flash_on_rounded, label: 'FAST'),
+                        _SplashFeature(icon: Icons.link_rounded, label: 'LINK'),
+                        _SplashFeature(icon: Icons.star_border_rounded, label: 'PRO'),
+                      ],
+                    ),
                   ),
                 ],
               ),
@@ -1378,24 +1357,43 @@ class _SplashFeature extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: 72,
+      width: 92,
       child: Column(
         children: [
-          Icon(
-            icon,
-            color: const Color(0xFFB7FF00),
-            size: 26,
+          Container(
+            width: 64,
+            height: 64,
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: 0.28),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: const Color(0xFFB7FF00).withValues(alpha: 0.85),
+                width: 1.4,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFFB7FF00).withValues(alpha: 0.28),
+                  blurRadius: 18,
+                  spreadRadius: 1,
+                ),
+              ],
+            ),
+            child: Icon(
+              icon,
+              color: const Color(0xFFB7FF00),
+              size: 32,
+            ),
           ),
 
-          const SizedBox(height: 6),
+          const SizedBox(height: 8),
 
           Text(
             label,
             textAlign: TextAlign.center,
             style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.78),
-              fontSize: 9.5,
-              fontWeight: FontWeight.w800,
+              color: Colors.white.withValues(alpha: 0.9),
+              fontSize: 12,
+              fontWeight: FontWeight.w900,
               letterSpacing: 1.1,
             ),
           ),
@@ -1428,7 +1426,7 @@ class SplashHeroPainter extends CustomPainter {
       ).createShader(
         Rect.fromCircle(
           center: c,
-          radius: 88,
+          radius: 82,
         ),
       );
 
