@@ -348,7 +348,6 @@ class _WebScreenState extends State<WebScreen>
           setState(() {
             pageLoaded = true;
             showResumeOverlay = false;
-            isInitialLaunch = false;
 
             isHomePage =
                 url == homeUrl ||
@@ -519,6 +518,8 @@ document.readyState
         setState(() {
           pageLoaded = false;
           showResumeOverlay = true;
+          isInitialLaunch = false;
+
         });
       }
 
@@ -1201,11 +1202,11 @@ document.querySelector(
 
                   Text(
                     isInitialLaunch ? 'Launching app...' : 'Restoring session...',
-                    style: GoogleFonts.orbitron(
-                      color: const Color(0xFFEFFFF5),
+                    style: TextStyle(
+                      color: Color(0xFFEFFFF5),
                       fontSize: 36,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 1.1,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 1.4,
                       height: 1,
                     ),
                   ),
@@ -1252,11 +1253,11 @@ document.querySelector(
                     fit: BoxFit.scaleDown,
                     child: RichText(
                       textAlign: TextAlign.center,
-                      text: const TextSpan(
+                      text: TextSpan(
                         children: [
                           TextSpan(
                             text: 'BASE LAYOUT ',
-                            style: TextStyle(
+                            style: GoogleFonts.orbitron(
                               color: Color(0xFFEFFFF5),
                               fontSize: 30,
                               fontWeight: FontWeight.w800,
@@ -1266,7 +1267,7 @@ document.querySelector(
                           ),
                           TextSpan(
                             text: 'PRO',
-                            style: TextStyle(
+                            style: GoogleFonts.orbitron(
                               color: Color(0xFFB7FF00),
                               fontSize: 30,
                               fontWeight: FontWeight.w700,
