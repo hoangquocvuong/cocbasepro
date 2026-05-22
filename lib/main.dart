@@ -1226,7 +1226,7 @@ document.querySelector(
                   const SizedBox(height: 22),
 
                   Container(
-                    width: MediaQuery.of(context).size.width * 0.74,
+                    width: MediaQuery.of(context).size.width * 0.62,
                     height: 12,
                     padding: const EdgeInsets.all(2),
                     decoration: BoxDecoration(
@@ -1268,7 +1268,7 @@ document.querySelector(
                             text: 'PRO',
                             style: GoogleFonts.orbitron(
                               color: Color(0xFFB7FF00),
-                              fontSize: 27,
+                              fontSize: 29,
                               fontWeight: FontWeight.w700,
                               letterSpacing: 1.0,
                               height: 1,
