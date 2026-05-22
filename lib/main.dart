@@ -1087,7 +1087,8 @@ document.querySelector(
         // ======================
         bottomNavigationBar:
         Platform.isIOS &&
-            pageLoaded
+            pageLoaded &&
+            minSplashFinished
             ? (isHomePage
             ? _homeNav()
             : _articleNav())
@@ -1314,7 +1315,7 @@ document.querySelector(
 
                   // ===== FEATURES =====
                   const SizedBox(
-                    width: 300,
+                    width: 330,
                     child: Wrap(
                       alignment: WrapAlignment.center,
                       spacing: 18,
