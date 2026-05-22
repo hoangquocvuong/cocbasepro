@@ -347,7 +347,7 @@ class _WebScreenState extends State<WebScreen>
           setState(() {
             pageLoaded = true;
             showResumeOverlay = false;
-            isInitialLaunch = false;
+
             isHomePage =
                 url == homeUrl ||
                     url == '$homeUrl/';
@@ -1201,7 +1201,7 @@ document.querySelector(
                     isInitialLaunch ? 'Launching app...' : 'Restoring session...',
                     style: const TextStyle(
                       color: Color(0xFFB7FF00),
-                      fontSize: 20,
+                      fontSize: 17,
                       fontWeight: FontWeight.w900,
                       letterSpacing: 0.3,
                     ),
@@ -1215,7 +1215,7 @@ document.querySelector(
                         : 'Refreshing latest content',
                     style: TextStyle(
                       color: Colors.white.withValues(alpha: 0.78),
-                      fontSize: 13,
+                      fontSize: 15,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -1255,9 +1255,9 @@ document.querySelector(
                             text: 'BASE LAYOUT ',
                             style: TextStyle(
                               color: Color(0xFFEFFFF5),
-                              fontSize: 36,
+                              fontSize: 33,
                               fontWeight: FontWeight.w900,
-                              letterSpacing: 1.4,
+                              letterSpacing: 1.2,
                               height: 1,
                             ),
                           ),
@@ -1265,9 +1265,9 @@ document.querySelector(
                             text: 'PRO',
                             style: TextStyle(
                               color: Color(0xFFB7FF00),
-                              fontSize: 36,
+                              fontSize: 33,
                               fontWeight: FontWeight.w900,
-                              letterSpacing: 1.4,
+                              letterSpacing: 1.2,
                               height: 1,
                             ),
                           ),
