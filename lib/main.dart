@@ -1204,7 +1204,7 @@ document.querySelector(
                     isInitialLaunch ? 'Launching app...' : 'Restoring session...',
                     style: TextStyle(
                       color: Color(0xFFEFFFF5),
-                      fontSize: 20,
+                      fontSize: 15,
                       fontWeight: FontWeight.w900,
                       letterSpacing: 0.3,
                     ),
@@ -1258,7 +1258,7 @@ document.querySelector(
                             text: 'BASE LAYOUT ',
                             style: GoogleFonts.orbitron(
                               color: Color(0xFFEFFFF5),
-                              fontSize: 24,
+                              fontSize: 25,
                               fontWeight: FontWeight.w800,
                               letterSpacing: 1.0,
                               height: 1,
@@ -1268,7 +1268,7 @@ document.querySelector(
                             text: 'PRO',
                             style: GoogleFonts.orbitron(
                               color: Color(0xFFB7FF00),
-                              fontSize: 22,
+                              fontSize: 25,
                               fontWeight: FontWeight.w700,
                               letterSpacing: 1.0,
                               height: 1,
