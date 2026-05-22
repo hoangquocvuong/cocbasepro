@@ -1162,7 +1162,6 @@ document.querySelector(
             ),
 
             // SPLASH / RESTORE LOADING
-            // SPLASH / RESTORE LOADING
             if (!pageLoaded || !minSplashFinished)
         Container(
         width: double.infinity,
@@ -1179,71 +1178,66 @@ document.querySelector(
           ),
         ),
         child: SafeArea(
-          child: Center(
-            child: SingleChildScrollView(
-              physics: const NeverScrollableScrollPhysics(),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: 22,
+              vertical: 18,
+            ),
 
-                  // ===== HERO LOGO =====
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
                   SizedBox(
-                    width: 180,
-                    height: 180,
+                    width: 190,
+                    height: 190,
                     child: CustomPaint(
                       painter: SplashHeroPainter(),
                     ),
                   ),
 
-                  const SizedBox(height: 14),
+                  const SizedBox(height: 20),
 
-                  // ===== STATUS =====
                   Text(
-                    isInitialLaunch
-                        ? 'Launching app...'
-                        : 'Restoring session...',
+                    isInitialLaunch ? 'Launching app...' : 'Restoring session...',
                     style: const TextStyle(
                       color: Color(0xFFB7FF00),
-                      fontSize: 20,
+                      fontSize: 24,
                       fontWeight: FontWeight.w900,
-                      letterSpacing: 0.2,
+                      letterSpacing: 0.3,
                     ),
                   ),
 
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 8),
 
                   Text(
                     isInitialLaunch
                         ? 'Loading latest Clash layouts'
                         : 'Refreshing latest content',
                     style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.72),
-                      fontSize: 12.5,
+                      color: Colors.white.withValues(alpha: 0.78),
+                      fontSize: 15,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
 
-                  const SizedBox(height: 18),
+                  const SizedBox(height: 22),
 
-                  // ===== LOADING BAR =====
                   Container(
-                    width: 210,
-                    height: 10,
+                    width: MediaQuery.of(context).size.width * 0.74,
+                    height: 12,
                     padding: const EdgeInsets.all(2),
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(999),
                       border: Border.all(
-                        color: const Color(0xFFB7FF00)
-                            .withValues(alpha: 0.42),
+                        color: const Color(0xFFB7FF00).withValues(alpha: 0.48),
                       ),
                       color: Colors.black.withValues(alpha: 0.38),
                     ),
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(999),
                       child: LinearProgressIndicator(
-                        minHeight: 6,
-                        backgroundColor:
-                        Colors.white.withValues(alpha: 0.06),
+                        minHeight: 8,
+                        backgroundColor: Colors.white.withValues(alpha: 0.06),
                         color: const Color(0xFFB7FF00),
                       ),
                     ),
@@ -1251,91 +1245,92 @@ document.querySelector(
 
                   const SizedBox(height: 28),
 
-                  // ===== TITLE =====
-                  RichText(
-                    textAlign: TextAlign.center,
-                    text: const TextSpan(
-                      children: [
-                        TextSpan(
-                          text: 'BASE LAYOUT ',
-                          style: TextStyle(
-                            color: Color(0xFFEFFFF5),
-                            fontSize: 25,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 1.7,
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: RichText(
+                      textAlign: TextAlign.center,
+                      text: const TextSpan(
+                        children: [
+                          TextSpan(
+                            text: 'BASE LAYOUT ',
+                            style: TextStyle(
+                              color: Color(0xFFEFFFF5),
+                              fontSize: 50,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 1.8,
+                              height: 1,
+                            ),
                           ),
-                        ),
-                        TextSpan(
-                          text: 'PRO',
-                          style: TextStyle(
-                            color: Color(0xFFB7FF00),
-                            fontSize: 25,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 1.7,
+                          TextSpan(
+                            text: 'PRO',
+                            style: TextStyle(
+                              color: Color(0xFFB7FF00),
+                              fontSize: 50,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 1.8,
+                              height: 1,
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
 
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 18),
 
-                  // ===== DIVIDER =====
                   Container(
-                    width: 170,
+                    width: MediaQuery.of(context).size.width * 0.78,
                     height: 1,
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
                         colors: [
                           Colors.transparent,
-                          const Color(0xFFB7FF00)
-                              .withValues(alpha: 0.9),
+                          const Color(0xFFB7FF00).withValues(alpha: 0.95),
                           Colors.transparent,
                         ],
                       ),
                     ),
                   ),
 
-                  const SizedBox(height: 14),
+                  const SizedBox(height: 18),
 
-                  // ===== TAGLINE =====
                   Text(
                     'Smart layouts. Fast copy. Better defense.',
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                      color: const Color(0xFFB7FF00)
-                          .withValues(alpha: 0.95),
-                      fontSize: 12.5,
+                      color: const Color(0xFFB7FF00).withValues(alpha: 0.96),
+                      fontSize: 16,
                       fontWeight: FontWeight.w700,
-                      letterSpacing: 0.3,
+                      letterSpacing: 0.35,
                     ),
                   ),
 
                   const SizedBox(height: 28),
 
-                  // ===== FEATURES =====
-                  const SizedBox(
-                    width: 330,
-                    child: Wrap(
-                      alignment: WrapAlignment.center,
-                      spacing: 18,
-                      runSpacing: 18,
-                      children: [
-                        _SplashFeature(icon: Icons.shield_outlined, label: 'DEFEND'),
-                        _SplashFeature(icon: Icons.grid_view_rounded, label: 'LAYOUT'),
-                        _SplashFeature(icon: Icons.content_copy_rounded, label: 'COPY'),
-                        _SplashFeature(icon: Icons.flash_on_rounded, label: 'FAST'),
-                        _SplashFeature(icon: Icons.link_rounded, label: 'LINK'),
-                        _SplashFeature(icon: Icons.star_border_rounded, label: 'PRO'),
-                      ],
-                    ),
+                  const Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      _SplashFeature(icon: Icons.shield_outlined, label: 'DEFEND'),
+                      _SplashFeature(icon: Icons.grid_view_rounded, label: 'LAYOUT'),
+                      _SplashFeature(icon: Icons.content_copy_rounded, label: 'COPY'),
+                    ],
+                  ),
+
+                  const SizedBox(height: 18),
+
+                  const Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      _SplashFeature(icon: Icons.flash_on_rounded, label: 'FAST'),
+                      _SplashFeature(icon: Icons.link_rounded, label: 'LINK'),
+                      _SplashFeature(icon: Icons.star_border_rounded, label: 'PRO'),
+                    ],
                   ),
                 ],
               ),
             ),
           ),
-        ),
-      ),
+        )
       ],
       ),
         ),
@@ -1358,23 +1353,23 @@ class _SplashFeature extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: 92,
+      width: 96,
       child: Column(
         children: [
           Container(
-            width: 64,
-            height: 64,
+            width: 88,
+            height: 88,
             decoration: BoxDecoration(
-              color: Colors.black.withValues(alpha: 0.28),
-              borderRadius: BorderRadius.circular(14),
+              color: Colors.black.withValues(alpha: 0.3),
+              borderRadius: BorderRadius.circular(16),
               border: Border.all(
-                color: const Color(0xFFB7FF00).withValues(alpha: 0.85),
-                width: 1.4,
+                color: const Color(0xFFB7FF00).withValues(alpha: 0.9),
+                width: 1.5,
               ),
               boxShadow: [
                 BoxShadow(
-                  color: const Color(0xFFB7FF00).withValues(alpha: 0.28),
-                  blurRadius: 18,
+                  color: const Color(0xFFB7FF00).withValues(alpha: 0.32),
+                  blurRadius: 22,
                   spreadRadius: 1,
                 ),
               ],
@@ -1382,20 +1377,20 @@ class _SplashFeature extends StatelessWidget {
             child: Icon(
               icon,
               color: const Color(0xFFB7FF00),
-              size: 32,
+              size: 42,
             ),
           ),
 
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
 
           Text(
             label,
             textAlign: TextAlign.center,
             style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.9),
-              fontSize: 12,
+              color: Colors.white.withValues(alpha: 0.92),
+              fontSize: 15,
               fontWeight: FontWeight.w900,
-              letterSpacing: 1.1,
+              letterSpacing: 1,
             ),
           ),
         ],
@@ -1427,11 +1422,11 @@ class SplashHeroPainter extends CustomPainter {
       ).createShader(
         Rect.fromCircle(
           center: c,
-          radius: 82,
+          radius: 100,
         ),
       );
 
-    canvas.drawCircle(c, 88, glowPaint);
+    canvas.drawCircle(c, 100, glowPaint);
 
     // ===== RINGS =====
     final ringPaint = Paint()
@@ -1440,10 +1435,10 @@ class SplashHeroPainter extends CustomPainter {
       ..color = const Color(0xFFB7FF00)
           .withValues(alpha: 0.32);
 
-    canvas.drawCircle(c, 78, ringPaint);
-    canvas.drawCircle(c, 65, ringPaint);
-    canvas.drawCircle(c, 52, ringPaint);
-    canvas.drawCircle(c, 40, ringPaint);
+    canvas.drawCircle(c, 92, ringPaint);
+    canvas.drawCircle(c, 72, ringPaint);
+    canvas.drawCircle(c, 58, ringPaint);
+    canvas.drawCircle(c, 44, ringPaint);
 
     // ===== HUD ARCS =====
     final arcPaint = Paint()
@@ -1752,7 +1747,7 @@ class SplashHeroPainter extends CustomPainter {
       final angle = i * 0.58;
 
       final radius =
-          68 + (i % 5) * 7;
+          68 + (i % 5) * 6;
 
       final p = Offset(
         c.dx +
