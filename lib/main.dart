@@ -1258,7 +1258,7 @@ document.querySelector(
                             text: 'BASE LAYOUT ',
                             style: GoogleFonts.orbitron(
                               color: Color(0xFFEFFFF5),
-                              fontSize: 25,
+                              fontSize: 27,
                               fontWeight: FontWeight.w800,
                               letterSpacing: 1.0,
                               height: 1,
@@ -1268,7 +1268,7 @@ document.querySelector(
                             text: 'PRO',
                             style: GoogleFonts.orbitron(
                               color: Color(0xFFB7FF00),
-                              fontSize: 25,
+                              fontSize: 27,
                               fontWeight: FontWeight.w700,
                               letterSpacing: 1.0,
                               height: 1,
