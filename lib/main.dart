@@ -1255,7 +1255,7 @@ document.querySelector(
                             text: 'BASE LAYOUT ',
                             style: TextStyle(
                               color: Color(0xFFEFFFF5),
-                              fontSize: 46,
+                              fontSize: 40,
                               fontWeight: FontWeight.w900,
                               letterSpacing: 1.8,
                               height: 1,
@@ -1265,7 +1265,7 @@ document.querySelector(
                             text: 'PRO',
                             style: TextStyle(
                               color: Color(0xFFB7FF00),
-                              fontSize: 46,
+                              fontSize: 40,
                               fontWeight: FontWeight.w900,
                               letterSpacing: 1.8,
                               height: 1,
@@ -1299,7 +1299,7 @@ document.querySelector(
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       color: const Color(0xFFB7FF00).withValues(alpha: 0.96),
-                      fontSize: 16,
+                      fontSize: 14,
                       fontWeight: FontWeight.w700,
                       letterSpacing: 0.35,
                     ),
