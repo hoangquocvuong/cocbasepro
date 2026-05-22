@@ -1181,11 +1181,11 @@ document.querySelector(
           child: Padding(
             padding: const EdgeInsets.symmetric(
               horizontal: 22,
-              vertical: 18,
+              vertical: 10,
             ),
 
             child: Column(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
                   SizedBox(
                     width: 190,
@@ -1195,13 +1195,13 @@ document.querySelector(
                     ),
                   ),
 
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 14),
 
                   Text(
                     isInitialLaunch ? 'Launching app...' : 'Restoring session...',
                     style: const TextStyle(
                       color: Color(0xFFB7FF00),
-                      fontSize: 24,
+                      fontSize: 20,
                       fontWeight: FontWeight.w900,
                       letterSpacing: 0.3,
                     ),
@@ -1243,7 +1243,7 @@ document.querySelector(
                     ),
                   ),
 
-                  const SizedBox(height: 28),
+                  const SizedBox(height: 22),
 
                   FittedBox(
                     fit: BoxFit.scaleDown,
@@ -1255,7 +1255,7 @@ document.querySelector(
                             text: 'BASE LAYOUT ',
                             style: TextStyle(
                               color: Color(0xFFEFFFF5),
-                              fontSize: 50,
+                              fontSize: 46,
                               fontWeight: FontWeight.w900,
                               letterSpacing: 1.8,
                               height: 1,
@@ -1265,7 +1265,7 @@ document.querySelector(
                             text: 'PRO',
                             style: TextStyle(
                               color: Color(0xFFB7FF00),
-                              fontSize: 50,
+                              fontSize: 46,
                               fontWeight: FontWeight.w900,
                               letterSpacing: 1.8,
                               height: 1,
@@ -1305,7 +1305,7 @@ document.querySelector(
                     ),
                   ),
 
-                  const SizedBox(height: 28),
+                  const SizedBox(height: 12),
 
                   const Row(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -1316,7 +1316,7 @@ document.querySelector(
                     ],
                   ),
 
-                  const SizedBox(height: 18),
+                  const SizedBox(height: 10),
 
                   const Row(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -1326,6 +1326,17 @@ document.querySelector(
                       _SplashFeature(icon: Icons.star_border_rounded, label: 'PRO'),
                     ],
                   ),
+
+                const SizedBox(height: 12),
+
+                SizedBox(
+                  width: MediaQuery.of(context).size.width * 0.82,
+                  height: 24,
+                  child: CustomPaint(
+                    painter: BottomHudPainter(),
+                  ),
+                ),
+
                 ],
               ),
             ),
@@ -1353,12 +1364,12 @@ class _SplashFeature extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: 96,
+      width: 102,
       child: Column(
         children: [
           Container(
-            width: 88,
-            height: 88,
+            width: 82,
+            height: 82,
             decoration: BoxDecoration(
               color: Colors.black.withValues(alpha: 0.3),
               borderRadius: BorderRadius.circular(16),
@@ -1377,7 +1388,7 @@ class _SplashFeature extends StatelessWidget {
             child: Icon(
               icon,
               color: const Color(0xFFB7FF00),
-              size: 42,
+              size: 38,
             ),
           ),
 
@@ -1747,7 +1758,7 @@ class SplashHeroPainter extends CustomPainter {
       final angle = i * 0.58;
 
       final radius =
-          68 + (i % 5) * 6;
+          68 + (i % 5) * 5;
 
       final p = Offset(
         c.dx +
@@ -1839,4 +1850,49 @@ class MathHelper {
         - (x * x * x) / 6
         + (x * x * x * x * x) / 120;
   }
+}
+
+class BottomHudPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final p = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.2
+      ..strokeCap = StrokeCap.round
+      ..color = const Color(0xFFB7FF00).withValues(alpha: 0.75);
+
+    final y = size.height / 2;
+    final w = size.width;
+
+    canvas.drawLine(Offset(0, y), Offset(w * 0.34, y), p);
+    canvas.drawLine(Offset(w * 0.66, y), Offset(w, y), p);
+
+    final center = Path()
+      ..moveTo(w * 0.36, y)
+      ..lineTo(w * 0.42, y - 8)
+      ..lineTo(w * 0.58, y - 8)
+      ..lineTo(w * 0.64, y)
+      ..lineTo(w * 0.58, y + 8)
+      ..lineTo(w * 0.42, y + 8)
+      ..close();
+
+    canvas.drawPath(center, p);
+
+    final fill = Paint()
+      ..style = PaintingStyle.fill
+      ..color = const Color(0xFFB7FF00).withValues(alpha: 0.9);
+
+    for (int i = 0; i < 6; i++) {
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(w * 0.46 + i * 7, y - 3, 4, 6),
+          const Radius.circular(1),
+        ),
+        fill,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
