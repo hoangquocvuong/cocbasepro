@@ -6,6 +6,7 @@ import 'dart:developer';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
@@ -347,6 +348,7 @@ class _WebScreenState extends State<WebScreen>
           setState(() {
             pageLoaded = true;
             showResumeOverlay = false;
+            isInitialLaunch = false;
 
             isHomePage =
                 url == homeUrl ||
@@ -1199,11 +1201,12 @@ document.querySelector(
 
                   Text(
                     isInitialLaunch ? 'Launching app...' : 'Restoring session...',
-                    style: const TextStyle(
-                      color: Color(0xFFB7FF00),
-                      fontSize: 17,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 0.3,
+                    style: GoogleFonts.orbitron(
+                      color: const Color(0xFFEFFFF5),
+                      fontSize: 36,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 1.1,
+                      height: 1,
                     ),
                   ),
 
@@ -1255,9 +1258,9 @@ document.querySelector(
                             text: 'BASE LAYOUT ',
                             style: TextStyle(
                               color: Color(0xFFEFFFF5),
-                              fontSize: 33,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: 1.2,
+                              fontSize: 30,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 1.0,
                               height: 1,
                             ),
                           ),
@@ -1265,9 +1268,9 @@ document.querySelector(
                             text: 'PRO',
                             style: TextStyle(
                               color: Color(0xFFB7FF00),
-                              fontSize: 33,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: 1.2,
+                              fontSize: 30,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 1.0,
                               height: 1,
                             ),
                           ),
@@ -1853,46 +1856,145 @@ class MathHelper {
 }
 
 class BottomHudPainter extends CustomPainter {
+
   @override
   void paint(Canvas canvas, Size size) {
-    final p = Paint()
+
+    final glow = Paint()
+      ..color =
+      const Color(0xFFB7FF00)
+          .withValues(alpha: 0.18)
+
+      ..maskFilter =
+      const MaskFilter.blur(
+        BlurStyle.normal,
+        10,
+      );
+
+    final line = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.2
+      ..strokeWidth = 1.4
       ..strokeCap = StrokeCap.round
-      ..color = const Color(0xFFB7FF00).withValues(alpha: 0.75);
-
-    final y = size.height / 2;
-    final w = size.width;
-
-    canvas.drawLine(Offset(0, y), Offset(w * 0.34, y), p);
-    canvas.drawLine(Offset(w * 0.66, y), Offset(w, y), p);
-
-    final center = Path()
-      ..moveTo(w * 0.36, y)
-      ..lineTo(w * 0.42, y - 8)
-      ..lineTo(w * 0.58, y - 8)
-      ..lineTo(w * 0.64, y)
-      ..lineTo(w * 0.58, y + 8)
-      ..lineTo(w * 0.42, y + 8)
-      ..close();
-
-    canvas.drawPath(center, p);
+      ..color =
+      const Color(0xFFB7FF00)
+          .withValues(alpha: 0.88);
 
     final fill = Paint()
       ..style = PaintingStyle.fill
-      ..color = const Color(0xFFB7FF00).withValues(alpha: 0.9);
+      ..color =
+      const Color(0xFFD6FF3F);
 
-    for (int i = 0; i < 6; i++) {
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromLTWH(w * 0.46 + i * 7, y - 3, 4, 6),
-          const Radius.circular(1),
+    final y =
+        size.height / 2;
+
+    final w =
+        size.width;
+
+    // ===== LEFT HUD =====
+    final left = Path()
+
+      ..moveTo(0, y)
+      ..lineTo(w * 0.18, y)
+
+      ..lineTo(w * 0.22, y - 7)
+
+      ..lineTo(w * 0.34, y - 7)
+
+      ..lineTo(w * 0.37, y)
+
+      ..lineTo(w * 0.44, y);
+
+    // ===== RIGHT HUD =====
+    final right = Path()
+
+      ..moveTo(w, y)
+      ..lineTo(w * 0.82, y)
+
+      ..lineTo(w * 0.78, y - 7)
+
+      ..lineTo(w * 0.66, y - 7)
+
+      ..lineTo(w * 0.63, y)
+
+      ..lineTo(w * 0.56, y);
+
+    canvas.drawPath(left, glow);
+    canvas.drawPath(right, glow);
+
+    canvas.drawPath(left, line);
+    canvas.drawPath(right, line);
+
+    // ===== CENTER CORE =====
+    final core = RRect.fromRectAndRadius(
+
+      Rect.fromCenter(
+        center: Offset(w / 2, y),
+        width: 110,
+        height: 16,
+      ),
+
+      const Radius.circular(4),
+    );
+
+    canvas.drawRRect(
+      core,
+
+      Paint()
+        ..style = PaintingStyle.fill
+
+        ..shader =
+        const LinearGradient(
+          colors: [
+            Color(0xFF8DFF00),
+            Color(0xFFE5FF54),
+            Color(0xFF8DFF00),
+          ],
+        ).createShader(
+          Rect.fromCenter(
+            center: Offset(w / 2, y),
+            width: 110,
+            height: 16,
+          ),
         ),
+    );
+
+    // ===== DASHES =====
+    for (int i = 0; i < 9; i++) {
+
+      canvas.drawRRect(
+
+        RRect.fromRectAndRadius(
+
+          Rect.fromLTWH(
+            w / 2 - 36 + i * 8,
+            y - 5,
+            4,
+            10,
+          ),
+
+          const Radius.circular(1.5),
+        ),
+
         fill,
       );
     }
+
+    // ===== SIDE DOTS =====
+    canvas.drawCircle(
+      Offset(w * 0.22, y - 7),
+      2.2,
+      fill,
+    );
+
+    canvas.drawCircle(
+      Offset(w * 0.78, y - 7),
+      2.2,
+      fill,
+    );
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(
+      covariant CustomPainter oldDelegate
+      ) => false;
 }
