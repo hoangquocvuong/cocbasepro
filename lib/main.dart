@@ -1204,10 +1204,9 @@ document.querySelector(
                     isInitialLaunch ? 'Launching app...' : 'Restoring session...',
                     style: TextStyle(
                       color: Color(0xFFEFFFF5),
-                      fontSize: 36,
+                      fontSize: 20,
                       fontWeight: FontWeight.w900,
-                      letterSpacing: 1.4,
-                      height: 1,
+                      letterSpacing: 0.3,
                     ),
                   ),
 
@@ -1219,7 +1218,7 @@ document.querySelector(
                         : 'Refreshing latest content',
                     style: TextStyle(
                       color: Colors.white.withValues(alpha: 0.78),
-                      fontSize: 15,
+                      fontSize: 13,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -1259,7 +1258,7 @@ document.querySelector(
                             text: 'BASE LAYOUT ',
                             style: GoogleFonts.orbitron(
                               color: Color(0xFFEFFFF5),
-                              fontSize: 30,
+                              fontSize: 24,
                               fontWeight: FontWeight.w800,
                               letterSpacing: 1.0,
                               height: 1,
@@ -1269,7 +1268,7 @@ document.querySelector(
                             text: 'PRO',
                             style: GoogleFonts.orbitron(
                               color: Color(0xFFB7FF00),
-                              fontSize: 30,
+                              fontSize: 22,
                               fontWeight: FontWeight.w700,
                               letterSpacing: 1.0,
                               height: 1,
