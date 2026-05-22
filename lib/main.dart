@@ -1161,7 +1161,8 @@ document.querySelector(
             ),
 
             // SPLASH / RESTORE LOADING
-              if (!pageLoaded || !minSplashFinished)
+            // SPLASH / RESTORE LOADING
+            if (!pageLoaded || !minSplashFinished)
         Container(
         width: double.infinity,
         height: double.infinity,
@@ -1183,29 +1184,32 @@ document.querySelector(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+
+                  // ===== HERO LOGO =====
                   SizedBox(
-                    width: 240,
-                    height: 240,
+                    width: 180,
+                    height: 180,
                     child: CustomPaint(
                       painter: SplashHeroPainter(),
                     ),
                   ),
 
-                  const SizedBox(height: 18),
+                  const SizedBox(height: 14),
 
+                  // ===== STATUS =====
                   Text(
                     isInitialLaunch
                         ? 'Launching app...'
                         : 'Restoring session...',
                     style: const TextStyle(
                       color: Color(0xFFB7FF00),
-                      fontSize: 25,
+                      fontSize: 20,
                       fontWeight: FontWeight.w900,
-                      letterSpacing: 0.3,
+                      letterSpacing: 0.2,
                     ),
                   ),
 
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 6),
 
                   Text(
                     isInitialLaunch
@@ -1213,36 +1217,40 @@ document.querySelector(
                         : 'Refreshing latest content',
                     style: TextStyle(
                       color: Colors.white.withValues(alpha: 0.72),
-                      fontSize: 14,
+                      fontSize: 12.5,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
 
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 18),
 
+                  // ===== LOADING BAR =====
                   Container(
-                    width: 250,
-                    height: 12,
+                    width: 210,
+                    height: 10,
                     padding: const EdgeInsets.all(2),
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(999),
                       border: Border.all(
-                        color: const Color(0xFFB7FF00).withValues(alpha: 0.42),
+                        color: const Color(0xFFB7FF00)
+                            .withValues(alpha: 0.42),
                       ),
                       color: Colors.black.withValues(alpha: 0.38),
                     ),
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(999),
                       child: LinearProgressIndicator(
-                        minHeight: 8,
-                        backgroundColor: Colors.white.withValues(alpha: 0.06),
+                        minHeight: 6,
+                        backgroundColor:
+                        Colors.white.withValues(alpha: 0.06),
                         color: const Color(0xFFB7FF00),
                       ),
                     ),
                   ),
 
-                  const SizedBox(height: 36),
+                  const SizedBox(height: 28),
 
+                  // ===== TITLE =====
                   RichText(
                     textAlign: TextAlign.center,
                     text: const TextSpan(
@@ -1251,76 +1259,94 @@ document.querySelector(
                           text: 'BASE LAYOUT ',
                           style: TextStyle(
                             color: Color(0xFFEFFFF5),
-                            fontSize: 31,
+                            fontSize: 25,
                             fontWeight: FontWeight.w900,
-                            letterSpacing: 2.1,
+                            letterSpacing: 1.7,
                           ),
                         ),
                         TextSpan(
                           text: 'PRO',
                           style: TextStyle(
                             color: Color(0xFFB7FF00),
-                            fontSize: 31,
+                            fontSize: 25,
                             fontWeight: FontWeight.w900,
-                            letterSpacing: 2.1,
+                            letterSpacing: 1.7,
                           ),
                         ),
                       ],
                     ),
                   ),
 
-                  const SizedBox(height: 14),
+                  const SizedBox(height: 10),
 
+                  // ===== DIVIDER =====
                   Container(
-                    width: 210,
+                    width: 170,
                     height: 1,
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
                         colors: [
                           Colors.transparent,
-                          const Color(0xFFB7FF00).withValues(alpha: 0.9),
+                          const Color(0xFFB7FF00)
+                              .withValues(alpha: 0.9),
                           Colors.transparent,
                         ],
                       ),
                     ),
                   ),
 
-                  const SizedBox(height: 18),
+                  const SizedBox(height: 14),
 
+                  // ===== TAGLINE =====
                   Text(
                     'Smart layouts. Fast copy. Better defense.',
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                      color: const Color(0xFFB7FF00).withValues(alpha: 0.95),
-                      fontSize: 15,
+                      color: const Color(0xFFB7FF00)
+                          .withValues(alpha: 0.95),
+                      fontSize: 12.5,
                       fontWeight: FontWeight.w700,
-                      letterSpacing: 0.4,
+                      letterSpacing: 0.3,
                     ),
                   ),
 
-                  const SizedBox(height: 30),
+                  const SizedBox(height: 24),
 
-                  const Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
+                  // ===== FEATURES =====
+                  const Wrap(
+                    alignment: WrapAlignment.center,
+                    spacing: 20,
+                    runSpacing: 18,
                     children: [
+
                       _SplashFeature(
                         icon: Icons.shield_outlined,
                         label: 'DEFEND',
                       ),
-                      SizedBox(width: 24),
+
                       _SplashFeature(
                         icon: Icons.grid_view_rounded,
                         label: 'LAYOUT',
                       ),
-                      SizedBox(width: 24),
+
                       _SplashFeature(
                         icon: Icons.content_copy_rounded,
                         label: 'COPY',
                       ),
-                      SizedBox(width: 24),
+
                       _SplashFeature(
                         icon: Icons.flash_on_rounded,
                         label: 'FAST',
+                      ),
+
+                      _SplashFeature(
+                        icon: Icons.link_rounded,
+                        label: 'LINK',
+                      ),
+
+                      _SplashFeature(
+                        icon: Icons.star_border_rounded,
+                        label: 'PRO',
                       ),
                     ],
                   ),
@@ -1331,8 +1357,8 @@ document.querySelector(
         ),
       ),
       ],
-        ),
       ),
+        ),
       ),
     );
 
@@ -1351,124 +1377,164 @@ class _SplashFeature extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Icon(
-          icon,
-          color: const Color(0xFFB7FF00),
-          size: 34,
-        ),
-        const SizedBox(height: 8),
-        Text(
-          label,
-          style: TextStyle(
-            color: Colors.white.withValues(alpha: 0.78),
-            fontSize: 11,
-            fontWeight: FontWeight.w800,
-            letterSpacing: 1.4,
+    return SizedBox(
+      width: 72,
+      child: Column(
+        children: [
+          Icon(
+            icon,
+            color: const Color(0xFFB7FF00),
+            size: 26,
           ),
-        ),
-      ],
+
+          const SizedBox(height: 6),
+
+          Text(
+            label,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.78),
+              fontSize: 9.5,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 1.1,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
 
 class SplashHeroPainter extends CustomPainter {
+
   @override
   void paint(Canvas canvas, Size size) {
-    final c = Offset(size.width / 2, size.height / 2);
 
+    final c =
+    Offset(size.width / 2, size.height / 2);
+
+    // ===== GLOW =====
     final glowPaint = Paint()
       ..shader = RadialGradient(
         colors: [
-          const Color(0xFFB7FF00).withValues(alpha: 0.45),
-          const Color(0xFFB7FF00).withValues(alpha: 0.16),
+          const Color(0xFFB7FF00)
+              .withValues(alpha: 0.42),
+
+          const Color(0xFFB7FF00)
+              .withValues(alpha: 0.15),
+
           Colors.transparent,
         ],
       ).createShader(
         Rect.fromCircle(
           center: c,
-          radius: 118,
+          radius: 88,
         ),
       );
 
-    canvas.drawCircle(c, 118, glowPaint);
+    canvas.drawCircle(c, 88, glowPaint);
 
+    // ===== RINGS =====
     final ringPaint = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.15
-      ..color = const Color(0xFFB7FF00).withValues(alpha: 0.32);
+      ..strokeWidth = 1
+      ..color = const Color(0xFFB7FF00)
+          .withValues(alpha: 0.32);
 
-    canvas.drawCircle(c, 102, ringPaint);
-    canvas.drawCircle(c, 88, ringPaint);
-    canvas.drawCircle(c, 72, ringPaint);
-    canvas.drawCircle(c, 56, ringPaint);
+    canvas.drawCircle(c, 78, ringPaint);
+    canvas.drawCircle(c, 65, ringPaint);
+    canvas.drawCircle(c, 52, ringPaint);
+    canvas.drawCircle(c, 40, ringPaint);
 
+    // ===== HUD ARCS =====
     final arcPaint = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 3.2
+      ..strokeWidth = 2.4
       ..strokeCap = StrokeCap.round
-      ..color = const Color(0xFFB7FF00).withValues(alpha: 0.9);
+      ..color = const Color(0xFFB7FF00)
+          .withValues(alpha: 0.88);
 
     canvas.drawArc(
-      Rect.fromCircle(center: c, radius: 104),
-      -2.95,
-      1.1,
+      Rect.fromCircle(center: c, radius: 80),
+      -2.9,
+      1.05,
       false,
       arcPaint,
     );
 
     canvas.drawArc(
-      Rect.fromCircle(center: c, radius: 94),
+      Rect.fromCircle(center: c, radius: 70),
       0.2,
-      0.95,
+      0.9,
       false,
       arcPaint,
     );
 
-    // ===== OUTER SHIELD - giống ảnh hơn =====
+    // ===== OUTER SHIELD =====
     final outerShield = Path()
-      ..moveTo(c.dx, c.dy - 72)
+
+      ..moveTo(c.dx, c.dy - 56)
+
       ..cubicTo(
-        c.dx - 24,
-        c.dy - 68,
-        c.dx - 56,
-        c.dy - 58,
-        c.dx - 78,
-        c.dy - 52,
-      )
-      ..lineTo(c.dx - 68, c.dy + 34)
-      ..cubicTo(
+        c.dx - 18,
+        c.dy - 44,
+
+        c.dx - 40,
+        c.dy - 38,
+
         c.dx - 54,
-        c.dy + 72,
-        c.dx - 24,
-        c.dy + 96,
-        c.dx,
-        c.dy + 88,
+        c.dy - 34,
       )
+
+      ..lineTo(
+        c.dx - 46,
+        c.dy + 22,
+      )
+
       ..cubicTo(
-        c.dx + 24,
-        c.dy + 96,
+        c.dx - 37,
+        c.dy + 50,
+
+        c.dx - 16,
+        c.dy + 67,
+
+        c.dx,
+        c.dy + 82,
+      )
+
+      ..cubicTo(
+        c.dx + 16,
+        c.dy + 67,
+
+        c.dx + 37,
+        c.dy + 50,
+
+        c.dx + 46,
+        c.dy + 22,
+      )
+
+      ..lineTo(
         c.dx + 54,
-        c.dy + 72,
-        c.dx + 68,
-        c.dy + 34,
+        c.dy - 34,
       )
-      ..lineTo(c.dx + 78, c.dy - 52)
+
       ..cubicTo(
-        c.dx + 56,
-        c.dy - 58,
-        c.dx + 24,
-        c.dy - 68,
+        c.dx + 40,
+        c.dy - 38,
+
+        c.dx + 18,
+        c.dy - 44,
+
         c.dx,
-        c.dy - 72,
+        c.dy - 56,
       )
+
       ..close();
 
     canvas.drawShadow(
       outerShield,
       const Color(0xFFB7FF00),
-      28,
+      16,
       true,
     );
 
@@ -1477,160 +1543,250 @@ class SplashHeroPainter extends CustomPainter {
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
         colors: [
+
           Color(0xFFFFFFFF),
+
           Color(0xFFB7FF00),
+
           Color(0xFF173F13),
+
           Color(0xFF020804),
         ],
       ).createShader(
         Rect.fromCircle(
           center: c,
-          radius: 110,
+          radius: 74,
         ),
       );
 
-    canvas.drawPath(outerShield, shieldPaint);
+    canvas.drawPath(
+      outerShield,
+      shieldPaint,
+    );
 
-    // ===== INNER DARK SHIELD =====
+    // ===== INNER SHIELD =====
     final innerShield = Path()
-      ..moveTo(c.dx, c.dy - 65)
+
+      ..moveTo(c.dx, c.dy - 40)
+
       ..cubicTo(
-        c.dx - 19,
-        c.dy - 50,
-        c.dx - 43,
-        c.dy - 42,
-        c.dx - 58,
-        c.dy - 38,
+        c.dx - 12,
+        c.dy - 31,
+
+        c.dx - 28,
+        c.dy - 27,
+
+        c.dx - 38,
+        c.dy - 24,
       )
-      ..lineTo(c.dx - 50, c.dy + 24)
+
+      ..lineTo(
+        c.dx - 32,
+        c.dy + 16,
+      )
+
       ..cubicTo(
-        c.dx - 40,
-        c.dy + 53,
-        c.dx - 18,
-        c.dy + 72,
+        c.dx - 26,
+        c.dy + 36,
+
+        c.dx - 12,
+        c.dy + 49,
+
         c.dx,
-        c.dy + 82,
+        c.dy + 58,
       )
+
       ..cubicTo(
-        c.dx + 18,
-        c.dy + 72,
-        c.dx + 40,
-        c.dy + 53,
-        c.dx + 50,
-        c.dy + 24,
+        c.dx + 12,
+        c.dy + 49,
+
+        c.dx + 26,
+        c.dy + 36,
+
+        c.dx + 32,
+        c.dy + 16,
       )
-      ..lineTo(c.dx + 58, c.dy - 38)
+
+      ..lineTo(
+        c.dx + 38,
+        c.dy - 24,
+      )
+
       ..cubicTo(
-        c.dx + 43,
-        c.dy - 42,
-        c.dx + 19,
-        c.dy - 50,
+        c.dx + 28,
+        c.dy - 27,
+
+        c.dx + 12,
+        c.dy - 31,
+
         c.dx,
-        c.dy - 65,
+        c.dy - 40,
       )
+
       ..close();
 
     canvas.drawPath(
       innerShield,
+
       Paint()
         ..shader = LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
-            const Color(0xFF123F17).withValues(alpha: 0.95),
-            const Color(0xFF061509).withValues(alpha: 0.98),
-            const Color(0xFF000000).withValues(alpha: 0.95),
+
+            const Color(0xFF123F17)
+                .withValues(alpha: 0.96),
+
+            const Color(0xFF061509)
+                .withValues(alpha: 0.98),
+
+            const Color(0xFF000000)
+                .withValues(alpha: 0.95),
           ],
         ).createShader(
-          Rect.fromCircle(center: c, radius: 80),
+          Rect.fromCircle(
+            center: c,
+            radius: 55,
+          ),
         ),
     );
 
-    final whiteBorder = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 4.2
-      ..strokeJoin = StrokeJoin.round
-      ..color = Colors.white.withValues(alpha: 0.82);
+    // ===== BORDERS =====
+    canvas.drawPath(
+      outerShield,
 
-    canvas.drawPath(outerShield, whiteBorder);
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 3
+        ..strokeJoin = StrokeJoin.round
+        ..color =
+        Colors.white.withValues(alpha: 0.82),
+    );
 
-    final greenBorder = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.2
-      ..strokeJoin = StrokeJoin.round
-      ..color = const Color(0xFFB7FF00).withValues(alpha: 0.95);
+    canvas.drawPath(
+      innerShield,
 
-    canvas.drawPath(innerShield, greenBorder);
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.8
+        ..strokeJoin = StrokeJoin.round
+        ..color = const Color(0xFFB7FF00)
+            .withValues(alpha: 0.95),
+    );
 
-    // ===== GRID 3x3 =====
-    const box = 18.5;
-    const gap = 8.0;
+    // ===== GRID =====
+    const box = 12.0;
+    const gap = 5.0;
 
-    final startX = c.dx - (box * 1.5 + gap);
-    final startY = c.dy - 28;
+    final startX =
+        c.dx - (box * 1.5 + gap);
+
+    final startY =
+        c.dy - 17;
 
     for (int y = 0; y < 3; y++) {
+
       for (int x = 0; x < 3; x++) {
-        final rect = RRect.fromRectAndRadius(
+
+        final rect =
+        RRect.fromRectAndRadius(
+
           Rect.fromLTWH(
-            startX + x * (box + gap),
-            startY + y * (box + gap),
+            startX +
+                x * (box + gap),
+
+            startY +
+                y * (box + gap),
+
             box,
             box,
           ),
-          const Radius.circular(4.5),
+
+          const Radius.circular(3),
         );
 
         canvas.drawRRect(
           rect,
+
           Paint()
-            ..color = const Color(0xFFB7FF00).withValues(alpha: 0.35)
-            ..maskFilter = const MaskFilter.blur(
+            ..color =
+            const Color(0xFFB7FF00)
+                .withValues(alpha: 0.35)
+
+            ..maskFilter =
+            const MaskFilter.blur(
               BlurStyle.normal,
-              6,
+              4,
             ),
         );
 
         canvas.drawRRect(
           rect,
+
           Paint()
-            ..shader = const LinearGradient(
+            ..shader =
+            const LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
               colors: [
+
                 Color(0xFFE8FF4A),
+
                 Color(0xFFB7FF00),
+
                 Color(0xFF5CCB00),
               ],
-            ).createShader(rect.outerRect),
+            ).createShader(
+              rect.outerRect,
+            ),
         );
       }
     }
 
+    // ===== PARTICLES =====
     final dotPaint = Paint()
-      ..color = const Color(0xFFB7FF00).withValues(alpha: 0.85);
+      ..color = const Color(0xFFB7FF00)
+          .withValues(alpha: 0.85);
 
-    for (int i = 0; i < 22; i++) {
+    for (int i = 0; i < 18; i++) {
+
       final angle = i * 0.58;
-      final radius = 92 + (i % 5) * 9;
+
+      final radius =
+          68 + (i % 5) * 7;
+
       final p = Offset(
-        c.dx + radius * MathHelper.cos(angle),
-        c.dy + radius * MathHelper.sin(angle),
+        c.dx +
+            radius *
+                MathHelper.cos(angle),
+
+        c.dy +
+            radius *
+                MathHelper.sin(angle),
       );
 
-      canvas.drawCircle(p, 2.1, dotPaint);
+      canvas.drawCircle(
+        p,
+        1.7,
+        dotPaint,
+      );
     }
 
+    // ===== SPARKLES =====
     final sparkle = Paint()
-      ..color = Colors.white.withValues(alpha: 0.9)
-      ..strokeWidth = 2;
+      ..color =
+      Colors.white.withValues(alpha: 0.9)
+
+      ..strokeWidth = 1.6;
 
     void star(Offset p, double r) {
+
       canvas.drawLine(
         Offset(p.dx - r, p.dy),
         Offset(p.dx + r, p.dy),
         sparkle,
       );
+
       canvas.drawLine(
         Offset(p.dx, p.dy - r),
         Offset(p.dx, p.dy + r),
@@ -1638,28 +1794,55 @@ class SplashHeroPainter extends CustomPainter {
       );
     }
 
-    star(Offset(c.dx - 74, c.dy - 60), 9);
-    star(Offset(c.dx + 68, c.dy + 34), 8);
-    star(Offset(c.dx + 38, c.dy - 86), 6);
+    star(
+      Offset(c.dx - 54, c.dy - 44),
+      7,
+    );
+
+    star(
+      Offset(c.dx + 50, c.dy + 24),
+      6,
+    );
+
+    star(
+      Offset(c.dx + 28, c.dy - 62),
+      5,
+    );
   }
 
   @override
   bool shouldRepaint(
-      covariant CustomPainter oldDelegate,
+      covariant CustomPainter oldDelegate
       ) {
     return false;
   }
 }
-
 class MathHelper {
-  static double sin(double x) => _sin(x);
-  static double cos(double x) => _sin(x + 1.57079632679);
+
+  static double sin(double x) {
+    return _sin(x);
+  }
+
+  static double cos(double x) {
+    return _sin(x + 1.57079632679);
+  }
 
   static double _sin(double x) {
+
     const pi = 3.14159265359;
+
     x = x % (2 * pi);
-    if (x > pi) x -= 2 * pi;
-    if (x < -pi) x += 2 * pi;
-    return x - (x * x * x) / 6 + (x * x * x * x * x) / 120;
+
+    if (x > pi) {
+      x -= 2 * pi;
+    }
+
+    if (x < -pi) {
+      x += 2 * pi;
+    }
+
+    return x
+        - (x * x * x) / 6
+        + (x * x * x * x * x) / 120;
   }
 }
