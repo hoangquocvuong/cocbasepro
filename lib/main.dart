@@ -1215,7 +1215,7 @@ document.querySelector(
                         : 'Refreshing latest content',
                     style: TextStyle(
                       color: Colors.white.withValues(alpha: 0.78),
-                      fontSize: 15,
+                      fontSize: 13,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -1255,9 +1255,9 @@ document.querySelector(
                             text: 'BASE LAYOUT ',
                             style: TextStyle(
                               color: Color(0xFFEFFFF5),
-                              fontSize: 40,
+                              fontSize: 36,
                               fontWeight: FontWeight.w900,
-                              letterSpacing: 1.8,
+                              letterSpacing: 1.4,
                               height: 1,
                             ),
                           ),
@@ -1265,9 +1265,9 @@ document.querySelector(
                             text: 'PRO',
                             style: TextStyle(
                               color: Color(0xFFB7FF00),
-                              fontSize: 40,
+                              fontSize: 36,
                               fontWeight: FontWeight.w900,
-                              letterSpacing: 1.8,
+                              letterSpacing: 1.4,
                               height: 1,
                             ),
                           ),
@@ -1299,7 +1299,7 @@ document.querySelector(
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       color: const Color(0xFFB7FF00).withValues(alpha: 0.96),
-                      fontSize: 14,
+                      fontSize: 13,
                       fontWeight: FontWeight.w700,
                       letterSpacing: 0.35,
                     ),
@@ -1330,7 +1330,7 @@ document.querySelector(
                 const SizedBox(height: 12),
 
                 SizedBox(
-                  width: MediaQuery.of(context).size.width * 0.82,
+                  width: MediaQuery.of(context).size.width * 0.92,
                   height: 24,
                   child: CustomPaint(
                     painter: BottomHudPainter(),
