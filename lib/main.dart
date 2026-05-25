@@ -1164,8 +1164,7 @@ document.querySelector(
                 ),
               ),
 
-
-// LAUNCHING / RESTORING STATUS
+              // LAUNCHING / RESTORING STATUS
               if (!pageLoaded || !minSplashFinished || showResumeOverlay)
                 AppStatusOverlay(
                   isRestore: !isInitialLaunch || showResumeOverlay,
@@ -1175,8 +1174,11 @@ document.querySelector(
         ),
       ),
     );
+
   }
+
 }
+
 
 class AppStatusOverlay extends StatefulWidget {
   final bool isRestore;
@@ -1200,7 +1202,7 @@ class _AppStatusOverlayState extends State<AppStatusOverlay>
 
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1400),
+      duration: const Duration(milliseconds: 1600),
     )..repeat();
   }
 
@@ -1212,9 +1214,7 @@ class _AppStatusOverlayState extends State<AppStatusOverlay>
 
   @override
   Widget build(BuildContext context) {
-    final title = widget.isRestore
-        ? 'RESTORING SESSION'
-        : 'LAUNCHING APP';
+    final title = widget.isRestore ? 'RESTORING SESSION' : 'LAUNCHING APP';
 
     final subtitle = widget.isRestore
         ? 'REBUILDING WEB SESSION'
@@ -1242,13 +1242,13 @@ class _AppStatusOverlayState extends State<AppStatusOverlay>
 
             Center(
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 22),
+                padding: const EdgeInsets.symmetric(horizontal: 18),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     SizedBox(
-                      width: 270,
-                      height: 270,
+                      width: 250,
+                      height: 250,
                       child: AnimatedBuilder(
                         animation: _controller,
                         builder: (_, __) {
@@ -1261,7 +1261,7 @@ class _AppStatusOverlayState extends State<AppStatusOverlay>
                       ),
                     ),
 
-                    const SizedBox(height: 22),
+                    const SizedBox(height: 26),
 
                     _GamingTitle(text: title),
 
@@ -1271,92 +1271,89 @@ class _AppStatusOverlayState extends State<AppStatusOverlay>
                       subtitle,
                       textAlign: TextAlign.center,
                       style: GoogleFonts.orbitron(
-                        color: Colors.white.withValues(alpha: 0.88),
-                        fontSize: 12,
+                        color: Colors.white.withValues(alpha: 0.9),
+                        fontSize: 13,
                         fontWeight: FontWeight.w700,
-                        letterSpacing: 1.8,
+                        letterSpacing: 2.2,
                       ),
                     ),
 
-                    const SizedBox(height: 34),
+                    const SizedBox(height: 56),
+
+                    Text(
+                      'LOADING',
+                      style: GoogleFonts.orbitron(
+                        color: const Color(0xFFB7FF00),
+                        fontSize: 15,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 2,
+                        shadows: [
+                          Shadow(
+                            color: const Color(0xFFB7FF00)
+                                .withValues(alpha: 0.75),
+                            blurRadius: 16,
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 14),
 
                     SizedBox(
-                      width: 94,
-                      height: 94,
+                      width: 118,
+                      height: 18,
                       child: AnimatedBuilder(
                         animation: _controller,
                         builder: (_, __) {
                           return CustomPaint(
-                            painter: CircularLoadingPainter(
+                            painter: ShortLoadingBarPainter(
                               progress: _controller.value,
-                            ),
-                            child: Center(
-                              child: Text(
-                                'LOADING',
-                                style: GoogleFonts.orbitron(
-                                  color: const Color(0xFFB7FF00),
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w900,
-                                  letterSpacing: 1,
-                                ),
-                              ),
                             ),
                           );
                         },
                       ),
                     ),
 
-                    const SizedBox(height: 42),
+                    const SizedBox(height: 74),
 
-                    Container(
-                      width: double.infinity,
-                      constraints: const BoxConstraints(maxWidth: 420),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 20,
-                        vertical: 14,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.55),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
-                          color: const Color(0xFFB7FF00)
-                              .withValues(alpha: 0.62),
-                          width: 1.2,
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: const Color(0xFFB7FF00)
-                                .withValues(alpha: 0.18),
-                            blurRadius: 28,
-                          ),
-                        ],
-                      ),
-                      child: FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: RichText(
-                          textAlign: TextAlign.center,
-                          text: TextSpan(
-                            children: [
-                              TextSpan(
-                                text: 'BASE LAYOUT ',
-                                style: GoogleFonts.orbitron(
-                                  color: Colors.white,
-                                  fontSize: 24,
-                                  fontWeight: FontWeight.w900,
-                                  letterSpacing: 1.8,
-                                ),
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: RichText(
+                        textAlign: TextAlign.center,
+                        text: TextSpan(
+                          children: [
+                            TextSpan(
+                              text: 'BASE LAYOUT ',
+                              style: GoogleFonts.orbitron(
+                                color: Colors.white,
+                                fontSize: 28,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 2.4,
+                                shadows: [
+                                  Shadow(
+                                    color: Colors.white.withValues(alpha: 0.42),
+                                    blurRadius: 12,
+                                  ),
+                                ],
                               ),
-                              TextSpan(
-                                text: 'PRO',
-                                style: GoogleFonts.orbitron(
-                                  color: const Color(0xFFB7FF00),
-                                  fontSize: 24,
-                                  fontWeight: FontWeight.w900,
-                                  letterSpacing: 1.8,
-                                ),
+                            ),
+                            TextSpan(
+                              text: 'PRO',
+                              style: GoogleFonts.orbitron(
+                                color: const Color(0xFFB7FF00),
+                                fontSize: 28,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 2.4,
+                                shadows: [
+                                  Shadow(
+                                    color: const Color(0xFFB7FF00)
+                                        .withValues(alpha: 0.8),
+                                    blurRadius: 16,
+                                  ),
+                                ],
                               ),
-                            ],
-                          ),
+                            ),
+                          ],
                         ),
                       ),
                     ),
@@ -1380,36 +1377,39 @@ class _GamingTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      alignment: Alignment.center,
-      children: [
-        Text(
-          text,
-          textAlign: TextAlign.center,
-          style: GoogleFonts.orbitron(
-            color: const Color(0xFFB7FF00).withValues(alpha: 0.42),
-            fontSize: 28,
-            fontWeight: FontWeight.w900,
-            letterSpacing: 2.2,
-            shadows: [
-              Shadow(
-                color: const Color(0xFFB7FF00).withValues(alpha: 0.85),
-                blurRadius: 24,
-              ),
-            ],
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Text(
+            text,
+            textAlign: TextAlign.center,
+            style: GoogleFonts.orbitron(
+              color: const Color(0xFFB7FF00).withValues(alpha: 0.42),
+              fontSize: 32,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 2.2,
+              shadows: [
+                Shadow(
+                  color: const Color(0xFFB7FF00).withValues(alpha: 0.85),
+                  blurRadius: 24,
+                ),
+              ],
+            ),
           ),
-        ),
-        Text(
-          text,
-          textAlign: TextAlign.center,
-          style: GoogleFonts.orbitron(
-            color: Colors.white,
-            fontSize: 27,
-            fontWeight: FontWeight.w900,
-            letterSpacing: 2.1,
+          Text(
+            text,
+            textAlign: TextAlign.center,
+            style: GoogleFonts.orbitron(
+              color: Colors.white,
+              fontSize: 31,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 2.1,
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -1423,59 +1423,59 @@ class StatusBackgroundPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height * 0.36);
+    final center = Offset(size.width / 2, size.height * 0.31);
 
     final glowPaint = Paint()
       ..shader = RadialGradient(
         colors: [
-          const Color(0xFFB7FF00).withValues(alpha: 0.26),
-          const Color(0xFFB7FF00).withValues(alpha: 0.07),
+          const Color(0xFFB7FF00).withValues(alpha: 0.22),
+          const Color(0xFFB7FF00).withValues(alpha: 0.06),
           Colors.transparent,
         ],
       ).createShader(
-        Rect.fromCircle(center: center, radius: 230),
+        Rect.fromCircle(center: center, radius: 180),
       );
 
-    canvas.drawCircle(center, 230, glowPaint);
+    canvas.drawCircle(center, 180, glowPaint);
 
     final ringPaint = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.1
-      ..color = const Color(0xFFB7FF00).withValues(alpha: 0.28);
+      ..strokeWidth = 1
+      ..color = const Color(0xFFB7FF00).withValues(alpha: 0.24);
 
-    for (int i = 0; i < 6; i++) {
+    for (int i = 0; i < 5; i++) {
       canvas.drawCircle(
         center,
-        100 + i * 22,
+        82 + i * 18,
         ringPaint,
       );
     }
 
     final arcPaint = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.2
+      ..strokeWidth = 2.4
       ..strokeCap = StrokeCap.round
-      ..color = const Color(0xFFB7FF00).withValues(alpha: 0.75);
+      ..color = const Color(0xFFB7FF00).withValues(alpha: 0.72);
 
-    for (int i = 0; i < 5; i++) {
-      final radius = 118.0 + i * 24;
-      final start = progress * 6.28 + i * 0.7;
+    for (int i = 0; i < 4; i++) {
+      final radius = 94.0 + i * 22;
+      final start = progress * 6.28318530718 + i * 0.75;
 
       canvas.drawArc(
         Rect.fromCircle(center: center, radius: radius),
         start,
-        0.55,
+        0.42,
         false,
         arcPaint,
       );
     }
 
     final dotPaint = Paint()
-      ..color = const Color(0xFFB7FF00).withValues(alpha: 0.82);
+      ..color = const Color(0xFFB7FF00).withValues(alpha: 0.78);
 
-    for (int i = 0; i < 55; i++) {
-      final angle = i * 0.72 + progress * 0.8;
-      final radius = 85 + (i % 12) * 16;
+    for (int i = 0; i < 42; i++) {
+      final angle = i * 0.82 + progress * 0.45;
+      final radius = 78 + (i % 9) * 14;
 
       final p = Offset(
         center.dx + MathHelper.cos(angle) * radius,
@@ -1484,33 +1484,10 @@ class StatusBackgroundPainter extends CustomPainter {
 
       canvas.drawCircle(
         p,
-        i % 5 == 0 ? 2.2 : 1.2,
+        i % 6 == 0 ? 2.2 : 1.2,
         dotPaint,
       );
     }
-
-    final border = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.1
-      ..strokeCap = StrokeCap.square
-      ..color = const Color(0xFFB7FF00).withValues(alpha: 0.42);
-
-    final w = size.width;
-    final h = size.height;
-    const p = 18.0;
-    const l = 72.0;
-
-    canvas.drawLine(const Offset(p, p), const Offset(p + l, p), border);
-    canvas.drawLine(const Offset(p, p), const Offset(p, p + l), border);
-
-    canvas.drawLine(Offset(w - p, p), Offset(w - p - l, p), border);
-    canvas.drawLine(Offset(w - p, p), Offset(w - p, p + l), border);
-
-    canvas.drawLine(Offset(p, h - p), Offset(p + l, h - p), border);
-    canvas.drawLine(Offset(p, h - p), Offset(p, h - p - l), border);
-
-    canvas.drawLine(Offset(w - p, h - p), Offset(w - p - l, h - p), border);
-    canvas.drawLine(Offset(w - p, h - p), Offset(w - p, h - p - l), border);
   }
 
   @override
@@ -1533,30 +1510,30 @@ class StatusShieldPainter extends CustomPainter {
     final glowPaint = Paint()
       ..shader = RadialGradient(
         colors: [
-          const Color(0xFFB7FF00).withValues(alpha: 0.5),
+          const Color(0xFFB7FF00).withValues(alpha: 0.45),
           const Color(0xFFB7FF00).withValues(alpha: 0.12),
           Colors.transparent,
         ],
       ).createShader(
-        Rect.fromCircle(center: c, radius: 120),
+        Rect.fromCircle(center: c, radius: 105),
       );
 
-    canvas.drawCircle(c, 120, glowPaint);
+    canvas.drawCircle(c, 105, glowPaint);
 
     final shield = Path()
-      ..moveTo(c.dx, c.dy - 78)
-      ..cubicTo(c.dx - 24, c.dy - 62, c.dx - 58, c.dy - 55, c.dx - 76, c.dy - 48)
-      ..lineTo(c.dx - 64, c.dy + 30)
-      ..cubicTo(c.dx - 52, c.dy + 70, c.dx - 22, c.dy + 96, c.dx, c.dy + 116)
-      ..cubicTo(c.dx + 22, c.dy + 96, c.dx + 52, c.dy + 70, c.dx + 64, c.dy + 30)
-      ..lineTo(c.dx + 76, c.dy - 48)
-      ..cubicTo(c.dx + 58, c.dy - 55, c.dx + 24, c.dy - 62, c.dx, c.dy - 78)
+      ..moveTo(c.dx, c.dy - 72)
+      ..cubicTo(c.dx - 22, c.dy - 58, c.dx - 54, c.dy - 52, c.dx - 70, c.dy - 45)
+      ..lineTo(c.dx - 58, c.dy + 25)
+      ..cubicTo(c.dx - 47, c.dy + 64, c.dx - 20, c.dy + 88, c.dx, c.dy + 106)
+      ..cubicTo(c.dx + 20, c.dy + 88, c.dx + 47, c.dy + 64, c.dx + 58, c.dy + 25)
+      ..lineTo(c.dx + 70, c.dy - 45)
+      ..cubicTo(c.dx + 54, c.dy - 52, c.dx + 22, c.dy - 58, c.dx, c.dy - 72)
       ..close();
 
     canvas.drawShadow(
       shield,
       const Color(0xFFB7FF00),
-      22,
+      18,
       true,
     );
 
@@ -1567,24 +1544,24 @@ class StatusShieldPainter extends CustomPainter {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
-            Color(0xFFFFFFFF),
+            Color(0xFFEFFFF5),
             Color(0xFFB7FF00),
-            Color(0xFF173F13),
+            Color(0xFF174112),
             Color(0xFF020804),
           ],
         ).createShader(
-          Rect.fromCircle(center: c, radius: 120),
+          Rect.fromCircle(center: c, radius: 105),
         ),
     );
 
     final inner = Path()
-      ..moveTo(c.dx, c.dy - 55)
-      ..cubicTo(c.dx - 16, c.dy - 44, c.dx - 42, c.dy - 39, c.dx - 54, c.dy - 34)
-      ..lineTo(c.dx - 46, c.dy + 20)
-      ..cubicTo(c.dx - 36, c.dy + 50, c.dx - 14, c.dy + 70, c.dx, c.dy + 84)
-      ..cubicTo(c.dx + 14, c.dy + 70, c.dx + 36, c.dy + 50, c.dx + 46, c.dy + 20)
-      ..lineTo(c.dx + 54, c.dy - 34)
-      ..cubicTo(c.dx + 42, c.dy - 39, c.dx + 16, c.dy - 44, c.dx, c.dy - 55)
+      ..moveTo(c.dx, c.dy - 47)
+      ..cubicTo(c.dx - 14, c.dy - 38, c.dx - 36, c.dy - 33, c.dx - 47, c.dy - 28)
+      ..lineTo(c.dx - 39, c.dy + 16)
+      ..cubicTo(c.dx - 30, c.dy + 43, c.dx - 12, c.dy + 61, c.dx, c.dy + 74)
+      ..cubicTo(c.dx + 12, c.dy + 61, c.dx + 30, c.dy + 43, c.dx + 39, c.dy + 16)
+      ..lineTo(c.dx + 47, c.dy - 28)
+      ..cubicTo(c.dx + 36, c.dy - 33, c.dx + 14, c.dy - 38, c.dx, c.dy - 47)
       ..close();
 
     canvas.drawPath(
@@ -1599,7 +1576,7 @@ class StatusShieldPainter extends CustomPainter {
             Color(0xFF000000),
           ],
         ).createShader(
-          Rect.fromCircle(center: c, radius: 95),
+          Rect.fromCircle(center: c, radius: 80),
         ),
     );
 
@@ -1621,37 +1598,30 @@ class StatusShieldPainter extends CustomPainter {
         ..color = const Color(0xFFB7FF00),
     );
 
-    final logo = Path()
-      ..moveTo(c.dx - 26, c.dy - 34)
-      ..lineTo(c.dx - 26, c.dy + 44)
-      ..lineTo(c.dx + 24, c.dy + 44)
-      ..quadraticBezierTo(c.dx + 48, c.dy + 44, c.dx + 48, c.dy + 18)
-      ..quadraticBezierTo(c.dx + 48, c.dy - 6, c.dx + 24, c.dy - 6)
-      ..lineTo(c.dx - 26, c.dy - 6)
-      ..moveTo(c.dx - 26, c.dy - 34)
-      ..lineTo(c.dx + 20, c.dy - 34)
-      ..quadraticBezierTo(c.dx + 42, c.dy - 34, c.dx + 42, c.dy - 8);
+    const dotSize = 8.0;
+    const gap = 10.0;
 
-    canvas.drawPath(
-      logo,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 17
-        ..strokeJoin = StrokeJoin.miter
-        ..strokeCap = StrokeCap.square
-        ..color = const Color(0xFFB7FF00).withValues(alpha: 0.24)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8),
-    );
+    final startX = c.dx - dotSize - gap;
+    final startY = c.dy - dotSize - gap;
 
-    canvas.drawPath(
-      logo,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 13
-        ..strokeCap = StrokeCap.square
-        ..strokeJoin = StrokeJoin.miter
-        ..color = const Color(0xFFB7FF00),
-    );
+    final dotGlow = Paint()
+      ..color = const Color(0xFFB7FF00).withValues(alpha: 0.35)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
+
+    final dotPaint = Paint()
+      ..color = const Color(0xFFB7FF00);
+
+    for (int y = 0; y < 3; y++) {
+      for (int x = 0; x < 3; x++) {
+        final p = Offset(
+          startX + x * (dotSize + gap),
+          startY + y * (dotSize + gap),
+        );
+
+        canvas.drawCircle(p, 6, dotGlow);
+        canvas.drawCircle(p, 4.2, dotPaint);
+      }
+    }
   }
 
   @override
@@ -1660,70 +1630,74 @@ class StatusShieldPainter extends CustomPainter {
   }
 }
 
-class CircularLoadingPainter extends CustomPainter {
+class ShortLoadingBarPainter extends CustomPainter {
   final double progress;
 
-  CircularLoadingPainter({
+  ShortLoadingBarPainter({
     required this.progress,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
-    final c = Offset(size.width / 2, size.height / 2);
-    final radius = size.width / 2 - 8;
+    final trackRect = RRect.fromRectAndRadius(
+      Rect.fromLTWH(
+        0,
+        4,
+        size.width,
+        10,
+      ),
+      const Radius.circular(999),
+    );
 
-    canvas.drawCircle(
-      c,
-      radius,
+    canvas.drawRRect(
+      trackRect,
+      Paint()
+        ..style = PaintingStyle.fill
+        ..color = Colors.black.withValues(alpha: 0.55),
+    );
+
+    canvas.drawRRect(
+      trackRect,
       Paint()
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 6
-        ..color = Colors.white.withValues(alpha: 0.12),
+        ..strokeWidth = 1.3
+        ..color = const Color(0xFFB7FF00).withValues(alpha: 0.42),
     );
 
-    final glow = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 12
-      ..strokeCap = StrokeCap.round
-      ..color = const Color(0xFFB7FF00).withValues(alpha: 0.2)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
+    final fillWidth = size.width * (0.18 + 0.56 * progress);
 
-    final active = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 7
-      ..strokeCap = StrokeCap.round
-      ..color = const Color(0xFFB7FF00);
-
-    canvas.drawArc(
-      Rect.fromCircle(center: c, radius: radius),
-      progress * 6.28,
-      1.65,
-      false,
-      glow,
+    final fillRect = RRect.fromRectAndRadius(
+      Rect.fromLTWH(
+        4,
+        7,
+        fillWidth.clamp(16, size.width - 8),
+        4,
+      ),
+      const Radius.circular(999),
     );
 
-    canvas.drawArc(
-      Rect.fromCircle(center: c, radius: radius),
-      progress * 6.28,
-      1.65,
-      false,
-      active,
+    canvas.drawRRect(
+      fillRect,
+      Paint()
+        ..color = const Color(0xFFB7FF00).withValues(alpha: 0.38)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8),
     );
 
-    final dotPaint = Paint()
-      ..color = const Color(0xFFB7FF00);
-
-    for (int i = 0; i < 3; i++) {
-      canvas.drawCircle(
-        Offset(c.dx - 10 + i * 10, c.dy + 18),
-        2,
-        dotPaint,
-      );
-    }
+    canvas.drawRRect(
+      fillRect,
+      Paint()
+        ..shader = const LinearGradient(
+          colors: [
+            Color(0xFF7CC800),
+            Color(0xFFB7FF00),
+            Color(0xFFDFFF4A),
+          ],
+        ).createShader(fillRect.outerRect),
+    );
   }
 
   @override
-  bool shouldRepaint(covariant CircularLoadingPainter oldDelegate) {
+  bool shouldRepaint(covariant ShortLoadingBarPainter oldDelegate) {
     return oldDelegate.progress != progress;
   }
 }
