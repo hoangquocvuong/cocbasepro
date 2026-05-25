@@ -289,57 +289,57 @@ class _WebScreenState extends State<WebScreen>
   // =========================
   NavigationDelegate _navigation() {
     return NavigationDelegate(
-      onNavigationRequest: (request) async {
-        final uri = Uri.parse(request.url);
+        onNavigationRequest: (request) async {
+          final uri = Uri.parse(request.url);
 
-        if (uri.host.contains('firebaseio.com')) {
-          return NavigationDecision.prevent;
-        }
-
-        if (isOffline) {
-          return NavigationDecision.prevent;
-        }
-
-        if (uri.host.contains('cocbasepro.com')) {
-          currentUrl = uri.toString();
-          return NavigationDecision.navigate;
-        }
-
-        // BUY ME A COFFEE -> CONFIRM
-        if (uri.host.toLowerCase().contains('buymeacoffee')) {
-          final ok = await showDialog<bool>(
-            context: context,
-            builder: (ctx) => AlertDialog(
-              title: const Text('Open link'),
-              content: const Text('Open in browser?'),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(ctx, false),
-                  child: const Text('Cancel'),
-                ),
-                ElevatedButton(
-                  onPressed: () => Navigator.pop(ctx, true),
-                  child: const Text('Open'),
-                )
-              ],
-            ),
-          ) ??
-              false;
-
-          if (ok) {
-            await launchUrl(uri,
-                mode: LaunchMode.externalApplication);
+          if (uri.host.contains('firebaseio.com')) {
+            return NavigationDecision.prevent;
           }
 
+          if (isOffline) {
+            return NavigationDecision.prevent;
+          }
+
+          if (uri.host.contains('cocbasepro.com')) {
+            currentUrl = uri.toString();
+            return NavigationDecision.navigate;
+          }
+
+          // BUY ME A COFFEE -> CONFIRM
+          if (uri.host.toLowerCase().contains('buymeacoffee')) {
+            final ok = await showDialog<bool>(
+              context: context,
+              builder: (ctx) => AlertDialog(
+                title: const Text('Open link'),
+                content: const Text('Open in browser?'),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx, false),
+                    child: const Text('Cancel'),
+                  ),
+                  ElevatedButton(
+                    onPressed: () => Navigator.pop(ctx, true),
+                    child: const Text('Open'),
+                  )
+                ],
+              ),
+            ) ??
+                false;
+
+            if (ok) {
+              await launchUrl(uri,
+                  mode: LaunchMode.externalApplication);
+            }
+
+            return NavigationDecision.prevent;
+          }
+
+          // OTHER LINKS -> OPEN DIRECT
+          await launchUrl(uri,
+              mode: LaunchMode.externalApplication);
+
           return NavigationDecision.prevent;
-        }
-
-        // OTHER LINKS -> OPEN DIRECT
-        await launchUrl(uri,
-            mode: LaunchMode.externalApplication);
-
-        return NavigationDecision.prevent;
-      },
+        },
 
         onPageFinished: (url) async {
 
@@ -1145,688 +1145,590 @@ document.querySelector(
               ),
 
 
-            // WEBVIEW
-            SafeArea(
-              child: AnimatedOpacity(
-                opacity:
-                (pageLoaded && minSplashFinished)
-                    ? 1
-                    : 0,
+              // WEBVIEW
+              SafeArea(
+                child: AnimatedOpacity(
+                  opacity:
+                  (pageLoaded && minSplashFinished)
+                      ? 1
+                      : 0,
 
-                duration:
-                const Duration(
-                  milliseconds: 250,
-                ),
+                  duration:
+                  const Duration(
+                    milliseconds: 250,
+                  ),
 
-                child: WebViewWidget(
-                  controller: controller,
+                  child: WebViewWidget(
+                    controller: controller,
+                  ),
                 ),
               ),
-            ),
 
-            // SPLASH / RESTORE LOADING
-            if (!pageLoaded || !minSplashFinished)
-        Container(
-        width: double.infinity,
-        height: double.infinity,
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              Color(0xFF020804),
-              Color(0xFF061006),
-              Color(0xFF000000),
+
+// LAUNCHING / RESTORING STATUS
+              if (!pageLoaded || !minSplashFinished || showResumeOverlay)
+                AppStatusOverlay(
+                  isRestore: !isInitialLaunch || showResumeOverlay,
+                ),
             ],
           ),
         ),
-        child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 22,
-              vertical: 10,
-            ),
+      ),
+    );
+  }
+}
 
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                  SizedBox(
-                    width: 190,
-                    height: 190,
-                    child: CustomPaint(
-                      painter: SplashHeroPainter(),
+class AppStatusOverlay extends StatefulWidget {
+  final bool isRestore;
+
+  const AppStatusOverlay({
+    super.key,
+    required this.isRestore,
+  });
+
+  @override
+  State<AppStatusOverlay> createState() => _AppStatusOverlayState();
+}
+
+class _AppStatusOverlayState extends State<AppStatusOverlay>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1400),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final title = widget.isRestore
+        ? 'RESTORING SESSION'
+        : 'LAUNCHING APP';
+
+    final subtitle = widget.isRestore
+        ? 'REBUILDING WEB SESSION'
+        : 'PREPARING LATEST LAYOUTS';
+
+    return Container(
+      width: double.infinity,
+      height: double.infinity,
+      color: const Color(0xFF030503),
+      child: SafeArea(
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: AnimatedBuilder(
+                animation: _controller,
+                builder: (_, __) {
+                  return CustomPaint(
+                    painter: StatusBackgroundPainter(
+                      progress: _controller.value,
                     ),
-                  ),
-
-                  const SizedBox(height: 14),
-
-                  Text(
-                    isInitialLaunch ? 'Launching app...' : 'Restoring session...',
-                    style: TextStyle(
-                      color: Color(0xFFEFFFF5),
-                      fontSize: 15,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 0.3,
-                    ),
-                  ),
-
-                  const SizedBox(height: 8),
-
-                  Text(
-                    isInitialLaunch
-                        ? 'Loading latest Clash layouts'
-                        : 'Refreshing latest content',
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.78),
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-
-                  const SizedBox(height: 22),
-
-                  Container(
-                    width: MediaQuery.of(context).size.width * 0.62,
-                    height: 12,
-                    padding: const EdgeInsets.all(2),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(999),
-                      border: Border.all(
-                        color: const Color(0xFFB7FF00).withValues(alpha: 0.48),
-                      ),
-                      color: Colors.black.withValues(alpha: 0.38),
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(999),
-                      child: LinearProgressIndicator(
-                        minHeight: 8,
-                        backgroundColor: Colors.white.withValues(alpha: 0.06),
-                        color: const Color(0xFFB7FF00),
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 22),
-
-                  FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: RichText(
-                      textAlign: TextAlign.center,
-                      text: TextSpan(
-                        children: [
-                          TextSpan(
-                            text: 'BASE LAYOUT ',
-                            style: GoogleFonts.orbitron(
-                              color: Color(0xFFEFFFF5),
-                              fontSize: 27,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: 1.0,
-                              height: 1,
-                            ),
-                          ),
-                          TextSpan(
-                            text: 'PRO',
-                            style: GoogleFonts.orbitron(
-                              color: Color(0xFFB7FF00),
-                              fontSize: 29,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 1.0,
-                              height: 1,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 18),
-
-                  Container(
-                    width: MediaQuery.of(context).size.width * 0.78,
-                    height: 1,
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          Colors.transparent,
-                          const Color(0xFFB7FF00).withValues(alpha: 0.95),
-                          Colors.transparent,
-                        ],
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 18),
-
-                  Text(
-                    'Smart layouts. Fast copy. Better defense.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: const Color(0xFFB7FF00).withValues(alpha: 0.96),
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0.35,
-                    ),
-                  ),
-
-                  const SizedBox(height: 12),
-
-                  const Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      _SplashFeature(icon: Icons.shield_outlined, label: 'DEFEND'),
-                      _SplashFeature(icon: Icons.grid_view_rounded, label: 'LAYOUT'),
-                      _SplashFeature(icon: Icons.content_copy_rounded, label: 'COPY'),
-                    ],
-                  ),
-
-                  const SizedBox(height: 10),
-
-                  const Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      _SplashFeature(icon: Icons.flash_on_rounded, label: 'FAST'),
-                      _SplashFeature(icon: Icons.link_rounded, label: 'LINK'),
-                      _SplashFeature(icon: Icons.star_border_rounded, label: 'PRO'),
-                    ],
-                  ),
-
-                const SizedBox(height: 12),
-
-                SizedBox(
-                  width: MediaQuery.of(context).size.width * 0.92,
-                  height: 24,
-                  child: CustomPaint(
-                    painter: BottomHudPainter(),
-                  ),
-                ),
-
-                ],
+                  );
+                },
               ),
             ),
-          ),
-        )
-      ],
-      ),
+
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 22),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(
+                      width: 270,
+                      height: 270,
+                      child: AnimatedBuilder(
+                        animation: _controller,
+                        builder: (_, __) {
+                          return CustomPaint(
+                            painter: StatusShieldPainter(
+                              progress: _controller.value,
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+
+                    const SizedBox(height: 22),
+
+                    _GamingTitle(text: title),
+
+                    const SizedBox(height: 12),
+
+                    Text(
+                      subtitle,
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.orbitron(
+                        color: Colors.white.withValues(alpha: 0.88),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 1.8,
+                      ),
+                    ),
+
+                    const SizedBox(height: 34),
+
+                    SizedBox(
+                      width: 94,
+                      height: 94,
+                      child: AnimatedBuilder(
+                        animation: _controller,
+                        builder: (_, __) {
+                          return CustomPaint(
+                            painter: CircularLoadingPainter(
+                              progress: _controller.value,
+                            ),
+                            child: Center(
+                              child: Text(
+                                'LOADING',
+                                style: GoogleFonts.orbitron(
+                                  color: const Color(0xFFB7FF00),
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 1,
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+
+                    const SizedBox(height: 42),
+
+                    Container(
+                      width: double.infinity,
+                      constraints: const BoxConstraints(maxWidth: 420),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 14,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.55),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: const Color(0xFFB7FF00)
+                              .withValues(alpha: 0.62),
+                          width: 1.2,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFFB7FF00)
+                                .withValues(alpha: 0.18),
+                            blurRadius: 28,
+                          ),
+                        ],
+                      ),
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: RichText(
+                          textAlign: TextAlign.center,
+                          text: TextSpan(
+                            children: [
+                              TextSpan(
+                                text: 'BASE LAYOUT ',
+                                style: GoogleFonts.orbitron(
+                                  color: Colors.white,
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 1.8,
+                                ),
+                              ),
+                              TextSpan(
+                                text: 'PRO',
+                                style: GoogleFonts.orbitron(
+                                  color: const Color(0xFFB7FF00),
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 1.8,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
-
   }
-
 }
 
-class _SplashFeature extends StatelessWidget {
-  final IconData icon;
-  final String label;
+class _GamingTitle extends StatelessWidget {
+  final String text;
 
-  const _SplashFeature({
-    required this.icon,
-    required this.label,
+  const _GamingTitle({
+    required this.text,
   });
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 102,
-      child: Column(
-        children: [
-          Container(
-            width: 82,
-            height: 82,
-            decoration: BoxDecoration(
-              color: Colors.black.withValues(alpha: 0.3),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: const Color(0xFFB7FF00).withValues(alpha: 0.9),
-                width: 1.5,
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        Text(
+          text,
+          textAlign: TextAlign.center,
+          style: GoogleFonts.orbitron(
+            color: const Color(0xFFB7FF00).withValues(alpha: 0.42),
+            fontSize: 28,
+            fontWeight: FontWeight.w900,
+            letterSpacing: 2.2,
+            shadows: [
+              Shadow(
+                color: const Color(0xFFB7FF00).withValues(alpha: 0.85),
+                blurRadius: 24,
               ),
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFFB7FF00).withValues(alpha: 0.32),
-                  blurRadius: 22,
-                  spreadRadius: 1,
-                ),
-              ],
-            ),
-            child: Icon(
-              icon,
-              color: const Color(0xFFB7FF00),
-              size: 38,
-            ),
+            ],
           ),
-
-          const SizedBox(height: 10),
-
-          Text(
-            label,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.92),
-              fontSize: 15,
-              fontWeight: FontWeight.w900,
-              letterSpacing: 1,
-            ),
+        ),
+        Text(
+          text,
+          textAlign: TextAlign.center,
+          style: GoogleFonts.orbitron(
+            color: Colors.white,
+            fontSize: 27,
+            fontWeight: FontWeight.w900,
+            letterSpacing: 2.1,
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
 
-class SplashHeroPainter extends CustomPainter {
+class StatusBackgroundPainter extends CustomPainter {
+  final double progress;
+
+  StatusBackgroundPainter({
+    required this.progress,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height * 0.36);
 
-    final c =
-    Offset(size.width / 2, size.height / 2);
-
-    // ===== GLOW =====
     final glowPaint = Paint()
       ..shader = RadialGradient(
         colors: [
-          const Color(0xFFB7FF00)
-              .withValues(alpha: 0.42),
-
-          const Color(0xFFB7FF00)
-              .withValues(alpha: 0.15),
-
+          const Color(0xFFB7FF00).withValues(alpha: 0.26),
+          const Color(0xFFB7FF00).withValues(alpha: 0.07),
           Colors.transparent,
         ],
       ).createShader(
-        Rect.fromCircle(
-          center: c,
-          radius: 100,
-        ),
+        Rect.fromCircle(center: center, radius: 230),
       );
 
-    canvas.drawCircle(c, 100, glowPaint);
+    canvas.drawCircle(center, 230, glowPaint);
 
-    // ===== RINGS =====
     final ringPaint = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 1
-      ..color = const Color(0xFFB7FF00)
-          .withValues(alpha: 0.32);
+      ..strokeWidth = 1.1
+      ..color = const Color(0xFFB7FF00).withValues(alpha: 0.28);
 
-    canvas.drawCircle(c, 92, ringPaint);
-    canvas.drawCircle(c, 72, ringPaint);
-    canvas.drawCircle(c, 58, ringPaint);
-    canvas.drawCircle(c, 44, ringPaint);
-
-    // ===== HUD ARCS =====
-    final arcPaint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.4
-      ..strokeCap = StrokeCap.round
-      ..color = const Color(0xFFB7FF00)
-          .withValues(alpha: 0.88);
-
-    canvas.drawArc(
-      Rect.fromCircle(center: c, radius: 80),
-      -2.9,
-      1.05,
-      false,
-      arcPaint,
-    );
-
-    canvas.drawArc(
-      Rect.fromCircle(center: c, radius: 70),
-      0.2,
-      0.9,
-      false,
-      arcPaint,
-    );
-
-    // ===== OUTER SHIELD =====
-    final outerShield = Path()
-
-      ..moveTo(c.dx, c.dy - 56)
-
-      ..cubicTo(
-        c.dx - 18,
-        c.dy - 44,
-
-        c.dx - 40,
-        c.dy - 38,
-
-        c.dx - 54,
-        c.dy - 34,
-      )
-
-      ..lineTo(
-        c.dx - 46,
-        c.dy + 22,
-      )
-
-      ..cubicTo(
-        c.dx - 37,
-        c.dy + 50,
-
-        c.dx - 16,
-        c.dy + 67,
-
-        c.dx,
-        c.dy + 82,
-      )
-
-      ..cubicTo(
-        c.dx + 16,
-        c.dy + 67,
-
-        c.dx + 37,
-        c.dy + 50,
-
-        c.dx + 46,
-        c.dy + 22,
-      )
-
-      ..lineTo(
-        c.dx + 54,
-        c.dy - 34,
-      )
-
-      ..cubicTo(
-        c.dx + 40,
-        c.dy - 38,
-
-        c.dx + 18,
-        c.dy - 44,
-
-        c.dx,
-        c.dy - 56,
-      )
-
-      ..close();
-
-    canvas.drawShadow(
-      outerShield,
-      const Color(0xFFB7FF00),
-      16,
-      true,
-    );
-
-    final shieldPaint = Paint()
-      ..shader = const LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [
-
-          Color(0xFFFFFFFF),
-
-          Color(0xFFB7FF00),
-
-          Color(0xFF173F13),
-
-          Color(0xFF020804),
-        ],
-      ).createShader(
-        Rect.fromCircle(
-          center: c,
-          radius: 74,
-        ),
+    for (int i = 0; i < 6; i++) {
+      canvas.drawCircle(
+        center,
+        100 + i * 22,
+        ringPaint,
       );
-
-    canvas.drawPath(
-      outerShield,
-      shieldPaint,
-    );
-
-    // ===== INNER SHIELD =====
-    final innerShield = Path()
-
-      ..moveTo(c.dx, c.dy - 40)
-
-      ..cubicTo(
-        c.dx - 12,
-        c.dy - 31,
-
-        c.dx - 28,
-        c.dy - 27,
-
-        c.dx - 38,
-        c.dy - 24,
-      )
-
-      ..lineTo(
-        c.dx - 32,
-        c.dy + 16,
-      )
-
-      ..cubicTo(
-        c.dx - 26,
-        c.dy + 36,
-
-        c.dx - 12,
-        c.dy + 49,
-
-        c.dx,
-        c.dy + 58,
-      )
-
-      ..cubicTo(
-        c.dx + 12,
-        c.dy + 49,
-
-        c.dx + 26,
-        c.dy + 36,
-
-        c.dx + 32,
-        c.dy + 16,
-      )
-
-      ..lineTo(
-        c.dx + 38,
-        c.dy - 24,
-      )
-
-      ..cubicTo(
-        c.dx + 28,
-        c.dy - 27,
-
-        c.dx + 12,
-        c.dy - 31,
-
-        c.dx,
-        c.dy - 40,
-      )
-
-      ..close();
-
-    canvas.drawPath(
-      innerShield,
-
-      Paint()
-        ..shader = LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-
-            const Color(0xFF123F17)
-                .withValues(alpha: 0.96),
-
-            const Color(0xFF061509)
-                .withValues(alpha: 0.98),
-
-            const Color(0xFF000000)
-                .withValues(alpha: 0.95),
-          ],
-        ).createShader(
-          Rect.fromCircle(
-            center: c,
-            radius: 55,
-          ),
-        ),
-    );
-
-    // ===== BORDERS =====
-    canvas.drawPath(
-      outerShield,
-
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 3
-        ..strokeJoin = StrokeJoin.round
-        ..color =
-        Colors.white.withValues(alpha: 0.82),
-    );
-
-    canvas.drawPath(
-      innerShield,
-
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.8
-        ..strokeJoin = StrokeJoin.round
-        ..color = const Color(0xFFB7FF00)
-            .withValues(alpha: 0.95),
-    );
-
-    // ===== GRID =====
-    const box = 12.0;
-    const gap = 5.0;
-
-    final startX =
-        c.dx - (box * 1.5 + gap);
-
-    final startY =
-        c.dy - 17;
-
-    for (int y = 0; y < 3; y++) {
-
-      for (int x = 0; x < 3; x++) {
-
-        final rect =
-        RRect.fromRectAndRadius(
-
-          Rect.fromLTWH(
-            startX +
-                x * (box + gap),
-
-            startY +
-                y * (box + gap),
-
-            box,
-            box,
-          ),
-
-          const Radius.circular(3),
-        );
-
-        canvas.drawRRect(
-          rect,
-
-          Paint()
-            ..color =
-            const Color(0xFFB7FF00)
-                .withValues(alpha: 0.35)
-
-            ..maskFilter =
-            const MaskFilter.blur(
-              BlurStyle.normal,
-              4,
-            ),
-        );
-
-        canvas.drawRRect(
-          rect,
-
-          Paint()
-            ..shader =
-            const LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-
-                Color(0xFFE8FF4A),
-
-                Color(0xFFB7FF00),
-
-                Color(0xFF5CCB00),
-              ],
-            ).createShader(
-              rect.outerRect,
-            ),
-        );
-      }
     }
 
-    // ===== PARTICLES =====
+    final arcPaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.2
+      ..strokeCap = StrokeCap.round
+      ..color = const Color(0xFFB7FF00).withValues(alpha: 0.75);
+
+    for (int i = 0; i < 5; i++) {
+      final radius = 118.0 + i * 24;
+      final start = progress * 6.28 + i * 0.7;
+
+      canvas.drawArc(
+        Rect.fromCircle(center: center, radius: radius),
+        start,
+        0.55,
+        false,
+        arcPaint,
+      );
+    }
+
     final dotPaint = Paint()
-      ..color = const Color(0xFFB7FF00)
-          .withValues(alpha: 0.85);
+      ..color = const Color(0xFFB7FF00).withValues(alpha: 0.82);
 
-    for (int i = 0; i < 18; i++) {
-
-      final angle = i * 0.58;
-
-      final radius =
-          68 + (i % 5) * 5;
+    for (int i = 0; i < 55; i++) {
+      final angle = i * 0.72 + progress * 0.8;
+      final radius = 85 + (i % 12) * 16;
 
       final p = Offset(
-        c.dx +
-            radius *
-                MathHelper.cos(angle),
-
-        c.dy +
-            radius *
-                MathHelper.sin(angle),
+        center.dx + MathHelper.cos(angle) * radius,
+        center.dy + MathHelper.sin(angle) * radius,
       );
 
       canvas.drawCircle(
         p,
-        1.7,
+        i % 5 == 0 ? 2.2 : 1.2,
         dotPaint,
       );
     }
 
-    // ===== SPARKLES =====
-    final sparkle = Paint()
-      ..color =
-      Colors.white.withValues(alpha: 0.9)
+    final border = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.1
+      ..strokeCap = StrokeCap.square
+      ..color = const Color(0xFFB7FF00).withValues(alpha: 0.42);
 
-      ..strokeWidth = 1.6;
+    final w = size.width;
+    final h = size.height;
+    const p = 18.0;
+    const l = 72.0;
 
-    void star(Offset p, double r) {
+    canvas.drawLine(const Offset(p, p), const Offset(p + l, p), border);
+    canvas.drawLine(const Offset(p, p), const Offset(p, p + l), border);
 
-      canvas.drawLine(
-        Offset(p.dx - r, p.dy),
-        Offset(p.dx + r, p.dy),
-        sparkle,
+    canvas.drawLine(Offset(w - p, p), Offset(w - p - l, p), border);
+    canvas.drawLine(Offset(w - p, p), Offset(w - p, p + l), border);
+
+    canvas.drawLine(Offset(p, h - p), Offset(p + l, h - p), border);
+    canvas.drawLine(Offset(p, h - p), Offset(p, h - p - l), border);
+
+    canvas.drawLine(Offset(w - p, h - p), Offset(w - p - l, h - p), border);
+    canvas.drawLine(Offset(w - p, h - p), Offset(w - p, h - p - l), border);
+  }
+
+  @override
+  bool shouldRepaint(covariant StatusBackgroundPainter oldDelegate) {
+    return oldDelegate.progress != progress;
+  }
+}
+
+class StatusShieldPainter extends CustomPainter {
+  final double progress;
+
+  StatusShieldPainter({
+    required this.progress,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final c = Offset(size.width / 2, size.height / 2);
+
+    final glowPaint = Paint()
+      ..shader = RadialGradient(
+        colors: [
+          const Color(0xFFB7FF00).withValues(alpha: 0.5),
+          const Color(0xFFB7FF00).withValues(alpha: 0.12),
+          Colors.transparent,
+        ],
+      ).createShader(
+        Rect.fromCircle(center: c, radius: 120),
       );
 
-      canvas.drawLine(
-        Offset(p.dx, p.dy - r),
-        Offset(p.dx, p.dy + r),
-        sparkle,
-      );
-    }
+    canvas.drawCircle(c, 120, glowPaint);
 
-    star(
-      Offset(c.dx - 54, c.dy - 44),
-      7,
+    final shield = Path()
+      ..moveTo(c.dx, c.dy - 78)
+      ..cubicTo(c.dx - 24, c.dy - 62, c.dx - 58, c.dy - 55, c.dx - 76, c.dy - 48)
+      ..lineTo(c.dx - 64, c.dy + 30)
+      ..cubicTo(c.dx - 52, c.dy + 70, c.dx - 22, c.dy + 96, c.dx, c.dy + 116)
+      ..cubicTo(c.dx + 22, c.dy + 96, c.dx + 52, c.dy + 70, c.dx + 64, c.dy + 30)
+      ..lineTo(c.dx + 76, c.dy - 48)
+      ..cubicTo(c.dx + 58, c.dy - 55, c.dx + 24, c.dy - 62, c.dx, c.dy - 78)
+      ..close();
+
+    canvas.drawShadow(
+      shield,
+      const Color(0xFFB7FF00),
+      22,
+      true,
     );
 
-    star(
-      Offset(c.dx + 50, c.dy + 24),
-      6,
+    canvas.drawPath(
+      shield,
+      Paint()
+        ..shader = const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color(0xFFFFFFFF),
+            Color(0xFFB7FF00),
+            Color(0xFF173F13),
+            Color(0xFF020804),
+          ],
+        ).createShader(
+          Rect.fromCircle(center: c, radius: 120),
+        ),
     );
 
-    star(
-      Offset(c.dx + 28, c.dy - 62),
-      5,
+    final inner = Path()
+      ..moveTo(c.dx, c.dy - 55)
+      ..cubicTo(c.dx - 16, c.dy - 44, c.dx - 42, c.dy - 39, c.dx - 54, c.dy - 34)
+      ..lineTo(c.dx - 46, c.dy + 20)
+      ..cubicTo(c.dx - 36, c.dy + 50, c.dx - 14, c.dy + 70, c.dx, c.dy + 84)
+      ..cubicTo(c.dx + 14, c.dy + 70, c.dx + 36, c.dy + 50, c.dx + 46, c.dy + 20)
+      ..lineTo(c.dx + 54, c.dy - 34)
+      ..cubicTo(c.dx + 42, c.dy - 39, c.dx + 16, c.dy - 44, c.dx, c.dy - 55)
+      ..close();
+
+    canvas.drawPath(
+      inner,
+      Paint()
+        ..shader = const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color(0xFF123F17),
+            Color(0xFF061509),
+            Color(0xFF000000),
+          ],
+        ).createShader(
+          Rect.fromCircle(center: c, radius: 95),
+        ),
+    );
+
+    canvas.drawPath(
+      shield,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 3
+        ..strokeJoin = StrokeJoin.round
+        ..color = Colors.white.withValues(alpha: 0.86),
+    );
+
+    canvas.drawPath(
+      inner,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2
+        ..strokeJoin = StrokeJoin.round
+        ..color = const Color(0xFFB7FF00),
+    );
+
+    final logo = Path()
+      ..moveTo(c.dx - 26, c.dy - 34)
+      ..lineTo(c.dx - 26, c.dy + 44)
+      ..lineTo(c.dx + 24, c.dy + 44)
+      ..quadraticBezierTo(c.dx + 48, c.dy + 44, c.dx + 48, c.dy + 18)
+      ..quadraticBezierTo(c.dx + 48, c.dy - 6, c.dx + 24, c.dy - 6)
+      ..lineTo(c.dx - 26, c.dy - 6)
+      ..moveTo(c.dx - 26, c.dy - 34)
+      ..lineTo(c.dx + 20, c.dy - 34)
+      ..quadraticBezierTo(c.dx + 42, c.dy - 34, c.dx + 42, c.dy - 8);
+
+    canvas.drawPath(
+      logo,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 17
+        ..strokeJoin = StrokeJoin.miter
+        ..strokeCap = StrokeCap.square
+        ..color = const Color(0xFFB7FF00).withValues(alpha: 0.24)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8),
+    );
+
+    canvas.drawPath(
+      logo,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 13
+        ..strokeCap = StrokeCap.square
+        ..strokeJoin = StrokeJoin.miter
+        ..color = const Color(0xFFB7FF00),
     );
   }
 
   @override
-  bool shouldRepaint(
-      covariant CustomPainter oldDelegate
-      ) {
-    return false;
+  bool shouldRepaint(covariant StatusShieldPainter oldDelegate) {
+    return oldDelegate.progress != progress;
   }
 }
-class MathHelper {
 
+class CircularLoadingPainter extends CustomPainter {
+  final double progress;
+
+  CircularLoadingPainter({
+    required this.progress,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final c = Offset(size.width / 2, size.height / 2);
+    final radius = size.width / 2 - 8;
+
+    canvas.drawCircle(
+      c,
+      radius,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 6
+        ..color = Colors.white.withValues(alpha: 0.12),
+    );
+
+    final glow = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 12
+      ..strokeCap = StrokeCap.round
+      ..color = const Color(0xFFB7FF00).withValues(alpha: 0.2)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
+
+    final active = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 7
+      ..strokeCap = StrokeCap.round
+      ..color = const Color(0xFFB7FF00);
+
+    canvas.drawArc(
+      Rect.fromCircle(center: c, radius: radius),
+      progress * 6.28,
+      1.65,
+      false,
+      glow,
+    );
+
+    canvas.drawArc(
+      Rect.fromCircle(center: c, radius: radius),
+      progress * 6.28,
+      1.65,
+      false,
+      active,
+    );
+
+    final dotPaint = Paint()
+      ..color = const Color(0xFFB7FF00);
+
+    for (int i = 0; i < 3; i++) {
+      canvas.drawCircle(
+        Offset(c.dx - 10 + i * 10, c.dy + 18),
+        2,
+        dotPaint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CircularLoadingPainter oldDelegate) {
+    return oldDelegate.progress != progress;
+  }
+}
+
+class MathHelper {
   static double sin(double x) {
     return _sin(x);
   }
@@ -1836,7 +1738,6 @@ class MathHelper {
   }
 
   static double _sin(double x) {
-
     const pi = 3.14159265359;
 
     x = x % (2 * pi);
@@ -1853,148 +1754,4 @@ class MathHelper {
         - (x * x * x) / 6
         + (x * x * x * x * x) / 120;
   }
-}
-
-class BottomHudPainter extends CustomPainter {
-
-  @override
-  void paint(Canvas canvas, Size size) {
-
-    final glow = Paint()
-      ..color =
-      const Color(0xFFB7FF00)
-          .withValues(alpha: 0.18)
-
-      ..maskFilter =
-      const MaskFilter.blur(
-        BlurStyle.normal,
-        10,
-      );
-
-    final line = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.4
-      ..strokeCap = StrokeCap.round
-      ..color =
-      const Color(0xFFB7FF00)
-          .withValues(alpha: 0.88);
-
-    final fill = Paint()
-      ..style = PaintingStyle.fill
-      ..color =
-      const Color(0xFFD6FF3F);
-
-    final y =
-        size.height / 2;
-
-    final w =
-        size.width;
-
-    // ===== LEFT HUD =====
-    final left = Path()
-
-      ..moveTo(0, y)
-      ..lineTo(w * 0.18, y)
-
-      ..lineTo(w * 0.22, y - 7)
-
-      ..lineTo(w * 0.34, y - 7)
-
-      ..lineTo(w * 0.37, y)
-
-      ..lineTo(w * 0.44, y);
-
-    // ===== RIGHT HUD =====
-    final right = Path()
-
-      ..moveTo(w, y)
-      ..lineTo(w * 0.82, y)
-
-      ..lineTo(w * 0.78, y - 7)
-
-      ..lineTo(w * 0.66, y - 7)
-
-      ..lineTo(w * 0.63, y)
-
-      ..lineTo(w * 0.56, y);
-
-    canvas.drawPath(left, glow);
-    canvas.drawPath(right, glow);
-
-    canvas.drawPath(left, line);
-    canvas.drawPath(right, line);
-
-    // ===== CENTER CORE =====
-    final core = RRect.fromRectAndRadius(
-
-      Rect.fromCenter(
-        center: Offset(w / 2, y),
-        width: 110,
-        height: 16,
-      ),
-
-      const Radius.circular(4),
-    );
-
-    canvas.drawRRect(
-      core,
-
-      Paint()
-        ..style = PaintingStyle.fill
-
-        ..shader =
-        const LinearGradient(
-          colors: [
-            Color(0xFF8DFF00),
-            Color(0xFFE5FF54),
-            Color(0xFF8DFF00),
-          ],
-        ).createShader(
-          Rect.fromCenter(
-            center: Offset(w / 2, y),
-            width: 110,
-            height: 16,
-          ),
-        ),
-    );
-
-    // ===== DASHES =====
-    for (int i = 0; i < 9; i++) {
-
-      canvas.drawRRect(
-
-        RRect.fromRectAndRadius(
-
-          Rect.fromLTWH(
-            w / 2 - 36 + i * 8,
-            y - 5,
-            4,
-            10,
-          ),
-
-          const Radius.circular(1.5),
-        ),
-
-        fill,
-      );
-    }
-
-    // ===== SIDE DOTS =====
-    canvas.drawCircle(
-      Offset(w * 0.22, y - 7),
-      2.2,
-      fill,
-    );
-
-    canvas.drawCircle(
-      Offset(w * 0.78, y - 7),
-      2.2,
-      fill,
-    );
-  }
-
-  @override
-  bool shouldRepaint(
-      covariant CustomPainter oldDelegate
-      ) => false;
 }
