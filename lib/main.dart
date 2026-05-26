@@ -240,6 +240,23 @@ class _WebScreenState extends State<WebScreen>
     return 'https://buymeacoffee.com$path';
   }
 
+  String extractBuyMeCoffeeId(String url) {
+    final uri = Uri.parse(url);
+
+    final parts = uri.path
+        .split('/')
+        .where((e) => e.isNotEmpty)
+        .toList();
+
+    final index = parts.indexOf('e');
+
+    if (index != -1 && index + 1 < parts.length) {
+      return parts[index + 1];
+    }
+
+    return '';
+  }
+
   Future<void> loadPremiumMap() async {
     try {
       final res = await http.get(
@@ -254,9 +271,11 @@ class _WebScreenState extends State<WebScreen>
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body) as Map<String, dynamic>;
 
+        premiumMap = {};
+
         premiumMap = data.map(
               (key, value) => MapEntry(
-            normalizeBuyMeCoffeeUrl(key),
+            key.toString(),
             value.toString(),
           ),
         );
@@ -405,12 +424,29 @@ class _WebScreenState extends State<WebScreen>
           }
 
 // ===== BUY ME A COFFEE =====
-          if (uri.host.toLowerCase().contains('buymeacoffee')) {
-            final productUrl = normalizeBuyMeCoffeeUrl(
-              uri.origin + uri.path,
+          final host = uri.host.toLowerCase();
+
+          if (
+          host.contains('buymeacoffee') ||
+              host.contains('bmc.link')
+          ) {
+
+            final cleanUrl =
+            Uri.decodeFull(request.url);
+
+            final productId =
+            extractBuyMeCoffeeId(cleanUrl);
+
+            debugPrint(
+              'PREMIUM ID = $productId',
             );
 
-            final baseLink = premiumMap[productUrl];
+            debugPrint(
+              'MAP HAS = ${premiumMap.containsKey(productId)}',
+            );
+
+            final baseLink =
+            premiumMap[productId];
 
             if (baseLink == null) {
               ScaffoldMessenger.of(context).showSnackBar(
@@ -428,7 +464,9 @@ class _WebScreenState extends State<WebScreen>
                 mode: LaunchMode.platformDefault,
               );
 
-              if (!ok && mounted) {
+              if (!mounted) return;
+
+              if (!ok) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
                     content: Text('Cannot open base link'),
@@ -438,7 +476,7 @@ class _WebScreenState extends State<WebScreen>
             }
 
             // Đã unlock trong session -> mở luôn
-            if (unlockedPremiumLinks.contains(productUrl)) {
+            if (unlockedPremiumLinks.contains(productId)) {
               await openBaseLink();
               return NavigationDecision.prevent;
             }
@@ -529,7 +567,7 @@ class _WebScreenState extends State<WebScreen>
                     loadRewardedAd();
 
                     if (earnedReward) {
-                      unlockedPremiumLinks.add(productUrl);
+                      unlockedPremiumLinks.add(productId);
                       lastRewardTime = DateTime.now();
 
                       await openBaseLink();
@@ -783,7 +821,7 @@ document.readyState
 
     openCount++;
 
-    if (openCount >= 3) {
+    if (openCount >= 6) {
       hasRequestedReview = true;
       _requestReview();
     }
