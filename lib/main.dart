@@ -333,6 +333,17 @@ class _WebScreenState extends State<WebScreen>
 
             return NavigationDecision.prevent;
           }
+          // BLOCK ADSENSE / DOUBLECLICK
+          if (
+          uri.host.contains('googlesyndication.com') ||
+              uri.host.contains('googleads.g.doubleclick.net') ||
+              uri.host.contains('doubleclick.net') ||
+              uri.host.contains('pagead2.googlesyndication.com') ||
+              uri.host.contains('googleadservices.com')
+          ) {
+            return NavigationDecision.prevent;
+          }
+
 
           // OTHER LINKS -> OPEN DIRECT
           await launchUrl(uri,
@@ -1168,6 +1179,77 @@ document.querySelector(
               if (!pageLoaded || !minSplashFinished || showResumeOverlay)
                 AppStatusOverlay(
                   isRestore: !isInitialLaunch || showResumeOverlay,
+                ),
+              if (isOffline)
+                Container(
+                  color: const Color(0xFF050505),
+                  width: double.infinity,
+                  height: double.infinity,
+
+                  child: Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+
+                        const Icon(
+                          Icons.wifi_off,
+                          size: 70,
+                          color: Colors.white70,
+                        ),
+
+                        const SizedBox(height: 18),
+
+                        Text(
+                          'NO INTERNET CONNECTION',
+                          style: GoogleFonts.orbitron(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 1.5,
+                          ),
+                        ),
+
+                        const SizedBox(height: 12),
+
+                        Text(
+                          'Please check your network',
+                          style: GoogleFonts.orbitron(
+                            color: Colors.white54,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            letterSpacing: 1,
+                          ),
+                        ),
+
+                        const SizedBox(height: 28),
+
+                        ElevatedButton(
+                          onPressed: () async {
+
+                            final result =
+                            await Connectivity()
+                                .checkConnectivity();
+
+                            final offline =
+                            result.contains(
+                              ConnectivityResult.none,
+                            );
+
+                            if (!offline) {
+
+                              setState(() {
+                                isOffline = false;
+                              });
+
+                              controller.reload();
+                            }
+                          },
+
+                          child: const Text('RETRY'),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
             ],
           ),
