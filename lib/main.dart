@@ -164,6 +164,10 @@ class _WebScreenState extends State<WebScreen>
   bool showResumeOverlay = false;
   bool isInitialLaunch = true;
   bool firstInternalLoad = true;
+  final Set<String> unlockedPremiumLinks = {};
+  bool isRewardShowing = false;
+  DateTime lastRewardTime =
+  DateTime.fromMillisecondsSinceEpoch(0);
 
   String currentUrl = '';
 
@@ -177,14 +181,21 @@ class _WebScreenState extends State<WebScreen>
 
   void tryShowInterstitial() {
     internalOpenCount++;
+    final justWatchedReward =
+        DateTime.now()
+            .difference(lastRewardTime)
+            .inSeconds < 120;
+
+    if (justWatchedReward) return;
 
     final now = DateTime.now();
 
     final canShowByCount =
-        internalOpenCount >= 2;
+        internalOpenCount >= 4;
 
     final canShowByTime =
-        now.difference(lastInterstitialTime).inSeconds >= 40;
+        now.difference(lastInterstitialTime).inSeconds >= 90;
+
 
     if (
     canShowByCount &&
@@ -214,15 +225,19 @@ class _WebScreenState extends State<WebScreen>
   }
 
   String normalizeBuyMeCoffeeUrl(String url) {
-    return url
-        .replaceAll(
-      'buymeacoffee.com/hoangquocvh',
-      'buymeacoffee.com/cocbase',
-    )
-        .replaceAll(
-      'buymeacoffee.com/hoangvuong',
-      'buymeacoffee.com/cocbase',
-    );
+    final uri = Uri.parse(url);
+
+    var path = uri.path;
+
+    path = path
+        .replaceAll('/hoangquocvh/', '/cocbase/')
+        .replaceAll('/hoangvuong/', '/cocbase/');
+
+    if (path.endsWith('/')) {
+      path = path.substring(0, path.length - 1);
+    }
+
+    return 'https://buymeacoffee.com$path';
   }
 
   Future<void> loadPremiumMap() async {
@@ -240,7 +255,10 @@ class _WebScreenState extends State<WebScreen>
         final data = jsonDecode(res.body) as Map<String, dynamic>;
 
         premiumMap = data.map(
-              (key, value) => MapEntry(key, value.toString()),
+              (key, value) => MapEntry(
+            normalizeBuyMeCoffeeUrl(key),
+            value.toString(),
+          ),
         );
 
         debugPrint('Premium map loaded: ${premiumMap.length}');
@@ -387,92 +405,93 @@ class _WebScreenState extends State<WebScreen>
           }
 
 // ===== BUY ME A COFFEE =====
-          if (
-          uri.host
-              .toLowerCase()
-              .contains('buymeacoffee')
-          ) {
-
-            final productUrl =
-            normalizeBuyMeCoffeeUrl(
+          if (uri.host.toLowerCase().contains('buymeacoffee')) {
+            final productUrl = normalizeBuyMeCoffeeUrl(
               uri.origin + uri.path,
             );
 
-            final baseLink =
-            premiumMap[productUrl];
+            final baseLink = premiumMap[productUrl];
 
-
-            // ===== NOT FOUND =====
             if (baseLink == null) {
-
-              ScaffoldMessenger.of(context)
-                  .showSnackBar(
+              ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
-                  content: Text(
-                    'Premium link not found',
-                  ),
+                  content: Text('Premium link not found'),
                 ),
               );
 
               return NavigationDecision.prevent;
             }
 
-            // ===== AD NOT READY =====
-            if (rewardedAd == null) {
+            Future<void> openBaseLink() async {
+              final ok = await launchUrl(
+                Uri.parse(baseLink),
+                mode: LaunchMode.platformDefault,
+              );
 
+              if (!ok && mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Cannot open base link'),
+                  ),
+                );
+              }
+            }
+
+            // ĐÃ MỞ KHÓA TRONG SESSION -> KHÔNG XEM ADS NỮA
+            if (unlockedPremiumLinks.contains(productUrl)) {
+              await openBaseLink();
+              return NavigationDecision.prevent;
+            }
+
+            // TRÁNH BẤM LIÊN TỤC HIỆN 2 ADS
+            if (isRewardShowing) {
+              return NavigationDecision.prevent;
+            }
+
+            if (rewardedAd == null) {
               loadRewardedAd();
 
-              ScaffoldMessenger.of(context)
-                  .showSnackBar(
+              ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
-                  content: Text(
-                    'Ad is loading...',
-                  ),
+                  content: Text('Ad is loading...'),
                 ),
               );
 
               return NavigationDecision.prevent;
             }
 
-            rewardedAd!
-                .fullScreenContentCallback =
+            isRewardShowing = true;
+
+            rewardedAd!.fullScreenContentCallback =
                 FullScreenContentCallback(
-
-                  onAdDismissedFullScreenContent:
-                      (ad) {
-
+                  onAdDismissedFullScreenContent: (ad) {
                     ad.dispose();
 
                     rewardedAd = null;
+                    isRewardShowing = false;
+
                     loadRewardedAd();
                   },
-
-                  onAdFailedToShowFullScreenContent:
-                      (ad, error) {
-
+                  onAdFailedToShowFullScreenContent: (ad, error) {
                     ad.dispose();
 
                     rewardedAd = null;
+                    isRewardShowing = false;
 
                     loadRewardedAd();
                   },
                 );
 
             rewardedAd!.show(
-
-              onUserEarnedReward:
-                  (ad, reward) async {
-
-                    await launchUrl(
-                      Uri.parse(baseLink),
-                      mode: LaunchMode.platformDefault,
-                    );
+              onUserEarnedReward: (ad, reward) async {
+                unlockedPremiumLinks.add(productUrl);
+                await openBaseLink();
               },
             );
 
-
             return NavigationDecision.prevent;
           }
+
           // ===== BLOCK ADS / HIDDEN TRACKING ONLY =====
           final url = request.url.toLowerCase();
 
@@ -1926,6 +1945,36 @@ class ShortLoadingBarPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
+
+    // ===== TRACK / KHUNG CŨ =====
+    final trackRect = RRect.fromRectAndRadius(
+      Rect.fromLTWH(
+        0,
+        5,
+        size.width,
+        8,
+      ),
+      const Radius.circular(999),
+    );
+
+    // BG
+    canvas.drawRRect(
+      trackRect,
+      Paint()
+        ..color = Colors.black.withValues(alpha: 0.42),
+    );
+
+    // BORDER
+    canvas.drawRRect(
+      trackRect,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1
+        ..color = const Color(0xFFB7FF00)
+            .withValues(alpha: 0.55),
+    );
+
+    // ===== FILL =====
     final fillRect = RRect.fromRectAndRadius(
       Rect.fromLTWH(
         4,
@@ -1937,13 +1986,20 @@ class ShortLoadingBarPainter extends CustomPainter {
       const Radius.circular(999),
     );
 
+    // GLOW
     canvas.drawRRect(
       fillRect,
       Paint()
-        ..color = const Color(0xFFB7FF00).withValues(alpha: 0.38)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8),
+        ..color = const Color(0xFFB7FF00)
+            .withValues(alpha: 0.38)
+        ..maskFilter =
+        const MaskFilter.blur(
+          BlurStyle.normal,
+          8,
+        ),
     );
 
+    // FILL
     canvas.drawRRect(
       fillRect,
       Paint()
