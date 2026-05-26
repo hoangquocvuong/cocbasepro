@@ -7,7 +7,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
-
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -30,6 +31,29 @@ Future<void> firebaseBgHandler(RemoteMessage message) async {
 // (2) INTERSTITIAL AD
 // =========================
 InterstitialAd? interstitialAd;
+RewardedAd? rewardedAd;
+
+void loadRewardedAd() {
+  RewardedAd.load(
+    adUnitId: 'ca-app-pub-9371341402256787/5585456052',
+    request: const AdRequest(
+      nonPersonalizedAds: true,
+    ),
+    rewardedAdLoadCallback:
+    RewardedAdLoadCallback(
+
+      onAdLoaded: (ad) {
+        rewardedAd = ad;
+      },
+
+      onAdFailedToLoad: (error) {
+        debugPrint(
+          'Rewarded failed: $error',
+        );
+      },
+    ),
+  );
+}
 
 void loadInterstitial() {
   InterstitialAd.load(
@@ -103,52 +127,6 @@ class MyApp extends StatelessWidget {
 }
 
 // =========================
-// (5) SPLASH SCREEN
-// =========================
-class SplashScreen extends StatefulWidget {
-  const SplashScreen({super.key});
-
-  @override
-  State<SplashScreen> createState() => _SplashScreenState();
-}
-
-class _SplashScreenState extends State<SplashScreen> {
-
-  @override
-  void initState() {
-    super.initState();
-
-    loadInterstitial();
-
-    Future.delayed(const Duration(milliseconds: 1600), () {
-      if (!mounted) return;
-
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const WebScreen()),
-      );
-
-      Future.delayed(const Duration(milliseconds: 800), () {
-        interstitialAd?.show();
-      });
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return const Scaffold(
-      backgroundColor: Color(0xFF050505),
-      body: Center(
-        child: Image(
-          image: AssetImage('assets/icon.png'),
-          width: 240,
-        ),
-      ),
-    );
-  }
-}
-
-// =========================
 // (6) WEB SCREEN
 // =========================
 class WebScreen extends StatefulWidget {
@@ -166,6 +144,7 @@ class _WebScreenState extends State<WebScreen>
 
   late WebViewController controller;
   late StreamSubscription<List<ConnectivityResult>> netSub;
+  Map<String, String> premiumMap = {};
 
   final homeUrl = 'https://www.cocbasepro.com';
 
@@ -184,12 +163,92 @@ class _WebScreenState extends State<WebScreen>
   bool appJustResumed = false;
   bool showResumeOverlay = false;
   bool isInitialLaunch = true;
+  bool firstInternalLoad = true;
 
   String currentUrl = '';
 
   int openCount = 0;
   bool hasRequestedReview = false;
 
+  int internalOpenCount = 0;
+
+  DateTime lastInterstitialTime =
+  DateTime.fromMillisecondsSinceEpoch(0);
+
+  void tryShowInterstitial() {
+    internalOpenCount++;
+
+    final now = DateTime.now();
+
+    final canShowByCount =
+        internalOpenCount >= 2;
+
+    final canShowByTime =
+        now.difference(lastInterstitialTime).inSeconds >= 40;
+
+    if (
+    canShowByCount &&
+        canShowByTime &&
+        interstitialAd != null
+    ) {
+      internalOpenCount = 0;
+      lastInterstitialTime = now;
+
+      interstitialAd!.fullScreenContentCallback =
+          FullScreenContentCallback(
+            onAdDismissedFullScreenContent: (ad) {
+              ad.dispose();
+              interstitialAd = null;
+              loadInterstitial();
+            },
+            onAdFailedToShowFullScreenContent: (ad, error) {
+              ad.dispose();
+              interstitialAd = null;
+              loadInterstitial();
+            },
+          );
+
+      interstitialAd!.show();
+      interstitialAd = null;
+    }
+  }
+
+  String normalizeBuyMeCoffeeUrl(String url) {
+    return url
+        .replaceAll(
+      'buymeacoffee.com/hoangquocvh',
+      'buymeacoffee.com/cocbase',
+    )
+        .replaceAll(
+      'buymeacoffee.com/hoangvuong',
+      'buymeacoffee.com/cocbase',
+    );
+  }
+
+  Future<void> loadPremiumMap() async {
+    try {
+      final res = await http.get(
+        Uri.parse(
+          'https://raw.githubusercontent.com/hoangquocvuong/premium-map.json/refs/heads/main/premium-map.json?v=${DateTime.now().millisecondsSinceEpoch}',
+        ),
+      ).timeout(
+        const Duration(seconds: 8),
+
+      );
+
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body) as Map<String, dynamic>;
+
+        premiumMap = data.map(
+              (key, value) => MapEntry(key, value.toString()),
+        );
+
+        debugPrint('Premium map loaded: ${premiumMap.length}');
+      }
+    } catch (e) {
+      debugPrint('Premium map error: $e');
+    }
+  }
 
   // ===== FIX WEBVIEW DIE =====
   bool isCheckingAlive = false;
@@ -210,6 +269,9 @@ class _WebScreenState extends State<WebScreen>
 
     _setupConnectivity();
     _setupFirebase();
+    loadInterstitial();
+    loadRewardedAd();
+    loadPremiumMap();
 
     // THEME WATCHER
     themeTimer = Timer.periodic(
@@ -246,7 +308,9 @@ class _WebScreenState extends State<WebScreen>
 
     // APP MODE FOR IOS
       ..setUserAgent(
-        Platform.isIOS ? 'CocBaseProApp-iOS' : null,
+        Platform.isIOS
+            ? 'CocBaseProApp-iOS'
+            : 'CocBaseProApp-Android',
       )
 
       ..setBackgroundColor(
@@ -300,47 +364,130 @@ class _WebScreenState extends State<WebScreen>
             return NavigationDecision.prevent;
           }
 
+          // ===== INTERNAL WEBSITE =====
           if (uri.host.contains('cocbasepro.com')) {
-            currentUrl = uri.toString();
+
+            final newUrl = uri.toString();
+
+            if (newUrl != currentUrl) {
+
+              currentUrl = newUrl;
+
+              if (firstInternalLoad) {
+
+                firstInternalLoad = false;
+
+              } else {
+
+                tryShowInterstitial();
+              }
+            }
+
             return NavigationDecision.navigate;
           }
 
-          // BUY ME A COFFEE -> CONFIRM
-          if (uri.host.toLowerCase().contains('buymeacoffee')) {
-            final ok = await showDialog<bool>(
-              context: context,
-              builder: (ctx) => AlertDialog(
-                title: const Text('Open link'),
-                content: const Text('Open in browser?'),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(ctx, false),
-                    child: const Text('Cancel'),
-                  ),
-                  ElevatedButton(
-                    onPressed: () => Navigator.pop(ctx, true),
-                    child: const Text('Open'),
-                  )
-                ],
-              ),
-            ) ??
-                false;
+// ===== BUY ME A COFFEE =====
+          if (
+          uri.host
+              .toLowerCase()
+              .contains('buymeacoffee')
+          ) {
 
-            if (ok) {
-              await launchUrl(uri,
-                  mode: LaunchMode.externalApplication);
+            final productUrl =
+            normalizeBuyMeCoffeeUrl(
+              uri.origin + uri.path,
+            );
+
+            final baseLink =
+            premiumMap[productUrl];
+
+
+            // ===== NOT FOUND =====
+            if (baseLink == null) {
+
+              ScaffoldMessenger.of(context)
+                  .showSnackBar(
+                const SnackBar(
+                  content: Text(
+                    'Premium link not found',
+                  ),
+                ),
+              );
+
+              return NavigationDecision.prevent;
             }
+
+            // ===== AD NOT READY =====
+            if (rewardedAd == null) {
+
+              loadRewardedAd();
+
+              ScaffoldMessenger.of(context)
+                  .showSnackBar(
+                const SnackBar(
+                  content: Text(
+                    'Ad is loading...',
+                  ),
+                ),
+              );
+
+              return NavigationDecision.prevent;
+            }
+
+            rewardedAd!
+                .fullScreenContentCallback =
+                FullScreenContentCallback(
+
+                  onAdDismissedFullScreenContent:
+                      (ad) {
+
+                    ad.dispose();
+
+                    rewardedAd = null;
+                    loadRewardedAd();
+                  },
+
+                  onAdFailedToShowFullScreenContent:
+                      (ad, error) {
+
+                    ad.dispose();
+
+                    rewardedAd = null;
+
+                    loadRewardedAd();
+                  },
+                );
+
+            rewardedAd!.show(
+
+              onUserEarnedReward:
+                  (ad, reward) async {
+
+                    await launchUrl(
+                      Uri.parse(baseLink),
+                      mode: LaunchMode.platformDefault,
+                    );
+              },
+            );
+
 
             return NavigationDecision.prevent;
           }
-          // BLOCK ADSENSE / DOUBLECLICK
-          if (
-          uri.host.contains('googlesyndication.com') ||
-              uri.host.contains('googleads.g.doubleclick.net') ||
-              uri.host.contains('doubleclick.net') ||
-              uri.host.contains('pagead2.googlesyndication.com') ||
-              uri.host.contains('googleadservices.com')
-          ) {
+          // ===== BLOCK ADS / HIDDEN TRACKING ONLY =====
+          final url = request.url.toLowerCase();
+
+          final isGoogleAdInternal =
+              url.contains('googlesyndication.com') ||
+                  url.contains('doubleclick.net') ||
+                  url.contains('googleadservices.com') ||
+                  url.contains('pagead2.googlesyndication.com') ||
+                  url.contains('adtrafficquality.google') ||
+                  url.contains('google.com/recaptcha') ||
+                  url.contains('/recaptcha/api2/aframe') ||
+                  url.contains('/pagead/') ||
+                  url.contains('/sodar/');
+
+          if (isGoogleAdInternal) {
             return NavigationDecision.prevent;
           }
 
@@ -562,11 +709,17 @@ document.readyState
   }
 
   Future<void> _requestReview() async {
-    final review = InAppReview.instance;
 
-    if (await review.isAvailable()) {
-      await review.requestReview();
-    }
+    try {
+
+      final review = InAppReview.instance;
+
+      if (await review.isAvailable()) {
+        await review.requestReview();
+      }
+
+    } catch (_) {}
+
   }
 
   // =========================
@@ -704,6 +857,7 @@ document.readyState
 
     netSub.cancel();
     interstitialAd?.dispose();
+    rewardedAd?.dispose();
     themeTimer?.cancel();
     newsTimer?.cancel();
     super.dispose();
@@ -1182,70 +1336,121 @@ document.querySelector(
                 ),
               if (isOffline)
                 Container(
-                  color: const Color(0xFF050505),
                   width: double.infinity,
                   height: double.infinity,
-
-                  child: Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
+                  color: const Color(0xFF030503),
+                  child: SafeArea(
+                    child: Stack(
                       children: [
-
-                        const Icon(
-                          Icons.wifi_off,
-                          size: 70,
-                          color: Colors.white70,
-                        ),
-
-                        const SizedBox(height: 18),
-
-                        Text(
-                          'NO INTERNET CONNECTION',
-                          style: GoogleFonts.orbitron(
-                            color: Colors.white,
-                            fontSize: 18,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 1.5,
+                        Positioned.fill(
+                          child: CustomPaint(
+                            painter: StatusBackgroundPainter(progress: 0.35),
                           ),
                         ),
 
-                        const SizedBox(height: 12),
+                        Center(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 22),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.wifi_off_rounded,
+                                  size: 82,
+                                  color: const Color(0xFFB7FF00),
+                                  shadows: [
+                                    Shadow(
+                                      color: const Color(0xFFB7FF00)
+                                          .withValues(alpha: 0.75),
+                                      blurRadius: 24,
+                                    ),
+                                  ],
+                                ),
 
-                        Text(
-                          'Please check your network',
-                          style: GoogleFonts.orbitron(
-                            color: Colors.white54,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                            letterSpacing: 1,
+                                const SizedBox(height: 28),
+
+                                _GamingTitle(
+                                  text: 'NO INTERNET',
+                                ),
+
+                                const SizedBox(height: 14),
+
+                                Text(
+                                  'CHECK YOUR CONNECTION',
+                                  textAlign: TextAlign.center,
+                                  style: GoogleFonts.orbitron(
+                                    color: Colors.white.withValues(alpha: 0.85),
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w700,
+                                    letterSpacing: 2.1,
+                                  ),
+                                ),
+
+                                const SizedBox(height: 42),
+
+                                GestureDetector(
+                                  onTap: () async {
+                                    final result =
+                                    await Connectivity().checkConnectivity();
+
+                                    final offline = result.contains(
+                                      ConnectivityResult.none,
+                                    );
+
+                                    if (!offline) {
+                                      setState(() {
+                                        isOffline = false;
+                                        pageLoaded = false;
+                                        showResumeOverlay = true;
+                                        isInitialLaunch = false;
+                                      });
+
+                                      controller.reload();
+                                    }
+                                  },
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 34,
+                                      vertical: 15,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(999),
+                                      color: const Color(0xFFB7FF00),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: const Color(0xFFB7FF00)
+                                              .withValues(alpha: 0.45),
+                                          blurRadius: 22,
+                                          spreadRadius: 1,
+                                        ),
+                                      ],
+                                    ),
+                                    child: Text(
+                                      'RETRY',
+                                      style: GoogleFonts.orbitron(
+                                        color: Colors.black,
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w900,
+                                        letterSpacing: 2,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+
+                                const SizedBox(height: 26),
+
+                                Text(
+                                  'COC BASE PRO',
+                                  style: GoogleFonts.orbitron(
+                                    color: Colors.white.withValues(alpha: 0.38),
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                    letterSpacing: 2.2,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
-
-                        const SizedBox(height: 28),
-
-                        ElevatedButton(
-                          onPressed: () async {
-
-                            final result =
-                            await Connectivity()
-                                .checkConnectivity();
-
-                            final offline =
-                            result.contains(
-                              ConnectivityResult.none,
-                            );
-
-                            if (!offline) {
-
-                              setState(() {
-                                isOffline = false;
-                              });
-
-                              controller.reload();
-                            }
-                          },
-
-                          child: const Text('RETRY'),
                         ),
                       ],
                     ),
@@ -1721,38 +1926,12 @@ class ShortLoadingBarPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final trackRect = RRect.fromRectAndRadius(
-      Rect.fromLTWH(
-        0,
-        4,
-        size.width,
-        10,
-      ),
-      const Radius.circular(999),
-    );
-
-    canvas.drawRRect(
-      trackRect,
-      Paint()
-        ..style = PaintingStyle.fill
-        ..color = Colors.black.withValues(alpha: 0.55),
-    );
-
-    canvas.drawRRect(
-      trackRect,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.3
-        ..color = const Color(0xFFB7FF00).withValues(alpha: 0.42),
-    );
-
-    final fillWidth = size.width * (0.18 + 0.56 * progress);
-
     final fillRect = RRect.fromRectAndRadius(
       Rect.fromLTWH(
         4,
         7,
-        fillWidth.clamp(16, size.width - 8),
+        (size.width - 8) *
+            (0.18 + (progress * 0.82)),
         4,
       ),
       const Radius.circular(999),
