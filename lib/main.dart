@@ -437,40 +437,103 @@ class _WebScreenState extends State<WebScreen>
               }
             }
 
-            // ĐÃ MỞ KHÓA TRONG SESSION -> KHÔNG XEM ADS NỮA
+            // Đã unlock trong session -> mở luôn
             if (unlockedPremiumLinks.contains(productUrl)) {
               await openBaseLink();
               return NavigationDecision.prevent;
             }
 
-            // TRÁNH BẤM LIÊN TỤC HIỆN 2 ADS
             if (isRewardShowing) {
               return NavigationDecision.prevent;
             }
 
+            isRewardShowing = true;
+
+            // Thông báo trước khi xem video
+            final agree = await showDialog<bool>(
+              context: context,
+              builder: (_) {
+                return AlertDialog(
+                  backgroundColor: const Color(0xFF0B1207),
+                  title: const Text(
+                    'Unlock Premium Base',
+                    style: TextStyle(
+                      color: Color(0xFFB7FF00),
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  content: const Text(
+                    'Watch a short video to unlock this premium base link.',
+                    style: TextStyle(
+                      color: Colors.white,
+                    ),
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () {
+                        Navigator.pop(context, false);
+                      },
+                      child: const Text('Cancel'),
+                    ),
+                    TextButton(
+                      onPressed: () {
+                        Navigator.pop(context, true);
+                      },
+                      child: const Text(
+                        'Watch Video',
+                        style: TextStyle(
+                          color: Color(0xFFB7FF00),
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              },
+            );
+            if (!mounted) {
+              return NavigationDecision.prevent;
+            }
+            if (agree != true) {
+              isRewardShowing = false;
+              return NavigationDecision.prevent;
+            }
+
             if (rewardedAd == null) {
+              isRewardShowing = false;
               loadRewardedAd();
+              if (!mounted) {
+                return NavigationDecision.prevent;
+              }
 
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
-                  content: Text('Ad is loading...'),
+                  content: Text('Ad is loading... Please try again.'),
                 ),
               );
 
               return NavigationDecision.prevent;
             }
 
-            isRewardShowing = true;
+
+            bool earnedReward = false;
 
             rewardedAd!.fullScreenContentCallback =
                 FullScreenContentCallback(
-                  onAdDismissedFullScreenContent: (ad) {
+                  onAdDismissedFullScreenContent: (ad) async {
                     ad.dispose();
 
                     rewardedAd = null;
                     isRewardShowing = false;
 
                     loadRewardedAd();
+
+                    if (earnedReward) {
+                      unlockedPremiumLinks.add(productUrl);
+                      lastRewardTime = DateTime.now();
+
+                      await openBaseLink();
+                    }
                   },
                   onAdFailedToShowFullScreenContent: (ad, error) {
                     ad.dispose();
@@ -483,9 +546,8 @@ class _WebScreenState extends State<WebScreen>
                 );
 
             rewardedAd!.show(
-              onUserEarnedReward: (ad, reward) async {
-                unlockedPremiumLinks.add(productUrl);
-                await openBaseLink();
+              onUserEarnedReward: (ad, reward) {
+                earnedReward = true;
               },
             );
 
@@ -1459,7 +1521,7 @@ document.querySelector(
                                 const SizedBox(height: 26),
 
                                 Text(
-                                  'COC BASE PRO',
+                                  'BASE LAYOUT PRO',
                                   style: GoogleFonts.orbitron(
                                     color: Colors.white.withValues(alpha: 0.38),
                                     fontSize: 12,
