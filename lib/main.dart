@@ -425,21 +425,18 @@ class _WebScreenState extends State<WebScreen>
 
   }
   Future<void> initPurchases() async {
-    final available = await iap.isAvailable();
 
-    showDebug('IAP AVAILABLE: $available');
+    final available = await iap.isAvailable();
 
     if (!available) return;
 
     purchaseSub = iap.purchaseStream.listen((purchases) async {
+
       for (final purchase in purchases) {
-        showDebug(
-            'PURCHASE STATUS: ${purchase.status}\n'
-                'PRODUCT: ${purchase.productID}'
-        );
 
         if (purchase.status == PurchaseStatus.purchased ||
             purchase.status == PurchaseStatus.restored) {
+
           isSubscriber = true;
 
           await syncPremiumToWebView();
@@ -452,32 +449,18 @@ class _WebScreenState extends State<WebScreen>
             setState(() {});
           }
         }
-
-        if (purchase.status == PurchaseStatus.error) {
-          showDebug(
-              'PURCHASE ERROR: ${purchase.error?.message ?? "UNKNOWN"}'
-          );
-        }
       }
     });
 
-    const ids = <String>{
+    const ids = {
       'premium_monthly',
       'premium_yearly',
     };
 
-    showDebug('QUERY IDS: ${ids.join(", ")}');
-
-    final response = await iap.queryProductDetails(ids);
-
-    showDebug(
-        'IAP FOUND: ${response.productDetails.length}\n'
-            'NOT FOUND: ${response.notFoundIDs.join(", ")}\n'
-            'ERROR: ${response.error?.message ?? "NONE"}'
-    );
+    final response =
+    await iap.queryProductDetails(ids);
 
     for (final p in response.productDetails) {
-      showDebug('PRODUCT FOUND: ${p.id} | ${p.price}');
 
       if (p.id == 'premium_monthly') {
         monthlyProduct = p;
@@ -490,6 +473,7 @@ class _WebScreenState extends State<WebScreen>
 
     await iap.restorePurchases();
   }
+
   Future<void> syncPremiumToWebView() async {
     final value = isSubscriber ? '1' : '0';
 
@@ -501,11 +485,10 @@ class _WebScreenState extends State<WebScreen>
   }
   void buyMonthly() {
     if (monthlyProduct == null) {
-      showDebug('MONTHLY PRODUCT NULL');
+
       return;
     }
 
-    showDebug('OPEN MONTHLY PAYMENT');
 
     final purchaseParam =
     PurchaseParam(productDetails: monthlyProduct!);
@@ -516,11 +499,10 @@ class _WebScreenState extends State<WebScreen>
   }
   void buyYearly() {
     if (yearlyProduct == null) {
-      showDebug('YEARLY PRODUCT NULL');
+
       return;
     }
 
-    showDebug('OPEN YEARLY PAYMENT');
 
     final purchaseParam =
     PurchaseParam(productDetails: yearlyProduct!);
@@ -1606,7 +1588,7 @@ document.querySelector(
         ),
         BottomNavigationBarItem(
           icon: Icon(Icons.forum),
-          label: 'Community',
+          label: 'Chat',
         ),
       ],
     );
