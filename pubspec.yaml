@@ -2,7 +2,7 @@ name: cocbasepro
 description: Coc Base Pro App
 publish_to: "none"
 
-version: 2.1.0+35
+version: 2.1.0+36
 
 
 
@@ -26,6 +26,7 @@ dependencies:
   google_mobile_ads: ^5.1.0
   in_app_review: ^2.0.9
   http: ^1.2.2
+  in_app_purchase: ^3.2.0
 
 dev_dependencies:
   flutter_test:

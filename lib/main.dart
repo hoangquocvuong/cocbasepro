@@ -12,6 +12,7 @@ import 'package:http/http.dart' as http;
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:in_app_purchase/in_app_purchase.dart';
 
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 
@@ -168,7 +169,21 @@ class _WebScreenState extends State<WebScreen>
   bool isRewardShowing = false;
   DateTime lastRewardTime =
   DateTime.fromMillisecondsSinceEpoch(0);
+  DateTime lastCommunityOpenAd =
+  DateTime.fromMillisecondsSinceEpoch(0);
 
+  DateTime lastCommunityCloseAd =
+  DateTime.fromMillisecondsSinceEpoch(0);
+  bool isSubscriber = false;
+  bool rewardStartedForPremium = false;
+  int rewardCancelCount = 0;
+  int rewardSuccessCount = 0;
+
+  final InAppPurchase iap = InAppPurchase.instance;
+  StreamSubscription<List<PurchaseDetails>>? purchaseSub;
+
+  ProductDetails? monthlyProduct;
+  ProductDetails? yearlyProduct;
   String currentUrl = '';
 
   int openCount = 0;
@@ -180,6 +195,8 @@ class _WebScreenState extends State<WebScreen>
   DateTime.fromMillisecondsSinceEpoch(0);
 
   void tryShowInterstitial() {
+    if (isSubscriber) return;
+
     internalOpenCount++;
     final justWatchedReward =
         DateTime.now()
@@ -223,7 +240,63 @@ class _WebScreenState extends State<WebScreen>
       interstitialAd = null;
     }
   }
+  void showCommunityOpenAd() {
+    if (isSubscriber) return;
+    if (isRewardShowing) return;
+    if (interstitialAd == null) return;
 
+    final now = DateTime.now();
+
+    if (now.difference(lastCommunityOpenAd).inSeconds < 90) return;
+
+    lastCommunityOpenAd = now;
+
+    interstitialAd!.fullScreenContentCallback =
+        FullScreenContentCallback(
+          onAdDismissedFullScreenContent: (ad) {
+            ad.dispose();
+            interstitialAd = null;
+            loadInterstitial();
+          },
+          onAdFailedToShowFullScreenContent: (ad, error) {
+            ad.dispose();
+            interstitialAd = null;
+            loadInterstitial();
+          },
+        );
+
+    interstitialAd!.show();
+    interstitialAd = null;
+  }
+
+  void showCommunityCloseAd() {
+    if (isSubscriber) return;
+    if (isRewardShowing) return;
+    if (interstitialAd == null) return;
+
+    final now = DateTime.now();
+
+    if (now.difference(lastCommunityCloseAd).inSeconds < 90) return;
+
+    lastCommunityCloseAd = now;
+
+    interstitialAd!.fullScreenContentCallback =
+        FullScreenContentCallback(
+          onAdDismissedFullScreenContent: (ad) {
+            ad.dispose();
+            interstitialAd = null;
+            loadInterstitial();
+          },
+          onAdFailedToShowFullScreenContent: (ad, error) {
+            ad.dispose();
+            interstitialAd = null;
+            loadInterstitial();
+          },
+        );
+
+    interstitialAd!.show();
+    interstitialAd = null;
+  }
   String normalizeBuyMeCoffeeUrl(String url) {
     final uri = Uri.parse(url);
 
@@ -256,6 +329,8 @@ class _WebScreenState extends State<WebScreen>
 
     return '';
   }
+
+
 
   Future<void> loadPremiumMap() async {
     try {
@@ -309,6 +384,9 @@ class _WebScreenState extends State<WebScreen>
     loadInterstitial();
     loadRewardedAd();
     loadPremiumMap();
+    initPurchases();
+
+
 
     // THEME WATCHER
     themeTimer = Timer.periodic(
@@ -332,7 +410,127 @@ class _WebScreenState extends State<WebScreen>
     );
 
   }
+  Future<void> initPurchases() async {
 
+    final available = await iap.isAvailable();
+
+    if (!available) return;
+    await iap.restorePurchases();
+
+
+    const ids = {
+      'premium_monthly',
+      'premium_yearly',
+    };
+
+    final response =
+    await iap.queryProductDetails(ids);
+
+    for (final p in response.productDetails) {
+
+      if (p.id == 'premium_monthly') {
+        monthlyProduct = p;
+      }
+
+      if (p.id == 'premium_yearly') {
+        yearlyProduct = p;
+      }
+    }
+
+    purchaseSub =
+        iap.purchaseStream.listen((purchases) async {
+
+          for (final purchase in purchases) {
+
+            if (
+            purchase.status == PurchaseStatus.purchased ||
+                purchase.status == PurchaseStatus.restored
+            ) {
+
+              isSubscriber = true;
+
+              await syncPremiumToWebView();
+
+              if (purchase.pendingCompletePurchase) {
+                await iap.completePurchase(purchase);
+              }
+
+              if (mounted) {
+                setState(() {});
+              }
+            }
+          }
+        });
+  }
+  Future<void> syncPremiumToWebView() async {
+    final value = isSubscriber ? '1' : '0';
+
+    await controller.runJavaScript('''
+    localStorage.setItem("APP_SUBSCRIBER", "$value");
+    window.APP_SUBSCRIBER = "$value";
+    document.documentElement.classList.toggle("app-subscriber", "$value" === "1");
+  ''');
+  }
+  void buyMonthly() {
+
+    if (monthlyProduct == null) return;
+
+    final purchaseParam =
+    PurchaseParam(productDetails: monthlyProduct!);
+
+    iap.buyNonConsumable(
+      purchaseParam: purchaseParam,
+    );
+  }
+  void buyYearly() {
+
+    if (yearlyProduct == null) return;
+
+    final purchaseParam =
+    PurchaseParam(productDetails: yearlyProduct!);
+
+    iap.buyNonConsumable(
+      purchaseParam: purchaseParam,
+    );
+  }
+  Future<void> showPremiumSubscribePopup() async {
+    if (isSubscriber || !mounted) return;
+
+    await showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('🚀 Go Premium'),
+        content: const Text(
+          'Unlock Premium Bases Instantly\n\n'
+              '✓ Remove All Ads\n'
+              '✓ Unlimited Premium Base Access\n'
+              '✓ Faster Access, No Waiting\n\n'
+              '\$6.99/month\n'
+              '\$49.99/year',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Maybe Later'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              buyMonthly();
+            },
+            child: const Text('Monthly'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              buyYearly();
+            },
+            child: const Text('Yearly'),
+          ),
+        ],
+      ),
+    );
+  }
 
   // =========================
 // (7.2) CREATE WEBVIEW
@@ -378,7 +576,14 @@ class _WebScreenState extends State<WebScreen>
           );
         },
       )
-
+      ..addJavaScriptChannel(
+        'CommunityAd',
+        onMessageReceived: (message) {
+          if (message.message == 'close') {
+            showCommunityCloseAd();
+          }
+        },
+      )
       ..setNavigationDelegate(_navigation())
 
       ..loadRequest(Uri.parse(currentUrl));
@@ -445,8 +650,7 @@ class _WebScreenState extends State<WebScreen>
               'MAP HAS = ${premiumMap.containsKey(productId)}',
             );
 
-            final baseLink =
-            premiumMap[productId];
+            final baseLink = premiumMap[productId];
 
             if (baseLink == null) {
               ScaffoldMessenger.of(context).showSnackBar(
@@ -473,6 +677,11 @@ class _WebScreenState extends State<WebScreen>
                   ),
                 );
               }
+            }
+
+            if (isSubscriber) {
+              await openBaseLink();
+              return NavigationDecision.prevent;
             }
 
             // Đã unlock trong session -> mở luôn
@@ -571,6 +780,8 @@ class _WebScreenState extends State<WebScreen>
                       lastRewardTime = DateTime.now();
 
                       await openBaseLink();
+                    } else {
+                      await showPremiumSubscribePopup();
                     }
                   },
                   onAdFailedToShowFullScreenContent: (ad, error) {
@@ -619,6 +830,7 @@ class _WebScreenState extends State<WebScreen>
         },
 
         onPageFinished: (url) async {
+          await syncPremiumToWebView();
 
           isReloading = false;
 
@@ -971,6 +1183,7 @@ document.readyState
   // =========================
   @override
   void dispose() {
+    purchaseSub?.cancel();
     _badgeDebounce?.cancel();
     WidgetsBinding.instance.removeObserver(this);
 
@@ -1306,9 +1519,24 @@ document.querySelector(
 """);
             break;
 
-        // SETTINGS
+        // TOP CLANS
           case 4:
-            _showSettings();
+            await controller.runJavaScript("""
+document.querySelector(
+'[data-popup="topclans"]'
+)?.click();
+""");
+            break;
+
+// COMMUNITY
+          case 5:
+            showCommunityOpenAd();
+
+            await controller.runJavaScript("""
+document.querySelector(
+'[data-popup="community"]'
+)?.click();
+""");
             break;
         }
       },
@@ -1321,16 +1549,10 @@ document.querySelector(
         BottomNavigationBarItem(
           icon: Badge(
             isLabelVisible: unreadNews > 0,
-
             label: Text(
-              unreadNews > 9
-                  ? '9+'
-                  : unreadNews.toString(),
+              unreadNews > 9 ? '9+' : unreadNews.toString(),
             ),
-
-            child: Icon(
-              Icons.article,
-            ),
+            child: Icon(Icons.article),
           ),
           label: 'News',
         ),
@@ -1343,8 +1565,12 @@ document.querySelector(
           label: 'Stats',
         ),
         BottomNavigationBarItem(
-          icon: Icon(Icons.settings),
-          label: 'Settings',
+          icon: Icon(Icons.emoji_events),
+          label: 'Top',
+        ),
+        BottomNavigationBarItem(
+          icon: Icon(Icons.forum),
+          label: 'Community',
         ),
       ],
     );
