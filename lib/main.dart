@@ -524,40 +524,174 @@ class _WebScreenState extends State<WebScreen>
     );
   }
   Future<void> showPremiumSubscribePopup(String baseLink) async {
-    if (isSubscriber || !mounted) return;
+    if (!mounted) return;
 
     await showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('🚀 Go Premium'),
-        content: const Text(
-          'Unlock Premium Bases Instantly\n\n'
-              '✓ Remove All Ads\n'
-              '✓ Unlimited Premium Base Access\n'
-              '✓ Faster Access, No Waiting\n\n'
-              '\$6.99/month\n'
-              '\$49.99/year',
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(24),
         ),
+
+        titlePadding: const EdgeInsets.fromLTRB(
+          20,
+          20,
+          10,
+          0,
+        ),
+
+        title: Row(
+          children: [
+            const Expanded(
+              child: Text(
+                '🚀 Go Premium',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 24,
+                ),
+              ),
+            ),
+
+            IconButton(
+              icon: const Icon(Icons.close),
+              onPressed: () {
+                Navigator.pop(context);
+              },
+            ),
+          ],
+        ),
+
+        content: const Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+
+            Text(
+              'Unlock Premium Bases Instantly',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+
+            SizedBox(height: 18),
+
+            Row(
+              children: [
+                Icon(Icons.check_circle,
+                    color: Colors.green,
+                    size: 18),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text('Remove All Ads'),
+                ),
+              ],
+            ),
+
+            SizedBox(height: 10),
+
+            Row(
+              children: [
+                Icon(Icons.check_circle,
+                    color: Colors.green,
+                    size: 18),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                      'Unlimited Premium Base Access'),
+                ),
+              ],
+            ),
+
+            SizedBox(height: 10),
+
+            Row(
+              children: [
+                Icon(Icons.check_circle,
+                    color: Colors.green,
+                    size: 18),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                      'Faster Access, No Waiting'),
+                ),
+              ],
+            ),
+          ],
+        ),
+
+        actionsPadding: const EdgeInsets.fromLTRB(
+          16,
+          0,
+          16,
+          20,
+        ),
+
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Maybe Later'),
-          ),
-          TextButton(
-            onPressed: () {
-              pendingPremiumBaseLink = baseLink;
-              Navigator.pop(context);
-              buyMonthly();
-            },
-            child: const Text('Monthly'),
-          ),
-          TextButton(
-            onPressed: () {
-              pendingPremiumBaseLink = baseLink;
-              Navigator.pop(context);
-              buyYearly();
-            },
-            child: const Text('Yearly'),
+
+          Row(
+            children: [
+
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: () {
+                    pendingPremiumBaseLink = baseLink;
+                    Navigator.pop(context);
+                    buyMonthly();
+                  },
+
+                  style: ElevatedButton.styleFrom(
+                    minimumSize: const Size(
+                      double.infinity,
+                      54,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius:
+                      BorderRadius.circular(14),
+                    ),
+                  ),
+
+                  child: const Text(
+                    '\$6.99\nMonth',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+
+              const SizedBox(width: 10),
+
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: () {
+                    pendingPremiumBaseLink = baseLink;
+                    Navigator.pop(context);
+                    buyYearly();
+                  },
+
+                  style: ElevatedButton.styleFrom(
+                    minimumSize: const Size(
+                      double.infinity,
+                      54,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius:
+                      BorderRadius.circular(14),
+                    ),
+                  ),
+
+                  child: const Text(
+                    '\$49.99\nYear',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
