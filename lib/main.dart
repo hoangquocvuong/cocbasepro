@@ -483,7 +483,7 @@ class _WebScreenState extends State<WebScreen>
       }
     }
 
-    // await iap.restorePurchases();
+    await iap.restorePurchases();
   }
 
   Future<void> syncPremiumToWebView() async {
@@ -651,12 +651,27 @@ class _WebScreenState extends State<WebScreen>
                     ),
                   ),
 
-                  child: const Text(
-                    '\$6.99\nMonth',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                    ),
+                  child: const Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        '\$49.99 / Year',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      SizedBox(height: 2),
+                      Text(
+                        'Save 40%',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.green,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
