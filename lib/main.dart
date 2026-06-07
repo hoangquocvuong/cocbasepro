@@ -187,6 +187,7 @@ class _WebScreenState extends State<WebScreen>
   ProductDetails? monthlyProduct;
   ProductDetails? yearlyProduct;
   String currentUrl = '';
+  String? pendingPremiumBaseLink;
 
   int openCount = 0;
   bool hasRequestedReview = false;
@@ -448,6 +449,17 @@ class _WebScreenState extends State<WebScreen>
           if (mounted) {
             setState(() {});
           }
+
+          // Mở link premium đang chờ sau khi thanh toán xong
+          if (pendingPremiumBaseLink != null) {
+            final link = pendingPremiumBaseLink!;
+            pendingPremiumBaseLink = null;
+
+            await launchUrl(
+              Uri.parse(link),
+              mode: LaunchMode.platformDefault,
+            );
+          }
         }
       }
     });
@@ -511,7 +523,7 @@ class _WebScreenState extends State<WebScreen>
       purchaseParam: purchaseParam,
     );
   }
-  Future<void> showPremiumSubscribePopup() async {
+  Future<void> showPremiumSubscribePopup(String baseLink) async {
     if (isSubscriber || !mounted) return;
 
     await showDialog(
@@ -533,6 +545,7 @@ class _WebScreenState extends State<WebScreen>
           ),
           TextButton(
             onPressed: () {
+              pendingPremiumBaseLink = baseLink;
               Navigator.pop(context);
               buyMonthly();
             },
@@ -540,6 +553,7 @@ class _WebScreenState extends State<WebScreen>
           ),
           TextButton(
             onPressed: () {
+              pendingPremiumBaseLink = baseLink;
               Navigator.pop(context);
               buyYearly();
             },
@@ -670,6 +684,7 @@ class _WebScreenState extends State<WebScreen>
 
             final baseLink = premiumMap[productId];
 
+
             if (baseLink == null) {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
@@ -799,7 +814,7 @@ class _WebScreenState extends State<WebScreen>
 
                       await openBaseLink();
                     } else {
-                      await showPremiumSubscribePopup();
+                      await showPremiumSubscribePopup(baseLink);
                     }
                   },
                   onAdFailedToShowFullScreenContent: (ad, error) {
