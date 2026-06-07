@@ -215,7 +215,7 @@ class _WebScreenState extends State<WebScreen>
       ),
     );
   }
-  
+
   void tryShowInterstitial() {
     if (!canShowInterstitialNow()) return;
 
@@ -425,26 +425,59 @@ class _WebScreenState extends State<WebScreen>
 
   }
   Future<void> initPurchases() async {
-
     final available = await iap.isAvailable();
 
+    showDebug('IAP AVAILABLE: $available');
+
     if (!available) return;
-    await iap.restorePurchases();
 
+    purchaseSub = iap.purchaseStream.listen((purchases) async {
+      for (final purchase in purchases) {
+        showDebug(
+            'PURCHASE STATUS: ${purchase.status}\n'
+                'PRODUCT: ${purchase.productID}'
+        );
 
-    const ids = {
+        if (purchase.status == PurchaseStatus.purchased ||
+            purchase.status == PurchaseStatus.restored) {
+          isSubscriber = true;
+
+          await syncPremiumToWebView();
+
+          if (purchase.pendingCompletePurchase) {
+            await iap.completePurchase(purchase);
+          }
+
+          if (mounted) {
+            setState(() {});
+          }
+        }
+
+        if (purchase.status == PurchaseStatus.error) {
+          showDebug(
+              'PURCHASE ERROR: ${purchase.error?.message ?? "UNKNOWN"}'
+          );
+        }
+      }
+    });
+
+    const ids = <String>{
       'premium_monthly',
       'premium_yearly',
     };
 
-    final response =
-    await iap.queryProductDetails(ids);
+    showDebug('QUERY IDS: ${ids.join(", ")}');
+
+    final response = await iap.queryProductDetails(ids);
+
     showDebug(
         'IAP FOUND: ${response.productDetails.length}\n'
-            'NOT FOUND: ${response.notFoundIDs.join(", ")}'
+            'NOT FOUND: ${response.notFoundIDs.join(", ")}\n'
+            'ERROR: ${response.error?.message ?? "NONE"}'
     );
 
     for (final p in response.productDetails) {
+      showDebug('PRODUCT FOUND: ${p.id} | ${p.price}');
 
       if (p.id == 'premium_monthly') {
         monthlyProduct = p;
@@ -455,30 +488,7 @@ class _WebScreenState extends State<WebScreen>
       }
     }
 
-    purchaseSub =
-        iap.purchaseStream.listen((purchases) async {
-
-          for (final purchase in purchases) {
-
-            if (
-            purchase.status == PurchaseStatus.purchased ||
-                purchase.status == PurchaseStatus.restored
-            ) {
-
-              isSubscriber = true;
-
-              await syncPremiumToWebView();
-
-              if (purchase.pendingCompletePurchase) {
-                await iap.completePurchase(purchase);
-              }
-
-              if (mounted) {
-                setState(() {});
-              }
-            }
-          }
-        });
+    await iap.restorePurchases();
   }
   Future<void> syncPremiumToWebView() async {
     final value = isSubscriber ? '1' : '0';
