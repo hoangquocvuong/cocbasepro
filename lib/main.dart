@@ -414,7 +414,7 @@ class _WebScreenState extends State<WebScreen>
     );
 
     Future.delayed(
-      const Duration(milliseconds: 2000),
+      const Duration(milliseconds: 800),
           () {
         if (!mounted) return;
 
@@ -483,7 +483,7 @@ class _WebScreenState extends State<WebScreen>
       }
     }
 
-    await iap.restorePurchases();
+    // await iap.restorePurchases();
   }
 
   Future<void> syncPremiumToWebView() async {
