@@ -171,6 +171,8 @@ class _WebScreenState extends State<WebScreen>
   DateTime.fromMillisecondsSinceEpoch(0);
   DateTime lastCommunityOpenAd =
   DateTime.fromMillisecondsSinceEpoch(0);
+  DateTime lastAnyInterstitialAd =
+  DateTime.fromMillisecondsSinceEpoch(0);
 
   DateTime lastCommunityCloseAd =
   DateTime.fromMillisecondsSinceEpoch(0);
@@ -193,9 +195,30 @@ class _WebScreenState extends State<WebScreen>
 
   DateTime lastInterstitialTime =
   DateTime.fromMillisecondsSinceEpoch(0);
+  bool canShowInterstitialNow() {
+    final now = DateTime.now();
 
+    if (isSubscriber) return false;
+    if (isRewardShowing) return false;
+    if (interstitialAd == null) return false;
+
+    return now.difference(lastAnyInterstitialAd).inSeconds >= 90;
+  }
+
+  void showDebug(String text) {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(text),
+        duration: const Duration(seconds: 5),
+      ),
+    );
+  }
+  
   void tryShowInterstitial() {
-    if (isSubscriber) return;
+    if (!canShowInterstitialNow()) return;
+
 
     internalOpenCount++;
     final justWatchedReward =
@@ -241,15 +264,10 @@ class _WebScreenState extends State<WebScreen>
     }
   }
   void showCommunityOpenAd() {
-    if (isSubscriber) return;
-    if (isRewardShowing) return;
-    if (interstitialAd == null) return;
+    if (!canShowInterstitialNow()) return;
 
-    final now = DateTime.now();
-
-    if (now.difference(lastCommunityOpenAd).inSeconds < 90) return;
-
-    lastCommunityOpenAd = now;
+    lastCommunityOpenAd = DateTime.now();
+    lastAnyInterstitialAd = DateTime.now();
 
     interstitialAd!.fullScreenContentCallback =
         FullScreenContentCallback(
@@ -270,15 +288,10 @@ class _WebScreenState extends State<WebScreen>
   }
 
   void showCommunityCloseAd() {
-    if (isSubscriber) return;
-    if (isRewardShowing) return;
-    if (interstitialAd == null) return;
+    if (!canShowInterstitialNow()) return;
 
-    final now = DateTime.now();
-
-    if (now.difference(lastCommunityCloseAd).inSeconds < 90) return;
-
-    lastCommunityCloseAd = now;
+    lastCommunityCloseAd = DateTime.now();
+    lastAnyInterstitialAd = DateTime.now();
 
     interstitialAd!.fullScreenContentCallback =
         FullScreenContentCallback(
@@ -297,6 +310,7 @@ class _WebScreenState extends State<WebScreen>
     interstitialAd!.show();
     interstitialAd = null;
   }
+
   String normalizeBuyMeCoffeeUrl(String url) {
     final uri = Uri.parse(url);
 
@@ -425,6 +439,10 @@ class _WebScreenState extends State<WebScreen>
 
     final response =
     await iap.queryProductDetails(ids);
+    showDebug(
+        'IAP FOUND: ${response.productDetails.length}\n'
+            'NOT FOUND: ${response.notFoundIDs.join(", ")}'
+    );
 
     for (final p in response.productDetails) {
 
@@ -472,8 +490,12 @@ class _WebScreenState extends State<WebScreen>
   ''');
   }
   void buyMonthly() {
+    if (monthlyProduct == null) {
+      showDebug('MONTHLY PRODUCT NULL');
+      return;
+    }
 
-    if (monthlyProduct == null) return;
+    showDebug('OPEN MONTHLY PAYMENT');
 
     final purchaseParam =
     PurchaseParam(productDetails: monthlyProduct!);
@@ -483,8 +505,12 @@ class _WebScreenState extends State<WebScreen>
     );
   }
   void buyYearly() {
+    if (yearlyProduct == null) {
+      showDebug('YEARLY PRODUCT NULL');
+      return;
+    }
 
-    if (yearlyProduct == null) return;
+    showDebug('OPEN YEARLY PAYMENT');
 
     final purchaseParam =
     PurchaseParam(productDetails: yearlyProduct!);
