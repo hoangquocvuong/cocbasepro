@@ -523,8 +523,8 @@ class _WebScreenState extends State<WebScreen>
       purchaseParam: purchaseParam,
     );
   }
-  Future<void> showPremiumSubscribePopup() async {
-    if (!mounted) return;
+  Future<void> showPremiumSubscribePopup(String baseLink) async {
+    if (isSubscriber || !mounted) return;
 
     await showDialog(
       context: context,
@@ -545,6 +545,7 @@ class _WebScreenState extends State<WebScreen>
           ),
           TextButton(
             onPressed: () {
+              pendingPremiumBaseLink = baseLink;
               Navigator.pop(context);
               buyMonthly();
             },
@@ -552,6 +553,7 @@ class _WebScreenState extends State<WebScreen>
           ),
           TextButton(
             onPressed: () {
+              pendingPremiumBaseLink = baseLink;
               Navigator.pop(context);
               buyYearly();
             },
@@ -681,7 +683,7 @@ class _WebScreenState extends State<WebScreen>
             );
 
             final baseLink = premiumMap[productId];
-            pendingPremiumBaseLink = baseLink;
+
 
             if (baseLink == null) {
               ScaffoldMessenger.of(context).showSnackBar(
@@ -812,7 +814,7 @@ class _WebScreenState extends State<WebScreen>
 
                       await openBaseLink();
                     } else {
-                      await showPremiumSubscribePopup();
+                      await showPremiumSubscribePopup(baseLink);
                     }
                   },
                   onAdFailedToShowFullScreenContent: (ad, error) {
