@@ -187,6 +187,7 @@ class _WebScreenState extends State<WebScreen>
   ProductDetails? monthlyProduct;
   ProductDetails? yearlyProduct;
   String currentUrl = '';
+  String? pendingPremiumBaseLink;
 
   int openCount = 0;
   bool hasRequestedReview = false;
@@ -448,6 +449,17 @@ class _WebScreenState extends State<WebScreen>
           if (mounted) {
             setState(() {});
           }
+
+          // Mở link premium đang chờ sau khi thanh toán xong
+          if (pendingPremiumBaseLink != null) {
+            final link = pendingPremiumBaseLink!;
+            pendingPremiumBaseLink = null;
+
+            await launchUrl(
+              Uri.parse(link),
+              mode: LaunchMode.platformDefault,
+            );
+          }
         }
       }
     });
@@ -512,7 +524,7 @@ class _WebScreenState extends State<WebScreen>
     );
   }
   Future<void> showPremiumSubscribePopup() async {
-    if (isSubscriber || !mounted) return;
+    if (!mounted) return;
 
     await showDialog(
       context: context,
@@ -669,6 +681,7 @@ class _WebScreenState extends State<WebScreen>
             );
 
             final baseLink = premiumMap[productId];
+            pendingPremiumBaseLink = baseLink;
 
             if (baseLink == null) {
               ScaffoldMessenger.of(context).showSnackBar(
@@ -1588,7 +1601,7 @@ document.querySelector(
         ),
         BottomNavigationBarItem(
           icon: Icon(Icons.forum),
-          label: 'Chat',
+          label: 'Forum',
         ),
       ],
     );
