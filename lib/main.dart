@@ -1064,8 +1064,8 @@ class _WebScreenState extends State<WebScreen>
   // =========================
 
   @override
-  void didChangeAppLifecycleState(
-      AppLifecycleState state) {
+  Future<void> didChangeAppLifecycleState(
+      AppLifecycleState state) async {
 
     if (state == AppLifecycleState.paused) {
       lastPaused = DateTime.now();
@@ -1080,7 +1080,6 @@ class _WebScreenState extends State<WebScreen>
               .difference(lastPaused)
               .inMinutes;
 
-      // chỉ check nếu ngủ lâu
       if (diff >= 10) {
 
         if(mounted){
@@ -1089,11 +1088,30 @@ class _WebScreenState extends State<WebScreen>
           });
         }
 
-        _recoverWebAfterResume();
-        _safeCheckAlive();
+        try{
+          await controller.runJavaScript("""
+localStorage.setItem("APP_RESUME_TIME", Date.now());
+""");
+
+          await controller.reload();
+
+        }catch(e){
+          debugPrint("Resume reload failed: $e");
+          _safeCheckAlive();
+        }
+
+        Future.delayed(
+          const Duration(seconds: 3),
+              (){
+            if(mounted){
+              setState(() {
+                showResumeOverlay = false;
+              });
+            }
+          },
+        );
       }
 
-      // resume xong reset cờ
       Future.delayed(
         const Duration(seconds: 5),
             () {
