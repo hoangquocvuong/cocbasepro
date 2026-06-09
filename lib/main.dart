@@ -1064,8 +1064,8 @@ class _WebScreenState extends State<WebScreen>
   // =========================
 
   @override
-  Future<void> didChangeAppLifecycleState(
-      AppLifecycleState state) async {
+  void didChangeAppLifecycleState(
+      AppLifecycleState state) {
 
     if (state == AppLifecycleState.paused) {
       lastPaused = DateTime.now();
@@ -1080,6 +1080,7 @@ class _WebScreenState extends State<WebScreen>
               .difference(lastPaused)
               .inMinutes;
 
+      // chỉ check nếu ngủ lâu
       if (diff >= 10) {
 
         if(mounted){
@@ -1088,30 +1089,10 @@ class _WebScreenState extends State<WebScreen>
           });
         }
 
-        try{
-          await controller.runJavaScript("""
-localStorage.setItem("APP_RESUME_TIME", Date.now());
-""");
-
-          await controller.reload();
-
-        }catch(e){
-          debugPrint("Resume reload failed: $e");
-          _safeCheckAlive();
-        }
-
-        Future.delayed(
-          const Duration(seconds: 3),
-              (){
-            if(mounted){
-              setState(() {
-                showResumeOverlay = false;
-              });
-            }
-          },
-        );
+        _safeCheckAlive();
       }
 
+      // resume xong reset cờ
       Future.delayed(
         const Duration(seconds: 5),
             () {
@@ -1132,49 +1113,6 @@ localStorage.setItem("APP_RESUME_TIME", Date.now());
     isCheckingAlive = false;
   }
 
-  Future<void> _recoverWebAfterResume() async {
-    try {
-      await controller.runJavaScript("""
-(function(){
-
-  console.log("🔥 iOS WebView resume recovery");
-
-  window.dispatchEvent(new Event("focus"));
-  window.dispatchEvent(new Event("pageshow"));
-  document.dispatchEvent(new Event("visibilitychange"));
-
-  if(window.firebase && firebase.database){
-    try{
-      firebase.database().goOnline();
-    }catch(e){}
-  }
-
-  setTimeout(function(){
-
-    if(typeof reloadCurrentPage === "function"){
-      reloadCurrentPage();
-    }
-
-    if(typeof reloadCommunityCurrentView === "function"){
-      reloadCommunityCurrentView();
-    }
-
-    if(typeof recoverCommunityIfBlank === "function"){
-      recoverCommunityIfBlank();
-    }
-
-    if(typeof apply === "function"){
-      apply();
-    }
-
-  }, 1200);
-
-})();
-""");
-    } catch (e) {
-      debugPrint("Resume recovery JS failed: $e");
-    }
-  }
   // =========================
 // (7.7) CHECK WEBVIEW DIE (FAST + STABLE)
 // =========================
