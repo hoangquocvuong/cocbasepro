@@ -1089,6 +1089,7 @@ class _WebScreenState extends State<WebScreen>
           });
         }
 
+        _recoverWebAfterResume();
         _safeCheckAlive();
       }
 
@@ -1113,6 +1114,49 @@ class _WebScreenState extends State<WebScreen>
     isCheckingAlive = false;
   }
 
+  Future<void> _recoverWebAfterResume() async {
+    try {
+      await controller.runJavaScript("""
+(function(){
+
+  console.log("🔥 iOS WebView resume recovery");
+
+  window.dispatchEvent(new Event("focus"));
+  window.dispatchEvent(new Event("pageshow"));
+  document.dispatchEvent(new Event("visibilitychange"));
+
+  if(window.firebase && firebase.database){
+    try{
+      firebase.database().goOnline();
+    }catch(e){}
+  }
+
+  setTimeout(function(){
+
+    if(typeof reloadCurrentPage === "function"){
+      reloadCurrentPage();
+    }
+
+    if(typeof reloadCommunityCurrentView === "function"){
+      reloadCommunityCurrentView();
+    }
+
+    if(typeof recoverCommunityIfBlank === "function"){
+      recoverCommunityIfBlank();
+    }
+
+    if(typeof apply === "function"){
+      apply();
+    }
+
+  }, 1200);
+
+})();
+""");
+    } catch (e) {
+      debugPrint("Resume recovery JS failed: $e");
+    }
+  }
   // =========================
 // (7.7) CHECK WEBVIEW DIE (FAST + STABLE)
 // =========================
