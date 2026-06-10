@@ -21,6 +21,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 
 import 'package:in_app_review/in_app_review.dart';
 
+
 // =========================
 // (1) FIREBASE BACKGROUND
 // =========================
@@ -561,12 +562,11 @@ class _WebScreenState extends State<WebScreen>
           ],
         ),
 
-        content: const Column(
+        content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-
-            Text(
+            const Text(
               'Unlock Premium Bases Instantly',
               style: TextStyle(
                 fontSize: 18,
@@ -574,52 +574,67 @@ class _WebScreenState extends State<WebScreen>
               ),
             ),
 
-            SizedBox(height: 18),
+            const SizedBox(height: 18),
 
-            Row(
+            const Row(
               children: [
-                Icon(Icons.check_circle,
-                    color: Colors.green,
-                    size: 18),
+                Icon(Icons.check_circle, color: Colors.green, size: 18),
                 SizedBox(width: 8),
-                Expanded(
-                  child: Text('Remove All Ads'),
-                ),
+                Expanded(child: Text('Remove All Ads')),
               ],
             ),
 
-            SizedBox(height: 10),
+            const SizedBox(height: 10),
 
-            Row(
+            const Row(
               children: [
-                Icon(Icons.check_circle,
-                    color: Colors.green,
-                    size: 18),
+                Icon(Icons.check_circle, color: Colors.green, size: 18),
                 SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                      'Unlimited Premium Base Access'),
-                ),
+                Expanded(child: Text('Unlimited Premium Base Access')),
               ],
             ),
 
-            SizedBox(height: 10),
+            const SizedBox(height: 10),
 
-            Row(
+            const Row(
               children: [
-                Icon(Icons.check_circle,
-                    color: Colors.green,
-                    size: 18),
+                Icon(Icons.check_circle, color: Colors.green, size: 18),
                 SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                      'Faster Access, No Waiting'),
-                ),
+                Expanded(child: Text('Faster Access, No Waiting')),
               ],
+            ),
+
+            const SizedBox(height: 20),
+
+            const Text(
+              'Subscriptions automatically renew unless cancelled.',
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey,
+              ),
+            ),
+
+            const SizedBox(height: 12),
+
+            TextButton(
+              onPressed: () async {
+                await launchUrl(
+                  Uri.parse('https://www.cocbasepro.com/p/privacy-policy.html'),
+                );
+              },
+              child: const Text('Privacy Policy'),
+            ),
+
+            TextButton(
+              onPressed: () async {
+                await launchUrl(
+                  Uri.parse('https://www.apple.com/legal/internet-services/itunes/dev/stdeula/'),
+                );
+              },
+              child: const Text('Terms of Use'),
             ),
           ],
         ),
-
         actionsPadding: const EdgeInsets.fromLTRB(
           16,
           0,
@@ -651,12 +666,28 @@ class _WebScreenState extends State<WebScreen>
                     ),
                   ),
 
-                  child: const Text(
-                    '\$6.99\nMonth',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                    ),
+                  child: const Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+
+                      Text(
+                        'Monthly Plan',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 11,
+                        ),
+                      ),
+
+                      SizedBox(height: 2),
+
+                      Text(
+                        '\$6.99 / Month',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -685,6 +716,17 @@ class _WebScreenState extends State<WebScreen>
                   child: const Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+
+                      Text(
+                        'Yearly Plan',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 11,
+                        ),
+                      ),
+
+                      SizedBox(height: 2),
+
                       Text(
                         '\$49.99 / Year',
                         textAlign: TextAlign.center,
@@ -692,7 +734,9 @@ class _WebScreenState extends State<WebScreen>
                           fontWeight: FontWeight.bold,
                         ),
                       ),
+
                       SizedBox(height: 2),
+
                       Text(
                         'Save 40%',
                         textAlign: TextAlign.center,
