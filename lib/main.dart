@@ -471,7 +471,8 @@ class _WebScreenState extends State<WebScreen>
           }
 
           // Mở link premium đang chờ sau khi thanh toán xong
-          if (pendingPremiumBaseLink != null) {
+          if (pendingPremiumBaseLink != null &&
+              pendingPremiumBaseLink!.isNotEmpty) {
             final link = pendingPremiumBaseLink!;
             pendingPremiumBaseLink = null;
 
@@ -1497,6 +1498,35 @@ document.readyState
             children: [
 
               ListTile(
+                leading: const Icon(Icons.forum),
+                title: const Text('Forum'),
+                trailing: unreadCommunity > 0
+                    ? Badge(
+                  label: Text(
+                    unreadCommunity > 99
+                        ? '99+'
+                        : unreadCommunity.toString(),
+                  ),
+                )
+                    : null,
+                onTap: () async {
+                  Navigator.pop(context);
+
+                  showCommunityOpenAd();
+
+                  await controller.runJavaScript("""
+document.querySelector('[data-popup="community"]')?.click();
+""");
+
+                  await Future.delayed(
+                    const Duration(milliseconds: 500),
+                  );
+
+                  await _refreshCommunityBadge();
+                },
+              ),
+
+              ListTile(
                 leading: const Icon(Icons.emoji_events),
                 title: const Text('Top Rankings'),
                 onTap: () async {
@@ -1515,34 +1545,6 @@ document.querySelector('[data-popup="topclans"]')?.click();
                   await controller.runJavaScript("""
 document.querySelector('[data-popup="top"]')?.click();
 """);
-                },
-              ),
-
-              ListTile(
-                leading: const Icon(Icons.forum),
-                title: const Text('Forum'),
-                trailing: unreadCommunity > 0
-                    ? Badge(
-                  label: Text(
-                    unreadCommunity > 99
-                        ? '99+'
-                        : unreadCommunity.toString(),
-                  ),
-                )
-                    : null,
-                onTap: () async {
-                  Navigator.pop(context);
-                  showCommunityOpenAd();
-
-                  await controller.runJavaScript("""
-document.querySelector('[data-popup="community"]')?.click();
-""");
-
-                  await Future.delayed(
-                    const Duration(milliseconds: 500),
-                  );
-
-                  await _refreshCommunityBadge();
                 },
               ),
             ],
@@ -1902,12 +1904,12 @@ document.getElementById('bookmark-target')?.click();
 
         const BottomNavigationBarItem(
           icon: Icon(Icons.workspace_premium),
-          label: 'Premium',
+          label: 'No Ads',
         ),
 
         const BottomNavigationBarItem(
           icon: Icon(Icons.auto_awesome),
-          label: 'Skins',
+          label: 'Skins Hero',
         ),
 
         BottomNavigationBarItem(
