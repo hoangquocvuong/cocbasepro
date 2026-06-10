@@ -1102,6 +1102,7 @@ class _WebScreenState extends State<WebScreen>
 
           // ===== REFRESH BADGE =====
           await _refreshNewsBadge();
+          await _refreshCommunityBadge();
 
 
           // ===== THEME SYNC =====
@@ -1431,6 +1432,39 @@ document.readyState
     }
   }
 
+  Future<void> _refreshCommunityBadge() async {
+
+    try {
+      final result =
+      await controller.runJavaScriptReturningResult("""
+(() => {
+  if(typeof window.getCommunityUnreadCount === 'function'){
+    return window.getCommunityUnreadCount();
+  }
+
+  return Number(window.COMMUNITY_UNREAD_COUNT || 0);
+})();
+""");
+
+      final count =
+          int.tryParse(
+            result.toString().replaceAll(RegExp(r'[^0-9]'), ''),
+          ) ?? 0;
+
+      if(!mounted) return;
+
+      if(count != unreadCommunity){
+        setState(() {
+          unreadCommunity = count;
+        });
+      }
+
+      debugPrint("🔥 community badge refreshed = $unreadCommunity");
+
+    } catch (e) {
+      debugPrint("Community badge refresh error: $e");
+    }
+  }
   // =========================
   // (7.12) DISPOSE
   // =========================
@@ -1785,11 +1819,17 @@ document.querySelector(
           case 5:
             showCommunityOpenAd();
 
+            await _refreshCommunityBadge();
+
             await controller.runJavaScript("""
 document.querySelector(
 '[data-popup="community"]'
 )?.click();
 """);
+
+            await Future.delayed(const Duration(milliseconds: 500));
+            await _refreshCommunityBadge();
+
             break;
         }
       },
