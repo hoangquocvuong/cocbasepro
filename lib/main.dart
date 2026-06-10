@@ -15,7 +15,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
 
 import 'package:google_mobile_ads/google_mobile_ads.dart';
-
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 
@@ -774,7 +774,48 @@ class _WebScreenState extends State<WebScreen>
       ),
     );
   }
-  
+  Future<void> showPremiumPopupAfterAdCancel(String baseLink) async {
+    if (isSubscriber) return;
+    if (!mounted) return;
+
+    final messenger = ScaffoldMessenger.of(context);
+
+    final prefs = await SharedPreferences.getInstance();
+
+    if (!mounted) return;
+
+    const countKey = 'premium_cancel_popup_count';
+    const lastKey = 'premium_cancel_popup_last_time';
+
+    final count = prefs.getInt(countKey) ?? 0;
+    final lastTime = prefs.getInt(lastKey) ?? 0;
+    final now = DateTime.now().millisecondsSinceEpoch;
+
+    final oneDayMs = const Duration(days: 1).inMilliseconds;
+
+    if (count >= 3) {
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text(
+            'You can learn more about Premium anytime from the "No Ads" menu. Sorry for the interruption.',
+          ),
+          duration: Duration(seconds: 4),
+        ),
+      );
+      return;
+    }
+
+    if (lastTime > 0 && now - lastTime < oneDayMs) {
+      return;
+    }
+
+    await prefs.setInt(countKey, count + 1);
+    await prefs.setInt(lastKey, now);
+
+    if (!mounted) return;
+
+    await showPremiumSubscribePopup(baseLink);
+  }
 
   // =========================
 // (7.2) CREATE WEBVIEW
@@ -1031,6 +1072,7 @@ class _WebScreenState extends State<WebScreen>
             }
             if (agree != true) {
               isRewardShowing = false;
+              await showPremiumSubscribePopup(baseLink);
               return NavigationDecision.prevent;
             }
 
@@ -1069,7 +1111,7 @@ class _WebScreenState extends State<WebScreen>
 
                       await openBaseLink();
                     } else {
-                      await showPremiumSubscribePopup(baseLink);
+                      await showPremiumPopupAfterAdCancel(baseLink);
                     }
                   },
                   onAdFailedToShowFullScreenContent: (ad, error) {
