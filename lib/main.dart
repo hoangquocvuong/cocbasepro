@@ -808,26 +808,21 @@ class _WebScreenState extends State<WebScreen>
       ..addJavaScriptChannel(
         'CommunityBadge',
         onMessageReceived: (message) {
-          final newCount = int.tryParse(message.message) ?? 0;
+          final count =
+              int.tryParse(message.message.trim()) ?? 0;
 
-          _communityBadgeDebounce?.cancel();
+          if (!mounted) return;
 
-          _communityBadgeDebounce = Timer(
-            const Duration(milliseconds: 300),
-                () {
-              if (!mounted) return;
+          setState(() {
+            unreadCommunity = count;
+          });
 
-              if (newCount == unreadCommunity) return;
-
-              setState(() {
-                unreadCommunity = newCount;
-              });
-
-              debugPrint("🔥 community badge updated = $unreadCommunity");
-            },
+          debugPrint(
+              "🔥 community badge updated = $unreadCommunity"
           );
         },
       )
+
       ..addJavaScriptChannel(
         'CommunityAd',
         onMessageReceived: (message) {
@@ -1433,36 +1428,39 @@ document.readyState
   }
 
   Future<void> _refreshCommunityBadge() async {
-
     try {
       final result =
       await controller.runJavaScriptReturningResult("""
 (() => {
-  if(typeof window.getCommunityUnreadCount === 'function'){
-    return window.getCommunityUnreadCount();
-  }
-
-  return Number(window.COMMUNITY_UNREAD_COUNT || 0);
+  return String(
+    Number(window.COMMUNITY_UNREAD_COUNT || 0)
+  );
 })();
 """);
 
+      final raw =
+      result
+          .toString()
+          .replaceAll('"', '')
+          .trim();
+
       final count =
-          int.tryParse(
-            result.toString().replaceAll(RegExp(r'[^0-9]'), ''),
-          ) ?? 0;
+          int.tryParse(raw) ?? 0;
 
-      if(!mounted) return;
+      if (!mounted) return;
 
-      if(count != unreadCommunity){
-        setState(() {
-          unreadCommunity = count;
-        });
-      }
+      setState(() {
+        unreadCommunity = count;
+      });
 
-      debugPrint("🔥 community badge refreshed = $unreadCommunity");
+      debugPrint(
+          "🔥 community badge refreshed = $unreadCommunity"
+      );
 
     } catch (e) {
-      debugPrint("Community badge refresh error: $e");
+      debugPrint(
+          "Community badge refresh error: $e"
+      );
     }
   }
   // =========================
@@ -1865,7 +1863,9 @@ document.querySelector(
           icon: Badge(
             isLabelVisible: unreadCommunity > 0,
             label: Text(
-              unreadCommunity > 9 ? '9+' : unreadCommunity.toString(),
+              unreadCommunity > 99
+                  ? '99+'
+                  : unreadCommunity.toString(),
             ),
             child: const Icon(Icons.forum),
           ),
