@@ -547,19 +547,33 @@ class _WebScreenState extends State<WebScreen>
   Future<void> showPremiumSubscribePopup(String baseLink) async {
     if (!mounted) return;
 
+    Widget benefit(String text) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: Row(
+          children: [
+            const Icon(Icons.check_circle, color: Colors.green, size: 18),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                text,
+                style: const TextStyle(fontSize: 14),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     await showDialog(
       context: context,
       builder: (_) => AlertDialog(
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(24),
         ),
-
-        titlePadding: const EdgeInsets.fromLTRB(
-          20,
-          20,
-          10,
-          0,
-        ),
+        titlePadding: const EdgeInsets.fromLTRB(20, 18, 8, 0),
+        contentPadding: const EdgeInsets.fromLTRB(22, 10, 22, 6),
+        actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 18),
 
         title: Row(
           children: [
@@ -568,16 +582,13 @@ class _WebScreenState extends State<WebScreen>
                 '🚀 Go Premium',
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
-                  fontSize: 24,
+                  fontSize: 23,
                 ),
               ),
             ),
-
             IconButton(
               icon: const Icon(Icons.close),
-              onPressed: () {
-                Navigator.pop(context);
-              },
+              onPressed: () => Navigator.pop(context),
             ),
           ],
         ),
@@ -587,86 +598,101 @@ class _WebScreenState extends State<WebScreen>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Unlock Premium Bases Instantly',
+              'Unlock 2000+ Premium Bases Instantly',
               style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
+                fontSize: 17,
+                fontWeight: FontWeight.w700,
               ),
             ),
 
-            const SizedBox(height: 18),
+            const SizedBox(height: 12),
 
-            const Row(
-              children: [
-                Icon(Icons.check_circle, color: Colors.green, size: 18),
-                SizedBox(width: 8),
-                Expanded(child: Text('Remove All Ads')),
-              ],
-            ),
+            benefit('Remove All Ads'),
+            benefit('Unlimited Premium Base Access'),
+            benefit('Faster Access, No Waiting'),
+            benefit('Daily Updated Premium Bases'),
+            benefit('Browse Hero Skins Without Ads'),
 
-            const SizedBox(height: 10),
-
-            const Row(
-              children: [
-                Icon(Icons.check_circle, color: Colors.green, size: 18),
-                SizedBox(width: 8),
-                Expanded(child: Text('Unlimited Premium Base Access')),
-              ],
-            ),
-
-            const SizedBox(height: 10),
-
-            const Row(
-              children: [
-                Icon(Icons.check_circle, color: Colors.green, size: 18),
-                SizedBox(width: 8),
-                Expanded(child: Text('Faster Access, No Waiting')),
-              ],
-            ),
-
-            const SizedBox(height: 20),
+            const SizedBox(height: 6),
 
             const Text(
-              'Subscriptions automatically renew unless cancelled.',
+              'Get unlimited access to premium layouts and exclusive app features.',
               style: TextStyle(
                 fontSize: 12,
                 color: Colors.grey,
               ),
             ),
 
-            const SizedBox(height: 12),
+            const SizedBox(height: 4),
 
-            TextButton(
-              onPressed: () async {
-                await launchUrl(
-                  Uri.parse('https://www.cocbasepro.com/p/privacy-policy.html'),
-                );
-              },
-              child: const Text('Privacy Policy'),
+            const Text(
+              'Subscriptions renew automatically unless cancelled.',
+              style: TextStyle(
+                fontSize: 11,
+                color: Colors.grey,
+              ),
             ),
 
-            TextButton(
-              onPressed: () async {
-                await launchUrl(
-                  Uri.parse('https://www.apple.com/legal/internet-services/itunes/dev/stdeula/'),
-                );
-              },
-              child: const Text('Terms of Use'),
+            const SizedBox(height: 4),
+
+            Row(
+              children: [
+                TextButton(
+                  style: TextButton.styleFrom(
+                    padding: EdgeInsets.zero,
+                    minimumSize: const Size(0, 30),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  onPressed: () async {
+                    await launchUrl(
+                      Uri.parse(
+                        'https://www.cocbasepro.com/p/privacy-policy.html',
+                      ),
+                    );
+                  },
+                  child: const Text(
+                    'Privacy Policy',
+                    style: TextStyle(fontSize: 12),
+                  ),
+                ),
+
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 8),
+                  child: Text(
+                    '|',
+                    style: TextStyle(
+                      color: Colors.grey,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+
+                TextButton(
+                  style: TextButton.styleFrom(
+                    padding: EdgeInsets.zero,
+                    minimumSize: const Size(0, 30),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  onPressed: () async {
+                    await launchUrl(
+                      Uri.parse(
+                        'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/',
+                      ),
+                    );
+                  },
+                  child: const Text(
+                    'Terms of Use',
+                    style: TextStyle(fontSize: 12),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
-        actionsPadding: const EdgeInsets.fromLTRB(
-          16,
-          0,
-          16,
-          20,
-        ),
 
         actions: [
-
           Row(
             children: [
-
               Expanded(
                 child: ElevatedButton(
                   onPressed: () {
@@ -674,38 +700,25 @@ class _WebScreenState extends State<WebScreen>
                     Navigator.pop(context);
                     buyMonthly();
                   },
-
                   style: ElevatedButton.styleFrom(
-                    minimumSize: const Size(
-                      double.infinity,
-                      54,
-                    ),
+                    minimumSize: const Size(double.infinity, 56),
                     shape: RoundedRectangleBorder(
-                      borderRadius:
-                      BorderRadius.circular(14),
+                      borderRadius: BorderRadius.circular(14),
                     ),
                   ),
-
                   child: const Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-
                       Text(
                         'Monthly Plan',
                         textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 11,
-                        ),
+                        style: TextStyle(fontSize: 11),
                       ),
-
                       SizedBox(height: 2),
-
                       Text(
                         '\$6.99 / Month',
                         textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                        ),
+                        style: TextStyle(fontWeight: FontWeight.bold),
                       ),
                     ],
                   ),
@@ -721,42 +734,27 @@ class _WebScreenState extends State<WebScreen>
                     Navigator.pop(context);
                     buyYearly();
                   },
-
                   style: ElevatedButton.styleFrom(
-                    minimumSize: const Size(
-                      double.infinity,
-                      54,
-                    ),
+                    minimumSize: const Size(double.infinity, 56),
                     shape: RoundedRectangleBorder(
-                      borderRadius:
-                      BorderRadius.circular(14),
+                      borderRadius: BorderRadius.circular(14),
                     ),
                   ),
-
                   child: const Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-
                       Text(
                         'Yearly Plan',
                         textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 11,
-                        ),
+                        style: TextStyle(fontSize: 11),
                       ),
-
                       SizedBox(height: 2),
-
                       Text(
                         '\$49.99 / Year',
                         textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                        ),
+                        style: TextStyle(fontWeight: FontWeight.bold),
                       ),
-
                       SizedBox(height: 2),
-
                       Text(
                         'Save 40%',
                         textAlign: TextAlign.center,
@@ -776,6 +774,7 @@ class _WebScreenState extends State<WebScreen>
       ),
     );
   }
+  
 
   // =========================
 // (7.2) CREATE WEBVIEW
@@ -910,6 +909,22 @@ class _WebScreenState extends State<WebScreen>
 
             final cleanUrl =
             Uri.decodeFull(request.url);
+            final pathParts = uri.path
+                .split('/')
+                .where((e) => e.isNotEmpty)
+                .toList();
+
+            final isPremiumProductLink =
+            pathParts.contains('e');
+
+            if (!isPremiumProductLink) {
+              await launchUrl(
+                uri,
+                mode: LaunchMode.externalApplication,
+              );
+
+              return NavigationDecision.prevent;
+            }
 
             final productId =
             extractBuyMeCoffeeId(cleanUrl);
@@ -1909,7 +1924,7 @@ document.getElementById('bookmark-target')?.click();
 
         const BottomNavigationBarItem(
           icon: Icon(Icons.auto_awesome),
-          label: 'Skins Hero',
+          label: 'Skins',
         ),
 
         BottomNavigationBarItem(
