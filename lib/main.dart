@@ -160,6 +160,8 @@ class _WebScreenState extends State<WebScreen>
   bool pageLoaded = false;
   bool minSplashFinished = false;
   int unreadNews = 0;
+  int unreadCommunity = 0;
+  Timer? _communityBadgeDebounce;
   Timer? newsTimer;
   Timer? _badgeDebounce;
   bool appJustResumed = false;
@@ -401,6 +403,7 @@ class _WebScreenState extends State<WebScreen>
     loadRewardedAd();
     loadPremiumMap();
     initPurchases();
+
 
 
 
@@ -784,7 +787,7 @@ class _WebScreenState extends State<WebScreen>
           final newCount = int.tryParse(message.message) ?? 0;
 
           _badgeDebounce?.cancel();
-
+          _communityBadgeDebounce?.cancel();
           _badgeDebounce = Timer(
             const Duration(milliseconds: 300),
                 () {
@@ -797,6 +800,30 @@ class _WebScreenState extends State<WebScreen>
               });
 
               debugPrint("🔥 badge updated = $unreadNews");
+            },
+          );
+        },
+      )
+
+      ..addJavaScriptChannel(
+        'CommunityBadge',
+        onMessageReceived: (message) {
+          final newCount = int.tryParse(message.message) ?? 0;
+
+          _communityBadgeDebounce?.cancel();
+
+          _communityBadgeDebounce = Timer(
+            const Duration(milliseconds: 300),
+                () {
+              if (!mounted) return;
+
+              if (newCount == unreadCommunity) return;
+
+              setState(() {
+                unreadCommunity = newCount;
+              });
+
+              debugPrint("🔥 community badge updated = $unreadCommunity");
             },
           );
         },
@@ -1795,7 +1822,13 @@ document.querySelector(
           label: 'Top',
         ),
         BottomNavigationBarItem(
-          icon: Icon(Icons.forum),
+          icon: Badge(
+            isLabelVisible: unreadCommunity > 0,
+            label: Text(
+              unreadCommunity > 9 ? '9+' : unreadCommunity.toString(),
+            ),
+            child: const Icon(Icons.forum),
+          ),
           label: 'Forum',
         ),
       ],
