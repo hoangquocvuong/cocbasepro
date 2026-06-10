@@ -183,6 +183,10 @@ class _WebScreenState extends State<WebScreen>
   bool rewardStartedForPremium = false;
   int rewardCancelCount = 0;
   int rewardSuccessCount = 0;
+  int heroSkinClickCount = 0;
+
+  DateTime lastHeroSkinAdTime =
+  DateTime.fromMillisecondsSinceEpoch(0);
 
   final InAppPurchase iap = InAppPurchase.instance;
   StreamSubscription<List<PurchaseDetails>>? purchaseSub;
@@ -262,11 +266,46 @@ class _WebScreenState extends State<WebScreen>
               loadInterstitial();
             },
           );
-
+      lastAnyInterstitialAd = now;
       interstitialAd!.show();
       interstitialAd = null;
     }
   }
+
+  bool canShowHeroSkinAd() {
+    final now = DateTime.now();
+
+    if (isSubscriber) return false;
+    if (isRewardShowing) return false;
+    if (interstitialAd == null) return false;
+
+    return now.difference(lastHeroSkinAdTime).inSeconds >= 45;
+  }
+
+  void showHeroSkinAd() {
+    if (!canShowHeroSkinAd()) return;
+
+    lastHeroSkinAdTime = DateTime.now();
+    lastAnyInterstitialAd = DateTime.now();
+
+    interstitialAd!.fullScreenContentCallback =
+        FullScreenContentCallback(
+          onAdDismissedFullScreenContent: (ad) {
+            ad.dispose();
+            interstitialAd = null;
+            loadInterstitial();
+          },
+          onAdFailedToShowFullScreenContent: (ad, error) {
+            ad.dispose();
+            interstitialAd = null;
+            loadInterstitial();
+          },
+        );
+
+    interstitialAd!.show();
+    interstitialAd = null;
+  }
+
   void showCommunityOpenAd() {
     if (!canShowInterstitialNow()) return;
 
@@ -291,29 +330,6 @@ class _WebScreenState extends State<WebScreen>
     interstitialAd = null;
   }
 
-  void showCommunityCloseAd() {
-    if (!canShowInterstitialNow()) return;
-
-    lastCommunityCloseAd = DateTime.now();
-    lastAnyInterstitialAd = DateTime.now();
-
-    interstitialAd!.fullScreenContentCallback =
-        FullScreenContentCallback(
-          onAdDismissedFullScreenContent: (ad) {
-            ad.dispose();
-            interstitialAd = null;
-            loadInterstitial();
-          },
-          onAdFailedToShowFullScreenContent: (ad, error) {
-            ad.dispose();
-            interstitialAd = null;
-            loadInterstitial();
-          },
-        );
-
-    interstitialAd!.show();
-    interstitialAd = null;
-  }
 
   String normalizeBuyMeCoffeeUrl(String url) {
     final uri = Uri.parse(url);
@@ -822,15 +838,23 @@ class _WebScreenState extends State<WebScreen>
           );
         },
       )
-
       ..addJavaScriptChannel(
-        'CommunityAd',
+        'HeroSkinAd',
         onMessageReceived: (message) {
-          if (message.message == 'close') {
-            showCommunityCloseAd();
+
+          if(message.message != "skin_detail_click"){
+            return;
+          }
+
+          heroSkinClickCount++;
+
+          if (heroSkinClickCount >= 5) {
+            heroSkinClickCount = 0;
+            showHeroSkinAd();
           }
         },
       )
+
       ..setNavigationDelegate(_navigation())
 
       ..loadRequest(Uri.parse(currentUrl));
@@ -1463,6 +1487,70 @@ document.readyState
       );
     }
   }
+  void _showMoreMenu() {
+    showModalBottomSheet(
+      context: context,
+      builder: (_) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+
+              ListTile(
+                leading: const Icon(Icons.emoji_events),
+                title: const Text('Top Rankings'),
+                onTap: () async {
+                  Navigator.pop(context);
+                  await controller.runJavaScript("""
+document.querySelector('[data-popup="topclans"]')?.click();
+""");
+                },
+              ),
+
+              ListTile(
+                leading: const Icon(Icons.bar_chart),
+                title: const Text('Stats'),
+                onTap: () async {
+                  Navigator.pop(context);
+                  await controller.runJavaScript("""
+document.querySelector('[data-popup="top"]')?.click();
+""");
+                },
+              ),
+
+              ListTile(
+                leading: const Icon(Icons.forum),
+                title: const Text('Forum'),
+                trailing: unreadCommunity > 0
+                    ? Badge(
+                  label: Text(
+                    unreadCommunity > 99
+                        ? '99+'
+                        : unreadCommunity.toString(),
+                  ),
+                )
+                    : null,
+                onTap: () async {
+                  Navigator.pop(context);
+                  showCommunityOpenAd();
+
+                  await controller.runJavaScript("""
+document.querySelector('[data-popup="community"]')?.click();
+""");
+
+                  await Future.delayed(
+                    const Duration(milliseconds: 500),
+                  );
+
+                  await _refreshCommunityBadge();
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
   // =========================
   // (7.12) DISPOSE
   // =========================
@@ -1769,107 +1857,78 @@ document.querySelectorAll(
 
         switch(index){
 
-        // HOME
           case 0:
             await controller.loadRequest(
               Uri.parse(homeUrl),
             );
             break;
 
-        // NEWS
           case 1:
-            await controller.runJavaScript("""
-document.getElementById(
-'nav-news-btn'
-)?.click();
-""");
+            await showPremiumSubscribePopup('');
             break;
 
-
-        // SAVED
           case 2:
+            showHeroSkinAd();
+
             await controller.runJavaScript("""
-document.getElementById(
-'bookmark-target'
-)?.click();
+document.querySelector('[data-popup="heroskins"]')?.click();
 """);
+
             break;
 
-        // STATS
           case 3:
             await controller.runJavaScript("""
-document.querySelector(
-'[data-popup="top"]'
-)?.click();
+document.getElementById('nav-news-btn')?.click();
 """);
             break;
 
-        // TOP CLANS
           case 4:
             await controller.runJavaScript("""
-document.querySelector(
-'[data-popup="topclans"]'
-)?.click();
+document.getElementById('bookmark-target')?.click();
 """);
             break;
 
-// COMMUNITY
           case 5:
-            showCommunityOpenAd();
-
-            await _refreshCommunityBadge();
-
-            await controller.runJavaScript("""
-document.querySelector(
-'[data-popup="community"]'
-)?.click();
-""");
-
-            await Future.delayed(const Duration(milliseconds: 500));
-            await _refreshCommunityBadge();
-
+            _showMoreMenu();
             break;
         }
       },
 
       items: [
-        BottomNavigationBarItem(
+        const BottomNavigationBarItem(
           icon: Icon(Icons.home),
           label: 'Home',
         ),
+
+        const BottomNavigationBarItem(
+          icon: Icon(Icons.workspace_premium),
+          label: 'Premium',
+        ),
+
+        const BottomNavigationBarItem(
+          icon: Icon(Icons.auto_awesome),
+          label: 'Skins',
+        ),
+
         BottomNavigationBarItem(
           icon: Badge(
             isLabelVisible: unreadNews > 0,
             label: Text(
               unreadNews > 9 ? '9+' : unreadNews.toString(),
             ),
-            child: Icon(Icons.article),
+            child: const Icon(Icons.article),
           ),
           label: 'News',
         ),
-        BottomNavigationBarItem(
+
+        const BottomNavigationBarItem(
           icon: Icon(Icons.bookmark),
           label: 'Saved',
         ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.bar_chart),
-          label: 'Stats',
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.emoji_events),
-          label: 'Top',
-        ),
-        BottomNavigationBarItem(
-          icon: Badge(
-            isLabelVisible: unreadCommunity > 0,
-            label: Text(
-              unreadCommunity > 99
-                  ? '99+'
-                  : unreadCommunity.toString(),
-            ),
-            child: const Icon(Icons.forum),
-          ),
-          label: 'Forum',
+
+        const BottomNavigationBarItem(
+          icon: Icon(Icons.menu),
+          label: 'More',
         ),
       ],
     );
