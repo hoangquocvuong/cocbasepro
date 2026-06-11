@@ -1646,7 +1646,9 @@ document.readyState
                   showCommunityOpenAd();
 
                   await controller.runJavaScript("""
-document.querySelector('[data-popup="community"]')?.click();
+if (typeof openSimple === 'function') {
+  openSimple('community');
+}
 """);
 
                   await Future.delayed(
@@ -1663,7 +1665,9 @@ document.querySelector('[data-popup="community"]')?.click();
                 onTap: () async {
                   Navigator.pop(context);
                   await controller.runJavaScript("""
-document.querySelector('[data-popup="topclans"]')?.click();
+if (typeof openSimple === 'function') {
+  openSimple('topclans');
+}
 """);
                 },
               ),
@@ -1674,7 +1678,9 @@ document.querySelector('[data-popup="topclans"]')?.click();
                 onTap: () async {
                   Navigator.pop(context);
                   await controller.runJavaScript("""
-document.querySelector('[data-popup="top"]')?.click();
+if (typeof openSimple === 'function') {
+  openSimple('top');
+}
 """);
                 },
               ),
