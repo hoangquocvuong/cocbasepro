@@ -468,10 +468,13 @@ class _WebScreenState extends State<WebScreen>
 
           if (mounted) {
             setState(() {});
+          }
+
+          // Chỉ hiện thông báo khi vừa mua mới
+          if (purchase.status == PurchaseStatus.purchased) {
             await showPremiumActivatedDialog();
           }
 
-          // Mở link premium đang chờ sau khi thanh toán xong
           if (pendingPremiumBaseLink != null &&
               pendingPremiumBaseLink!.isNotEmpty) {
             final link = pendingPremiumBaseLink!;
