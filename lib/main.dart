@@ -201,6 +201,7 @@ class _WebScreenState extends State<WebScreen>
   int internalOpenCount = 0;
   int aiFinderFreeUsed = 0;
   static const int aiFinderFreeLimit = 5;
+  bool purchaseStartedByUser = false;
 
   DateTime lastInterstitialTime =
   DateTime.fromMillisecondsSinceEpoch(0);
@@ -590,9 +591,15 @@ class _WebScreenState extends State<WebScreen>
             setState(() {});
           }
 
-          // Chỉ hiện thông báo khi vừa mua mới
-          if (purchase.status == PurchaseStatus.purchased) {
+          if (
+          purchase.status == PurchaseStatus.purchased &&
+              purchaseStartedByUser
+          ) {
+
+            purchaseStartedByUser = false;
+
             await showPremiumActivatedDialog();
+
           }
 
           if (pendingPremiumBaseLink != null &&
@@ -641,33 +648,40 @@ class _WebScreenState extends State<WebScreen>
   ''');
   }
   void buyMonthly() {
-    if (monthlyProduct == null) {
 
+    if (monthlyProduct == null) {
       return;
     }
 
+    purchaseStartedByUser = true;
 
     final purchaseParam =
-    PurchaseParam(productDetails: monthlyProduct!);
+    PurchaseParam(
+      productDetails: monthlyProduct!,
+    );
 
     iap.buyNonConsumable(
       purchaseParam: purchaseParam,
     );
   }
   void buyYearly() {
-    if (yearlyProduct == null) {
 
+    if (yearlyProduct == null) {
       return;
     }
 
+    purchaseStartedByUser = true;
 
     final purchaseParam =
-    PurchaseParam(productDetails: yearlyProduct!);
+    PurchaseParam(
+      productDetails: yearlyProduct!,
+    );
 
     iap.buyNonConsumable(
       purchaseParam: purchaseParam,
     );
   }
+
   Future<void> showPremiumSubscribePopup(String baseLink) async {
     if (!mounted) return;
 
@@ -732,6 +746,7 @@ class _WebScreenState extends State<WebScreen>
             const SizedBox(height: 12),
 
             benefit('Remove All Ads'),
+            benefit('Unlimited AI Image Base Finder'),
             benefit('Unlimited Premium Base Access'),
             benefit('Faster Access, No Waiting'),
             benefit('Daily Updated Premium Bases'),
@@ -928,6 +943,7 @@ class _WebScreenState extends State<WebScreen>
             SizedBox(height: 12),
 
             Text('✓ Remove All Ads'),
+            Text('✓ Unlimited AI Image Base Finder'),
             Text('✓ Unlimited Premium Base Access'),
             Text('✓ Faster Access, No Waiting'),
             Text('✓ Daily Updated Premium Bases'),
@@ -2029,11 +2045,18 @@ document.querySelector('[data-popup="heroskins"]')?.click();
             trackAiFinderAd();
 
             await controller.runJavaScript("""
-if (typeof openFindBasePopup === 'function') {
-  openFindBasePopup();
-} else {
-  alert('Find Base AI coming soon');
-}
+(function(){
+
+  const btn = document.getElementById('nav-ai-btn');
+
+  if(btn){
+    btn.click();
+    return;
+  }
+
+  alert('AI Finder is not available');
+
+})();
 """);
 
             break;
