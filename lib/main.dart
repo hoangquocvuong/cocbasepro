@@ -160,8 +160,7 @@ class _WebScreenState extends State<WebScreen>
   bool pageLoaded = false;
   bool minSplashFinished = false;
   int unreadNews = 0;
-  int unreadCommunity = 0;
-  Timer? _communityBadgeDebounce;
+
   Timer? newsTimer;
   Timer? _badgeDebounce;
   bool appJustResumed = false;
@@ -170,20 +169,20 @@ class _WebScreenState extends State<WebScreen>
   bool firstInternalLoad = true;
   final Set<String> unlockedPremiumLinks = {};
   bool isRewardShowing = false;
+  bool isInterstitialShowing = false;
   DateTime lastRewardTime =
   DateTime.fromMillisecondsSinceEpoch(0);
-  DateTime lastCommunityOpenAd =
-  DateTime.fromMillisecondsSinceEpoch(0);
+
   DateTime lastAnyInterstitialAd =
   DateTime.fromMillisecondsSinceEpoch(0);
 
-  DateTime lastCommunityCloseAd =
-  DateTime.fromMillisecondsSinceEpoch(0);
   bool isSubscriber = false;
   bool rewardStartedForPremium = false;
   int rewardCancelCount = 0;
   int rewardSuccessCount = 0;
   int heroSkinClickCount = 0;
+
+  int aiFinderClickCount = 0;
 
   DateTime lastHeroSkinAdTime =
   DateTime.fromMillisecondsSinceEpoch(0);
@@ -200,6 +199,8 @@ class _WebScreenState extends State<WebScreen>
   bool hasRequestedReview = false;
 
   int internalOpenCount = 0;
+  int aiFinderFreeUsed = 0;
+  static const int aiFinderFreeLimit = 5;
 
   DateTime lastInterstitialTime =
   DateTime.fromMillisecondsSinceEpoch(0);
@@ -208,6 +209,7 @@ class _WebScreenState extends State<WebScreen>
 
     if (isSubscriber) return false;
     if (isRewardShowing) return false;
+    if (isInterstitialShowing) return false;
     if (interstitialAd == null) return false;
 
     return now.difference(lastAnyInterstitialAd).inSeconds >= 90;
@@ -227,23 +229,20 @@ class _WebScreenState extends State<WebScreen>
   void tryShowInterstitial() {
     if (!canShowInterstitialNow()) return;
 
-
     internalOpenCount++;
-    final justWatchedReward =
-        DateTime.now()
-            .difference(lastRewardTime)
-            .inSeconds < 120;
-
-    if (justWatchedReward) return;
 
     final now = DateTime.now();
+
+    final justWatchedReward =
+        now.difference(lastRewardTime).inSeconds < 120;
+
+    if (justWatchedReward) return;
 
     final canShowByCount =
         internalOpenCount >= 4;
 
     final canShowByTime =
         now.difference(lastInterstitialTime).inSeconds >= 90;
-
 
     if (
     canShowByCount &&
@@ -252,21 +251,26 @@ class _WebScreenState extends State<WebScreen>
     ) {
       internalOpenCount = 0;
       lastInterstitialTime = now;
+      lastAnyInterstitialAd = now;
+
+      isInterstitialShowing = true;
 
       interstitialAd!.fullScreenContentCallback =
           FullScreenContentCallback(
             onAdDismissedFullScreenContent: (ad) {
+              isInterstitialShowing = false;
               ad.dispose();
               interstitialAd = null;
               loadInterstitial();
             },
             onAdFailedToShowFullScreenContent: (ad, error) {
+              isInterstitialShowing = false;
               ad.dispose();
               interstitialAd = null;
               loadInterstitial();
             },
           );
-      lastAnyInterstitialAd = now;
+
       interstitialAd!.show();
       interstitialAd = null;
     }
@@ -277,56 +281,137 @@ class _WebScreenState extends State<WebScreen>
 
     if (isSubscriber) return false;
     if (isRewardShowing) return false;
+    if (isInterstitialShowing) return false;
     if (interstitialAd == null) return false;
 
-    return now.difference(lastHeroSkinAdTime).inSeconds >= 45;
+    return now.difference(lastHeroSkinAdTime).inSeconds >= 90;
+  }
+  void trackAiFinderAd() {
+
+    if (isSubscriber) return;
+
+    if (isRewardShowing) return;
+    if (isInterstitialShowing) return;
+
+    aiFinderClickCount++;
+
+    final now = DateTime.now();
+
+    final justWatchedReward =
+        now.difference(lastRewardTime)
+            .inSeconds < 120;
+
+    if (justWatchedReward) return;
+
+    final canShowByCount =
+        aiFinderClickCount >= 5;
+
+    final canShowByTime =
+        now.difference(lastAnyInterstitialAd)
+            .inSeconds >= 90;
+
+    if (
+    canShowByCount &&
+        canShowByTime &&
+        interstitialAd != null
+    ) {
+
+      aiFinderClickCount = 0;
+
+      lastAnyInterstitialAd = now;
+      lastInterstitialTime = now;
+
+      isInterstitialShowing = true;
+
+      interstitialAd!.fullScreenContentCallback =
+          FullScreenContentCallback(
+
+            onAdDismissedFullScreenContent: (ad) {
+              isInterstitialShowing = false;
+
+              ad.dispose();
+
+              interstitialAd = null;
+
+              loadInterstitial();
+
+            },
+
+            onAdFailedToShowFullScreenContent:
+                (ad, error) {
+              isInterstitialShowing = false;
+              ad.dispose();
+
+              interstitialAd = null;
+
+              loadInterstitial();
+
+            },
+          );
+
+      interstitialAd!.show();
+
+      interstitialAd = null;
+    }
+  }
+
+  Future<bool> canUseAiFinder() async {
+    if (isSubscriber) return true;
+
+    final prefs = await SharedPreferences.getInstance();
+
+    aiFinderFreeUsed =
+        prefs.getInt('ai_finder_free_used') ?? 0;
+
+    if (aiFinderFreeUsed >= aiFinderFreeLimit) {
+      await showPremiumSubscribePopup('');
+      return false;
+    }
+
+    aiFinderFreeUsed++;
+
+    await prefs.setInt(
+      'ai_finder_free_used',
+      aiFinderFreeUsed,
+    );
+
+    return true;
   }
 
   void showHeroSkinAd() {
     if (!canShowHeroSkinAd()) return;
 
-    lastHeroSkinAdTime = DateTime.now();
-    lastAnyInterstitialAd = DateTime.now();
+    final now = DateTime.now();
+
+    lastHeroSkinAdTime = now;
+    lastAnyInterstitialAd = now;
+    lastInterstitialTime = now;
+
+    isInterstitialShowing = true;
 
     interstitialAd!.fullScreenContentCallback =
         FullScreenContentCallback(
           onAdDismissedFullScreenContent: (ad) {
+            isInterstitialShowing = false;
+
             ad.dispose();
             interstitialAd = null;
+
             loadInterstitial();
           },
+
           onAdFailedToShowFullScreenContent: (ad, error) {
+            isInterstitialShowing = false;
+
             ad.dispose();
             interstitialAd = null;
+
             loadInterstitial();
           },
         );
 
     interstitialAd!.show();
-    interstitialAd = null;
-  }
 
-  void showCommunityOpenAd() {
-    if (!canShowInterstitialNow()) return;
-
-    lastCommunityOpenAd = DateTime.now();
-    lastAnyInterstitialAd = DateTime.now();
-
-    interstitialAd!.fullScreenContentCallback =
-        FullScreenContentCallback(
-          onAdDismissedFullScreenContent: (ad) {
-            ad.dispose();
-            interstitialAd = null;
-            loadInterstitial();
-          },
-          onAdFailedToShowFullScreenContent: (ad, error) {
-            ad.dispose();
-            interstitialAd = null;
-            loadInterstitial();
-          },
-        );
-
-    interstitialAd!.show();
     interstitialAd = null;
   }
 
@@ -414,11 +499,46 @@ class _WebScreenState extends State<WebScreen>
     _createWebView();
 
     _setupConnectivity();
-    _setupFirebase();
-    loadInterstitial();
-    loadRewardedAd();
-    loadPremiumMap();
-    initPurchases();
+
+    Future.delayed(
+      const Duration(milliseconds: 800),
+          () {
+        if (!mounted) return;
+        loadInterstitial();
+      },
+    );
+
+    Future.delayed(
+      const Duration(seconds: 1),
+          () {
+        if (!mounted) return;
+        loadRewardedAd();
+      },
+    );
+
+    Future.delayed(
+      const Duration(seconds: 1),
+          () {
+        if (!mounted) return;
+        loadPremiumMap();
+      },
+    );
+
+    Future.delayed(
+      const Duration(seconds: 2),
+          () {
+        if (!mounted) return;
+        initPurchases();
+      },
+    );
+
+    Future.delayed(
+      const Duration(seconds: 3),
+          () {
+        if (!mounted) return;
+        _setupFirebase();
+      },
+    );
 
 
 
@@ -426,7 +546,7 @@ class _WebScreenState extends State<WebScreen>
     // THEME WATCHER
     themeTimer = Timer.periodic(
       const Duration(
-        milliseconds: 500,
+        milliseconds: 3,
       ),
           (_) {
         _watchThemeChange();
@@ -918,7 +1038,7 @@ class _WebScreenState extends State<WebScreen>
           final newCount = int.tryParse(message.message) ?? 0;
 
           _badgeDebounce?.cancel();
-          _communityBadgeDebounce?.cancel();
+
           _badgeDebounce = Timer(
             const Duration(milliseconds: 300),
                 () {
@@ -936,23 +1056,6 @@ class _WebScreenState extends State<WebScreen>
         },
       )
 
-      ..addJavaScriptChannel(
-        'CommunityBadge',
-        onMessageReceived: (message) {
-          final count =
-              int.tryParse(message.message.trim()) ?? 0;
-
-          if (!mounted) return;
-
-          setState(() {
-            unreadCommunity = count;
-          });
-
-          debugPrint(
-              "🔥 community badge updated = $unreadCommunity"
-          );
-        },
-      )
       ..addJavaScriptChannel(
         'HeroSkinAd',
         onMessageReceived: (message) {
@@ -1253,7 +1356,6 @@ class _WebScreenState extends State<WebScreen>
 
           // ===== REFRESH BADGE =====
           await _refreshNewsBadge();
-          await _refreshCommunityBadge();
 
 
           // ===== THEME SYNC =====
@@ -1583,42 +1685,6 @@ document.readyState
     }
   }
 
-  Future<void> _refreshCommunityBadge() async {
-    try {
-      final result =
-      await controller.runJavaScriptReturningResult("""
-(() => {
-  return String(
-    Number(window.COMMUNITY_UNREAD_COUNT || 0)
-  );
-})();
-""");
-
-      final raw =
-      result
-          .toString()
-          .replaceAll('"', '')
-          .trim();
-
-      final count =
-          int.tryParse(raw) ?? 0;
-
-      if (!mounted) return;
-
-      setState(() {
-        unreadCommunity = count;
-      });
-
-      debugPrint(
-          "🔥 community badge refreshed = $unreadCommunity"
-      );
-
-    } catch (e) {
-      debugPrint(
-          "Community badge refresh error: $e"
-      );
-    }
-  }
   void _showMoreMenu() {
     showModalBottomSheet(
       context: context,
@@ -1627,43 +1693,44 @@ document.readyState
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-
               ListTile(
-                leading: const Icon(Icons.forum),
-                title: const Text('Forum'),
-                trailing: unreadCommunity > 0
-                    ? Badge(
-                  label: Text(
-                    unreadCommunity > 99
-                        ? '99+'
-                        : unreadCommunity.toString(),
-                  ),
-                )
-                    : null,
+                leading: const Icon(Icons.refresh),
+                title: const Text('Reload'),
                 onTap: () async {
                   Navigator.pop(context);
 
-                  showCommunityOpenAd();
+                  setState(() {
+                    pageLoaded = false;
+                    showResumeOverlay = true;
+                    isInitialLaunch = false;
+                  });
 
-                  await controller.runJavaScript("""
-if (typeof openSimple === 'function') {
-  openSimple('community');
-}
-""");
-
-                  await Future.delayed(
-                    const Duration(milliseconds: 500),
-                  );
-
-                  await _refreshCommunityBadge();
+                  try {
+                    await controller.clearCache();
+                    await controller.reload();
+                  } catch (_) {}
                 },
               ),
 
+              ListTile(
+                leading: const Icon(Icons.bookmark),
+                title: const Text('Saved'),
+                onTap: () async {
+                  Navigator.pop(context);
+
+                  await controller.runJavaScript("""
+if (typeof openSimple === 'function') {
+  openSimple('saved');
+}
+""");
+                },
+              ),
               ListTile(
                 leading: const Icon(Icons.emoji_events),
                 title: const Text('Top Rankings'),
                 onTap: () async {
                   Navigator.pop(context);
+
                   await controller.runJavaScript("""
 if (typeof openSimple === 'function') {
   openSimple('topclans');
@@ -1673,15 +1740,12 @@ if (typeof openSimple === 'function') {
               ),
 
               ListTile(
-                leading: const Icon(Icons.bar_chart),
-                title: const Text('Stats'),
+                leading: const Icon(Icons.workspace_premium),
+                title: const Text('Premium / No Ads'),
                 onTap: () async {
                   Navigator.pop(context);
-                  await controller.runJavaScript("""
-if (typeof openSimple === 'function') {
-  openSimple('top');
-}
-""");
+
+                  await showPremiumSubscribePopup('');
                 },
               ),
             ],
@@ -1705,56 +1769,6 @@ if (typeof openSimple === 'function') {
     themeTimer?.cancel();
     newsTimer?.cancel();
     super.dispose();
-  }
-
-// =========================
-// SETTINGS SHEET
-// =========================
-  void _showSettings() {
-    showModalBottomSheet(
-      context: context,
-      builder: (_) {
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-
-              ListTile(
-                leading:
-                const Icon(Icons.refresh),
-
-                title:
-                const Text('Reload'),
-
-                onTap: () {
-                  controller.reload();
-                  Navigator.pop(context);
-                },
-              ),
-
-              ListTile(
-                leading:
-                const Icon(Icons.star),
-
-                title:
-                const Text('Rate App'),
-
-                onTap: () async {
-                  final review =
-                      InAppReview.instance;
-
-                  if (await review
-                      .isAvailable()) {
-                    await review
-                        .requestReview();
-                  }
-                },
-              ),
-            ],
-          ),
-        );
-      },
-    );
   }
 
   Future<void> _syncNavTheme() async {
@@ -1977,57 +1991,72 @@ document.querySelectorAll(
   }
   Widget _articleNav() {
     return BottomNavigationBar(
-      backgroundColor:
-      navBgColor,
+      backgroundColor: navBgColor,
 
-      selectedItemColor:
-      navIconColor,
+      selectedItemColor: navIconColor,
 
-      unselectedItemColor:
-      navIconColor
-          .withValues(
+      unselectedItemColor: navIconColor.withValues(
         alpha: 0.7,
       ),
 
-      type:
-      BottomNavigationBarType.fixed,
+      type: BottomNavigationBarType.fixed,
 
       onTap: (index) async {
+        switch (index) {
 
-        switch(index){
-
+        // HOME
           case 0:
             await controller.loadRequest(
               Uri.parse(homeUrl),
             );
             break;
 
+        // SKINS
           case 1:
-            await showPremiumSubscribePopup('');
-            break;
-
-          case 2:
             showHeroSkinAd();
 
             await controller.runJavaScript("""
 document.querySelector('[data-popup="heroskins"]')?.click();
 """);
+            break;
+
+        // FIND BASE
+          case 2:
+            final allowed = await canUseAiFinder();
+
+            if (!allowed) return;
+
+            trackAiFinderAd();
+
+            await controller.runJavaScript("""
+if (typeof openFindBasePopup === 'function') {
+  openFindBasePopup();
+} else {
+  alert('Find Base AI coming soon');
+}
+""");
 
             break;
 
+        // NEWS
           case 3:
             await controller.runJavaScript("""
-document.getElementById('nav-news-btn')?.click();
+if (typeof window.openNewsPopup === 'function') {
+  window.openNewsPopup();
+} else {
+  document.getElementById('nav-news-btn')?.click();
+}
 """);
+
+            await Future.delayed(
+              const Duration(milliseconds: 500),
+            );
+
+            await _refreshNewsBadge();
             break;
 
+        // MORE
           case 4:
-            await controller.runJavaScript("""
-document.getElementById('bookmark-target')?.click();
-""");
-            break;
-
-          case 5:
             _showMoreMenu();
             break;
         }
@@ -2040,13 +2069,13 @@ document.getElementById('bookmark-target')?.click();
         ),
 
         const BottomNavigationBarItem(
-          icon: Icon(Icons.workspace_premium),
-          label: 'No Ads',
+          icon: Icon(Icons.auto_awesome),
+          label: 'Skins',
         ),
 
         const BottomNavigationBarItem(
-          icon: Icon(Icons.auto_awesome),
-          label: 'Skins',
+          icon: Icon(Icons.search),
+          label: 'Find Base',
         ),
 
         BottomNavigationBarItem(
@@ -2058,11 +2087,6 @@ document.getElementById('bookmark-target')?.click();
             child: const Icon(Icons.article),
           ),
           label: 'News',
-        ),
-
-        const BottomNavigationBarItem(
-          icon: Icon(Icons.bookmark),
-          label: 'Saved',
         ),
 
         const BottomNavigationBarItem(
