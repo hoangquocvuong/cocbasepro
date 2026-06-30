@@ -158,7 +158,7 @@ class _WebScreenState extends State<WebScreen>
   Timer? themeTimer;
   bool lastDarkMode = false;
   bool pageLoaded = false;
-  bool minSplashFinished = false;
+  bool minSplashFinished = true;
   int unreadNews = 0;
 
   Timer? newsTimer;
@@ -205,7 +205,16 @@ class _WebScreenState extends State<WebScreen>
 
   DateTime lastInterstitialTime =
   DateTime.fromMillisecondsSinceEpoch(0);
-  bool canShowInterstitialNow() {
+  // =========================
+  // (ADS) UNIFIED INTERSTITIAL MANAGER
+  // =========================
+  static const int webNavigationClicksPerAd = 2;
+  static const int aiFinderClicksPerAd = 2;
+  static const int globalInterstitialCooldownSeconds = 45;
+  static const int rewardInterstitialCooldownSeconds = 60;
+  static const int heroSkinAdCooldownSeconds = 45;
+
+  bool _canShowInterstitialBase() {
     final now = DateTime.now();
 
     if (isSubscriber) return false;
@@ -213,7 +222,17 @@ class _WebScreenState extends State<WebScreen>
     if (isInterstitialShowing) return false;
     if (interstitialAd == null) return false;
 
-    return now.difference(lastAnyInterstitialAd).inSeconds >= 90;
+    final justWatchedReward =
+        now.difference(lastRewardTime).inSeconds <
+            rewardInterstitialCooldownSeconds;
+
+    if (justWatchedReward) return false;
+
+    final globalCooldownOk =
+        now.difference(lastAnyInterstitialAd).inSeconds >=
+            globalInterstitialCooldownSeconds;
+
+    return globalCooldownOk;
   }
 
   void showDebug(String text) {
@@ -227,132 +246,85 @@ class _WebScreenState extends State<WebScreen>
     );
   }
 
-  void tryShowInterstitial() {
-    if (!canShowInterstitialNow()) return;
-
-    internalOpenCount++;
+  bool requestInterstitialAd({
+    required String source,
+    bool respectHeroCooldown = false,
+  }) {
+    if (!_canShowInterstitialBase()) return false;
 
     final now = DateTime.now();
 
-    final justWatchedReward =
-        now.difference(lastRewardTime).inSeconds < 120;
+    if (respectHeroCooldown &&
+        now.difference(lastHeroSkinAdTime).inSeconds <
+            heroSkinAdCooldownSeconds) {
+      return false;
+    }
 
-    if (justWatchedReward) return;
+    final ad = interstitialAd;
+    if (ad == null) return false;
 
-    final canShowByCount =
-        internalOpenCount >= 4;
+    lastAnyInterstitialAd = now;
+    lastInterstitialTime = now;
 
-    final canShowByTime =
-        now.difference(lastInterstitialTime).inSeconds >= 90;
+    if (respectHeroCooldown) {
+      lastHeroSkinAdTime = now;
+    }
 
-    if (
-    canShowByCount &&
-        canShowByTime &&
-        interstitialAd != null
-    ) {
+    isInterstitialShowing = true;
+    interstitialAd = null;
+
+    ad.fullScreenContentCallback = FullScreenContentCallback(
+      onAdDismissedFullScreenContent: (ad) {
+        isInterstitialShowing = false;
+        ad.dispose();
+        loadInterstitial();
+      },
+      onAdFailedToShowFullScreenContent: (ad, error) {
+        isInterstitialShowing = false;
+        ad.dispose();
+        loadInterstitial();
+      },
+    );
+
+    ad.show();
+    return true;
+  }
+
+  void tryShowInterstitial() {
+    if (isSubscriber) return;
+
+    internalOpenCount++;
+
+    if (internalOpenCount < webNavigationClicksPerAd) return;
+
+    final shown = requestInterstitialAd(
+      source: 'web_navigation',
+    );
+
+    if (shown) {
       internalOpenCount = 0;
-      lastInterstitialTime = now;
-      lastAnyInterstitialAd = now;
-
-      isInterstitialShowing = true;
-
-      interstitialAd!.fullScreenContentCallback =
-          FullScreenContentCallback(
-            onAdDismissedFullScreenContent: (ad) {
-              isInterstitialShowing = false;
-              ad.dispose();
-              interstitialAd = null;
-              loadInterstitial();
-            },
-            onAdFailedToShowFullScreenContent: (ad, error) {
-              isInterstitialShowing = false;
-              ad.dispose();
-              interstitialAd = null;
-              loadInterstitial();
-            },
-          );
-
-      interstitialAd!.show();
-      interstitialAd = null;
     }
   }
 
   bool canShowHeroSkinAd() {
-    final now = DateTime.now();
-
-    if (isSubscriber) return false;
-    if (isRewardShowing) return false;
-    if (isInterstitialShowing) return false;
-    if (interstitialAd == null) return false;
-
-    return now.difference(lastHeroSkinAdTime).inSeconds >= 90;
+    return _canShowInterstitialBase() &&
+        DateTime.now().difference(lastHeroSkinAdTime).inSeconds >=
+            heroSkinAdCooldownSeconds;
   }
+
   void trackAiFinderAd() {
-
     if (isSubscriber) return;
-
-    if (isRewardShowing) return;
-    if (isInterstitialShowing) return;
 
     aiFinderClickCount++;
 
-    final now = DateTime.now();
+    if (aiFinderClickCount < aiFinderClicksPerAd) return;
 
-    final justWatchedReward =
-        now.difference(lastRewardTime)
-            .inSeconds < 120;
+    final shown = requestInterstitialAd(
+      source: 'ai_finder',
+    );
 
-    if (justWatchedReward) return;
-
-    final canShowByCount =
-        aiFinderClickCount >= 5;
-
-    final canShowByTime =
-        now.difference(lastAnyInterstitialAd)
-            .inSeconds >= 90;
-
-    if (
-    canShowByCount &&
-        canShowByTime &&
-        interstitialAd != null
-    ) {
-
+    if (shown) {
       aiFinderClickCount = 0;
-
-      lastAnyInterstitialAd = now;
-      lastInterstitialTime = now;
-
-      isInterstitialShowing = true;
-
-      interstitialAd!.fullScreenContentCallback =
-          FullScreenContentCallback(
-
-            onAdDismissedFullScreenContent: (ad) {
-              isInterstitialShowing = false;
-
-              ad.dispose();
-
-              interstitialAd = null;
-
-              loadInterstitial();
-
-            },
-
-            onAdFailedToShowFullScreenContent:
-                (ad, error) {
-              isInterstitialShowing = false;
-              ad.dispose();
-
-              interstitialAd = null;
-
-              loadInterstitial();
-
-            },
-          );
-
-      interstitialAd!.show();
-
-      interstitialAd = null;
     }
   }
 
@@ -361,8 +333,7 @@ class _WebScreenState extends State<WebScreen>
 
     final prefs = await SharedPreferences.getInstance();
 
-    aiFinderFreeUsed =
-        prefs.getInt('ai_finder_free_used') ?? 0;
+    aiFinderFreeUsed = prefs.getInt('ai_finder_free_used') ?? 0;
 
     if (aiFinderFreeUsed >= aiFinderFreeLimit) {
       await showPremiumSubscribePopup('');
@@ -380,40 +351,10 @@ class _WebScreenState extends State<WebScreen>
   }
 
   void showHeroSkinAd() {
-    if (!canShowHeroSkinAd()) return;
-
-    final now = DateTime.now();
-
-    lastHeroSkinAdTime = now;
-    lastAnyInterstitialAd = now;
-    lastInterstitialTime = now;
-
-    isInterstitialShowing = true;
-
-    interstitialAd!.fullScreenContentCallback =
-        FullScreenContentCallback(
-          onAdDismissedFullScreenContent: (ad) {
-            isInterstitialShowing = false;
-
-            ad.dispose();
-            interstitialAd = null;
-
-            loadInterstitial();
-          },
-
-          onAdFailedToShowFullScreenContent: (ad, error) {
-            isInterstitialShowing = false;
-
-            ad.dispose();
-            interstitialAd = null;
-
-            loadInterstitial();
-          },
-        );
-
-    interstitialAd!.show();
-
-    interstitialAd = null;
+    requestInterstitialAd(
+      source: 'hero_skins',
+      respectHeroCooldown: true,
+    );
   }
 
 
@@ -502,7 +443,7 @@ class _WebScreenState extends State<WebScreen>
     _setupConnectivity();
 
     Future.delayed(
-      const Duration(milliseconds: 800),
+      const Duration(milliseconds: 300),
           () {
         if (!mounted) return;
         loadInterstitial();
@@ -551,17 +492,6 @@ class _WebScreenState extends State<WebScreen>
       ),
           (_) {
         _watchThemeChange();
-      },
-    );
-
-    Future.delayed(
-      const Duration(milliseconds: 800),
-          () {
-        if (!mounted) return;
-
-        setState(() {
-          minSplashFinished = true;
-        });
       },
     );
 
@@ -1082,7 +1012,7 @@ class _WebScreenState extends State<WebScreen>
 
           heroSkinClickCount++;
 
-          if (heroSkinClickCount >= 5) {
+          if (heroSkinClickCount >= 6) {
             heroSkinClickCount = 0;
             showHeroSkinAd();
           }
@@ -2144,8 +2074,7 @@ if (typeof window.openNewsPopup === 'function') {
         // ======================
         bottomNavigationBar:
         Platform.isIOS &&
-            pageLoaded &&
-            minSplashFinished
+            pageLoaded
             ? (isHomePage
             ? _homeNav()
             : _articleNav())
@@ -2201,28 +2130,12 @@ if (typeof window.openNewsPopup === 'function') {
 
               // WEBVIEW
               SafeArea(
-                child: AnimatedOpacity(
-                  opacity:
-                  (pageLoaded && minSplashFinished)
-                      ? 1
-                      : 0,
-
-                  duration:
-                  const Duration(
-                    milliseconds: 250,
-                  ),
-
-                  child: WebViewWidget(
-                    controller: controller,
-                  ),
+                child: WebViewWidget(
+                  controller: controller,
                 ),
               ),
 
-              // LAUNCHING / RESTORING STATUS
-              if (!pageLoaded || !minSplashFinished || showResumeOverlay)
-                AppStatusOverlay(
-                  isRestore: !isInitialLaunch || showResumeOverlay,
-                ),
+              // Custom splash removed: WebView is shown immediately on launch.
               if (isOffline)
                 Container(
                   width: double.infinity,
