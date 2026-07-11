@@ -1684,7 +1684,7 @@ document.readyState
       barrierColor: Colors.black.withValues(alpha: 0.42),
       builder: (sheetContext) {
         final media = MediaQuery.of(sheetContext);
-        final maxHeight = media.size.height * 0.58;
+        final maxHeight = media.size.height * 0.54;
 
         final panelColor = navBgColor;
         final primaryText = navIconColor;
@@ -1786,38 +1786,27 @@ document.readyState
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        'Explore CocBasePro',
-                        style: TextStyle(
-                          color: primaryText,
-                          fontSize: 17,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                    ),
-                    Material(
-                      color: tileColor,
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: Material(
+                    color: tileColor,
+                    borderRadius: BorderRadius.circular(999),
+                    child: InkWell(
                       borderRadius: BorderRadius.circular(999),
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(999),
-                        onTap: () => Navigator.pop(sheetContext),
-                        child: SizedBox(
-                          width: 34,
-                          height: 34,
-                          child: Icon(
-                            Icons.close_rounded,
-                            size: 19,
-                            color: secondaryText,
-                          ),
+                      onTap: () => Navigator.pop(sheetContext),
+                      child: SizedBox(
+                        width: 32,
+                        height: 32,
+                        child: Icon(
+                          Icons.close_rounded,
+                          size: 18,
+                          color: secondaryText,
                         ),
                       ),
                     ),
-                  ],
+                  ),
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 6),
                 Flexible(
                   child: GridView.count(
                     shrinkWrap: true,
@@ -1881,10 +1870,10 @@ if (typeof window.openSimple === 'function') {
                         },
                       ),
                       tile(
-                        icon: Icons.star_rounded,
-                        label: 'Hero Skins',
+                        icon: Icons.subscriptions_rounded,
+                        label: 'Subscription',
                         action: () async {
-                          await _openSkinsFromAppMenu();
+                          await showPremiumSubscribePopup('');
                         },
                       ),
                       tile(
@@ -2318,7 +2307,9 @@ window.scrollTo({
                   children: [
                     Icon(
                       icon,
-                      color: const Color(0xFFF8FAFC),
+                      color: lastDarkMode
+                          ? const Color(0xFFF8FAFC)
+                          : const Color(0xFF111827),
                       size: 21,
                     ),
                     const SizedBox(height: 3),
@@ -2326,8 +2317,10 @@ window.scrollTo({
                       label,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Color(0xFFF8FAFC),
+                      style: TextStyle(
+                        color: lastDarkMode
+                            ? const Color(0xFFF8FAFC)
+                            : const Color(0xFF111827),
                         fontSize: 9,
                         fontWeight: FontWeight.w800,
                         height: 1,
@@ -2389,25 +2382,24 @@ window.scrollTo({
         height: 58,
         padding: const EdgeInsets.fromLTRB(5, 4, 5, 4),
         decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            begin: Alignment.bottomCenter,
-            end: Alignment.topCenter,
-            colors: [
-              Color(0xF007111F),
-              Color(0xD107111F),
-            ],
-          ),
-          border: const Border(
+          color: lastDarkMode
+              ? const Color(0xF007111F)
+              : Colors.white.withValues(alpha: 0.96),
+          border: Border(
             top: BorderSide(
-              color: Color(0x1FFFFFFF),
+              color: lastDarkMode
+                  ? Colors.white.withValues(alpha: 0.10)
+                  : Colors.black.withValues(alpha: 0.08),
               width: 1,
             ),
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.20),
-              blurRadius: 20,
-              offset: const Offset(0, -7),
+              color: Colors.black.withValues(
+                alpha: lastDarkMode ? 0.20 : 0.10,
+              ),
+              blurRadius: 18,
+              offset: const Offset(0, -6),
             ),
           ],
         ),
