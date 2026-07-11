@@ -1285,6 +1285,13 @@ class _WebScreenState extends State<WebScreen>
         onPageFinished: (url) async {
           await syncPremiumToWebView();
 
+          if (Platform.isIOS) {
+            await controller.runJavaScript("""
+document.documentElement.classList.add('cocbase-native-ios');
+document.body?.classList.add('cocbase-native-ios');
+""");
+          }
+
           isReloading = false;
 
           setState(() {
@@ -1834,221 +1841,317 @@ if (typeof openSimple === 'function') {
 
 
 
-  Widget _homeNav() {
-    return BottomNavigationBar(
-      backgroundColor:
-      navBgColor,
+  // =========================
+  // (7.12A) SYNCED APP MENU
+  // Same order and visual hierarchy as the web menu:
+  // Home · Bases · AI Finder · Skins · More
+  // =========================
 
-      selectedItemColor:
-      navIconColor,
-
-      unselectedItemColor:
-      navIconColor
-          .withValues(
-        alpha: 0.7,
-      ),
-
-      type:
-      BottomNavigationBarType.fixed,
-
-      onTap: (index) async {
-
-        switch(index){
-
-        // HOME
-          case 0:
-            await controller
-                .runJavaScript("""
+  Future<void> _openHomeFromAppMenu() async {
+    if (currentUrl == homeUrl || currentUrl == '$homeUrl/') {
+      await controller.runJavaScript("""
 window.scrollTo({
-  top:0,
-  behavior:'smooth'
+  top: 0,
+  behavior: 'smooth'
 });
 """);
-            break;
+      return;
+    }
 
-        // EVENT
-          case 1:
-            await controller
-                .runJavaScript("""
-openEventPopup();
-""");
-            break;
-
-        // TH
-          case 2:
-            await controller
-                .runJavaScript("""
-document.querySelectorAll(
-'.bottom-nav .nav-item'
-)[2]?.click();
-""");
-            break;
-
-        // BH
-          case 3:
-            await controller
-                .runJavaScript("""
-document.querySelectorAll(
-'.bottom-nav .nav-item'
-)[3]?.click();
-""");
-            break;
-
-        // CH
-          case 4:
-            await controller
-                .runJavaScript("""
-document.querySelectorAll(
-'.bottom-nav .nav-item'
-)[4]?.click();
-""");
-            break;
-        }
-      },
-
-      items: const [
-
-        BottomNavigationBarItem(
-          icon: Icon(Icons.home),
-          label: 'Home',
-        ),
-
-        BottomNavigationBarItem(
-          icon: Icon(Icons.event),
-          label: 'Event',
-        ),
-
-        BottomNavigationBarItem(
-          icon: Icon(Icons.castle),
-          label: 'TH',
-        ),
-
-        BottomNavigationBarItem(
-          icon: Icon(Icons.build),
-          label: 'BH',
-        ),
-
-        BottomNavigationBarItem(
-          icon: Icon(Icons.shield),
-          label: 'CH',
-        ),
-      ],
-    );
-  }
-  Widget _articleNav() {
-    return BottomNavigationBar(
-      backgroundColor: navBgColor,
-
-      selectedItemColor: navIconColor,
-
-      unselectedItemColor: navIconColor.withValues(
-        alpha: 0.7,
-      ),
-
-      type: BottomNavigationBarType.fixed,
-
-      onTap: (index) async {
-        switch (index) {
-
-        // HOME
-          case 0:
-            await controller.loadRequest(
-              Uri.parse(homeUrl),
-            );
-            break;
-
-        // SKINS
-          case 1:
-            showHeroSkinAd();
-
-            await controller.runJavaScript("""
-document.querySelector('[data-popup="heroskins"]')?.click();
-""");
-            break;
-
-        // FIND BASE
-          case 2:
-            final allowed = await canUseAiFinder();
-
-            if (!allowed) return;
-
-            trackAiFinderAd();
-
-            await controller.runJavaScript("""
-(function(){
-
-  const btn = document.getElementById('nav-ai-btn');
-
-  if(btn){
-    btn.click();
-    return;
+    currentUrl = homeUrl;
+    await controller.loadRequest(Uri.parse(homeUrl));
   }
 
-  alert('AI Finder is not available');
+  Future<void> _openBasesFromAppMenu() async {
+    const basesUrl = 'https://www.cocbasepro.com/p/coc-bases.html';
 
+    if (currentUrl == basesUrl) {
+      await controller.runJavaScript("""
+window.scrollTo({
+  top: 0,
+  behavior: 'smooth'
+});
+""");
+      return;
+    }
+
+    currentUrl = basesUrl;
+    await controller.loadRequest(Uri.parse(basesUrl));
+  }
+
+  Future<void> _openAiFinderFromAppMenu() async {
+    /*
+     * AI and Premium are intentionally separated.
+     *
+     * Premium is shown only when canUseAiFinder() returns false because
+     * the real free-search limit has been reached. A normal AI tap never
+     * calls showPremiumSubscribePopup() directly.
+     */
+    final allowed = await canUseAiFinder();
+
+    if (!allowed) return;
+
+    trackAiFinderAd();
+
+    try {
+      final result = await controller.runJavaScriptReturningResult("""
+(function () {
+  try {
+    if (typeof window.closeMobileMore === 'function') {
+      window.closeMobileMore();
+    }
+
+    if (typeof window.openAIFinder === 'function') {
+      window.openAIFinder();
+      return 'openAIFinder';
+    }
+
+    if (typeof window.openAIFinderPopup === 'function') {
+      window.openAIFinderPopup();
+      return 'openAIFinderPopup';
+    }
+
+    if (typeof window.CBPMenuOpenAIFinder === 'function') {
+      window.CBPMenuOpenAIFinder();
+      return 'CBPMenuOpenAIFinder';
+    }
+
+    const button =
+      document.getElementById('cbp-ai-finder-btn-v3') ||
+      document.querySelector('[data-cbp-action="open-ai-finder"]');
+
+    if (button) {
+      button.click();
+      return 'menu-button';
+    }
+
+    return 'not-found';
+  } catch (error) {
+    return 'error:' + String(error);
+  }
 })();
 """);
 
-            break;
+      final message = result.toString();
 
-        // NEWS
-          case 3:
-            await controller.runJavaScript("""
-if (typeof window.openNewsPopup === 'function') {
-  window.openNewsPopup();
-} else {
-  document.getElementById('nav-news-btn')?.click();
-}
-""");
-
-            await Future.delayed(
-              const Duration(milliseconds: 500),
-            );
-
-            await _refreshNewsBadge();
-            break;
-
-        // MORE
-          case 4:
-            _showMoreMenu();
-            break;
-        }
-      },
-
-      items: [
-        const BottomNavigationBarItem(
-          icon: Icon(Icons.home),
-          label: 'Home',
-        ),
-
-        const BottomNavigationBarItem(
-          icon: Icon(Icons.auto_awesome),
-          label: 'Skins',
-        ),
-
-        const BottomNavigationBarItem(
-          icon: Icon(Icons.search),
-          label: 'Find Base',
-        ),
-
-        BottomNavigationBarItem(
-          icon: Badge(
-            isLabelVisible: unreadNews > 0,
-            label: Text(
-              unreadNews > 9 ? '9+' : unreadNews.toString(),
-            ),
-            child: const Icon(Icons.article),
+      if (message.contains('not-found') && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('AI Finder is not available on this page.'),
           ),
-          label: 'News',
-        ),
+        );
+      }
+    } catch (error) {
+      if (!mounted) return;
 
-        const BottomNavigationBarItem(
-          icon: Icon(Icons.menu),
-          label: 'More',
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Cannot open AI Finder: $error'),
         ),
-      ],
+      );
+    }
+  }
+
+  Future<void> _openSkinsFromAppMenu() async {
+    showHeroSkinAd();
+
+    await controller.runJavaScript("""
+(function () {
+  if (typeof window.openSimple === 'function') {
+    window.openSimple('heroskins');
+    return;
+  }
+
+  document.querySelector('[data-popup="heroskins"]')?.click();
+})();
+""");
+  }
+
+  Widget _syncedMenuIcon({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+    bool isCenterAi = false,
+  }) {
+    final iconColor = isCenterAi
+        ? Colors.white
+        : navIconColor.withValues(alpha: 0.88);
+
+    final labelColor = isCenterAi
+        ? Colors.white
+        : navIconColor.withValues(alpha: 0.78);
+
+    if (isCenterAi) {
+      return Expanded(
+        child: Transform.translate(
+          offset: const Offset(0, -12),
+          child: Semantics(
+            button: true,
+            label: label,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(22),
+              onTap: onTap,
+              child: Container(
+                height: 64,
+                margin: const EdgeInsets.symmetric(horizontal: 2),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(22),
+                  gradient: const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Color(0xFF0EA5E9),
+                      Color(0xFF2563EB),
+                    ],
+                  ),
+                  border: Border.all(
+                    color: navBgColor,
+                    width: 5,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF2563EB)
+                          .withValues(alpha: 0.38),
+                      blurRadius: 22,
+                      offset: const Offset(0, 10),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      icon,
+                      color: iconColor,
+                      size: 27,
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: labelColor,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                        height: 1,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Expanded(
+      child: Semantics(
+        button: true,
+        label: label,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: onTap,
+          child: SizedBox(
+            height: 54,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  icon,
+                  color: iconColor,
+                  size: 23,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: labelColor,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                    height: 1,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
+
+  Widget _syncedAppMenu() {
+    return SafeArea(
+      top: false,
+      minimum: const EdgeInsets.fromLTRB(10, 0, 10, 8),
+      child: Material(
+        color: Colors.transparent,
+        child: Container(
+          height: 70,
+          padding: const EdgeInsets.fromLTRB(7, 7, 7, 5),
+          decoration: BoxDecoration(
+            color: navBgColor,
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(
+              color: lastDarkMode
+                  ? Colors.white.withValues(alpha: 0.10)
+                  : Colors.black.withValues(alpha: 0.08),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.22),
+                blurRadius: 30,
+                offset: const Offset(0, 13),
+              ),
+            ],
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              _syncedMenuIcon(
+                icon: Icons.home_rounded,
+                label: 'Home',
+                onTap: () {
+                  _openHomeFromAppMenu();
+                },
+              ),
+              _syncedMenuIcon(
+                icon: Icons.grid_view_rounded,
+                label: 'Bases',
+                onTap: () {
+                  _openBasesFromAppMenu();
+                },
+              ),
+              _syncedMenuIcon(
+                icon: Icons.manage_search_rounded,
+                label: 'AI Finder',
+                isCenterAi: true,
+                onTap: () {
+                  _openAiFinderFromAppMenu();
+                },
+              ),
+              _syncedMenuIcon(
+                icon: Icons.auto_awesome_rounded,
+                label: 'Skins',
+                onTap: () {
+                  _openSkinsFromAppMenu();
+                },
+              ),
+              _syncedMenuIcon(
+                icon: Icons.more_horiz_rounded,
+                label: 'More',
+                onTap: _showMoreMenu,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   // =========================
 // (7.13) UI
 // =========================
@@ -2073,11 +2176,8 @@ if (typeof window.openNewsPopup === 'function') {
         // NATIVE BOTTOM NAV
         // ======================
         bottomNavigationBar:
-        Platform.isIOS &&
-            pageLoaded
-            ? (isHomePage
-            ? _homeNav()
-            : _articleNav())
+        Platform.isIOS && pageLoaded
+            ? _syncedAppMenu()
             : null,
         // ======================
         // BODY
@@ -2130,8 +2230,13 @@ if (typeof window.openNewsPopup === 'function') {
 
               // WEBVIEW
               SafeArea(
-                child: WebViewWidget(
-                  controller: controller,
+                child: Padding(
+                  padding: EdgeInsets.only(
+                    bottom: Platform.isIOS && pageLoaded ? 4 : 0,
+                  ),
+                  child: WebViewWidget(
+                    controller: controller,
+                  ),
                 ),
               ),
 
