@@ -1026,6 +1026,19 @@ class _WebScreenState extends State<WebScreen>
       )
 
       ..addJavaScriptChannel(
+        'AppTheme',
+        onMessageReceived: (message) {
+          final mode = message.message.trim().toLowerCase();
+
+          if (mode == 'dark') {
+            _applyNativeTheme(true);
+          } else if (mode == 'light') {
+            _applyNativeTheme(false);
+          }
+        },
+      )
+
+      ..addJavaScriptChannel(
         'HeroSkinAd',
         onMessageReceived: (message) {
 
@@ -1335,6 +1348,7 @@ document.body?.classList.add('cocbase-native-ios');
 
 
           // ===== THEME SYNC =====
+          await _installWebThemeObserver();
           await _syncNavTheme();
 
           // ===== REVIEW =====
@@ -1942,121 +1956,218 @@ if (typeof window.openSimple === 'function') {
     super.dispose();
   }
 
+  void _applyNativeTheme(bool isDark) {
+    if (!mounted) return;
+
+    if (lastDarkMode == isDark &&
+        ((isDark && navBgColor == const Color(0xFF0F172A)) ||
+            (!isDark && navBgColor != const Color(0xFF0F172A)))) {
+      return;
+    }
+
+    lastDarkMode = isDark;
+
+    final background = isDark
+        ? const Color(0xFF0F172A)
+        : Colors.white.withValues(alpha: 0.96);
+
+    final foreground = isDark
+        ? Colors.white.withValues(alpha: 0.92)
+        : const Color(0xFF111827);
+
+    setState(() {
+      navBgColor = background;
+      navIconColor = foreground;
+    });
+
+    SystemChrome.setSystemUIOverlayStyle(
+      SystemUiOverlayStyle(
+        statusBarColor: isDark
+            ? const Color(0xFF0F172A)
+            : const Color(0xFFF8FAFC),
+        statusBarIconBrightness:
+        isDark ? Brightness.light : Brightness.dark,
+        statusBarBrightness:
+        isDark ? Brightness.dark : Brightness.light,
+        systemNavigationBarColor: isDark
+            ? const Color(0xFF050505)
+            : const Color(0xFFF8FAFC),
+        systemNavigationBarIconBrightness:
+        isDark ? Brightness.light : Brightness.dark,
+      ),
+    );
+  }
+
+  Future<void> _installWebThemeObserver() async {
+    try {
+      await controller.runJavaScript("""
+(function () {
+  if (window.__cocbaseThemeObserverInstalled) {
+    if (typeof window.__cocbaseSendTheme === 'function') {
+      window.__cocbaseSendTheme();
+    }
+    return;
+  }
+
+  window.__cocbaseThemeObserverInstalled = true;
+
+  function resolveTheme() {
+    const htmlMode =
+      document.documentElement.getAttribute('data-mode');
+
+    const bodyMode =
+      document.body &&
+      document.body.getAttribute('data-mode');
+
+    const storedMode =
+      localStorage.getItem('mode') ||
+      localStorage.getItem('theme') ||
+      localStorage.getItem('darkMode');
+
+    if (htmlMode === 'light' || bodyMode === 'light') {
+      return 'light';
+    }
+
+    if (htmlMode === 'dark' || bodyMode === 'dark') {
+      return 'dark';
+    }
+
+    if (storedMode === 'light') {
+      return 'light';
+    }
+
+    if (storedMode === 'dark' || storedMode === 'true') {
+      return 'dark';
+    }
+
+    return window.matchMedia('(prefers-color-scheme: dark)').matches
+      ? 'dark'
+      : 'light';
+  }
+
+  window.__cocbaseSendTheme = function () {
+    const mode = resolveTheme();
+
+    if (window.AppTheme &&
+        typeof window.AppTheme.postMessage === 'function') {
+      window.AppTheme.postMessage(mode);
+    }
+  };
+
+  const observer = new MutationObserver(function () {
+    window.__cocbaseSendTheme();
+  });
+
+  observer.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ['data-mode', 'class']
+  });
+
+  if (document.body) {
+    observer.observe(document.body, {
+      attributes: true,
+      attributeFilter: ['data-mode', 'class']
+    });
+  }
+
+  const media = window.matchMedia('(prefers-color-scheme: dark)');
+
+  if (typeof media.addEventListener === 'function') {
+    media.addEventListener('change', window.__cocbaseSendTheme);
+  }
+
+  window.addEventListener('storage', window.__cocbaseSendTheme);
+  document.addEventListener('click', function () {
+    setTimeout(window.__cocbaseSendTheme, 80);
+    setTimeout(window.__cocbaseSendTheme, 300);
+  }, true);
+
+  window.__cocbaseSendTheme();
+})();
+""");
+    } catch (e) {
+      debugPrint('Theme observer error: $e');
+    }
+  }
+
   Future<void> _syncNavTheme() async {
     try {
-
       final result =
-      await controller
-          .runJavaScriptReturningResult("""
-(() => {
+      await controller.runJavaScriptReturningResult("""
+(function () {
+  const htmlMode =
+    document.documentElement.getAttribute('data-mode');
 
-  // kiểm tra mode thật của blog
-  const mode =
-      document.documentElement
-          .getAttribute('data-mode') ||
-      document.body
-          .getAttribute('data-mode');
+  const bodyMode =
+    document.body &&
+    document.body.getAttribute('data-mode');
 
-  // fallback theo system
-  const prefersDark =
-      window.matchMedia(
-        '(prefers-color-scheme: dark)'
-      ).matches;
+  const storedMode =
+    localStorage.getItem('mode') ||
+    localStorage.getItem('theme') ||
+    localStorage.getItem('darkMode');
 
-  const isDark =
-      mode === 'dark'
-      || (!mode && prefersDark);
+  if (htmlMode === 'light' || bodyMode === 'light') {
+    return 'light';
+  }
 
-  return isDark ? 'dark' : 'light';
+  if (htmlMode === 'dark' || bodyMode === 'dark') {
+    return 'dark';
+  }
+
+  if (storedMode === 'light') {
+    return 'light';
+  }
+
+  if (storedMode === 'dark' || storedMode === 'true') {
+    return 'dark';
+  }
+
+  return window.matchMedia('(prefers-color-scheme: dark)').matches
+    ? 'dark'
+    : 'light';
 })();
 """);
 
-      final isDark =
-      result
+      final mode = result
           .toString()
-          .contains('dark');
+          .replaceAll('"', '')
+          .trim()
+          .toLowerCase();
 
-      if (!mounted) return;
-
-      setState(() {
-
-        // giống website
-        navBgColor =
-        isDark
-            ? const Color(0xFF0F172A)
-            : Colors.white
-            .withValues(alpha: 0.92);
-
-        navIconColor =
-        isDark
-            ? Colors.white70
-            : Colors.black87;
-      });
-
+      _applyNativeTheme(mode == 'dark');
     } catch (e) {
-      debugPrint(
-        'Theme sync error: $e',
-      );
+      debugPrint('Theme sync error: $e');
     }
   }
 
   Future<void> _watchThemeChange() async {
     try {
-
       final result =
-      await controller
-          .runJavaScriptReturningResult("""
-(() => {
-
+      await controller.runJavaScriptReturningResult("""
+(function () {
   const mode =
-      document.documentElement
-          .getAttribute('data-mode') ||
-      document.body
-          .getAttribute('data-mode');
+    document.documentElement.getAttribute('data-mode') ||
+    (document.body && document.body.getAttribute('data-mode'));
 
-  const prefersDark =
-      window.matchMedia(
-        '(prefers-color-scheme: dark)'
-      ).matches;
+  if (mode === 'light') return 'light';
+  if (mode === 'dark') return 'dark';
 
-  const isDark =
-      mode === 'dark'
-      || (!mode && prefersDark);
-
-  return isDark;
+  return window.matchMedia('(prefers-color-scheme: dark)').matches
+    ? 'dark'
+    : 'light';
 })();
 """);
 
-      final isDark =
-      result
+      final mode = result
           .toString()
-          .contains('true');
+          .replaceAll('"', '')
+          .trim()
+          .toLowerCase();
 
-      // chỉ update khi đổi mode
-      if (isDark != lastDarkMode &&
-          mounted) {
-
-        lastDarkMode = isDark;
-
-        setState(() {
-          navBgColor =
-          isDark
-              ? const Color(0xFF0F172A)
-              : Colors.white
-              .withValues(
-            alpha: 0.92,
-          );
-
-          navIconColor =
-          isDark
-              ? Colors.white70
-              : Colors.black87;
-        });
-      }
-
+      _applyNativeTheme(mode == 'dark');
     } catch (_) {}
   }
-
 
 
   // =========================
@@ -2363,7 +2474,9 @@ window.scrollTo({
 
       child: Scaffold(
         backgroundColor:
-        const Color(0xFF050505),
+        lastDarkMode
+            ? const Color(0xFF050505)
+            : const Color(0xFFF8FAFC),
 
         // ======================
         // NATIVE BOTTOM NAV
@@ -2379,26 +2492,22 @@ window.scrollTo({
 // BODY
 // ======================
         body: AnnotatedRegion<SystemUiOverlayStyle>(
-          value: const SystemUiOverlayStyle(
-
-            // TOP SAFE AREA
-            statusBarColor:
-            Color(0xFF101A08),
-
-            // ANDROID ICON
-            statusBarIconBrightness:
-            Brightness.light,
-
-            // IOS ICON
-            statusBarBrightness:
-            Brightness.dark,
-
-            // NAV BAR
-            systemNavigationBarColor:
-            Color(0xFF050505),
-
-            systemNavigationBarIconBrightness:
-            Brightness.light,
+          value: SystemUiOverlayStyle(
+            statusBarColor: lastDarkMode
+                ? const Color(0xFF0F172A)
+                : const Color(0xFFF8FAFC),
+            statusBarIconBrightness: lastDarkMode
+                ? Brightness.light
+                : Brightness.dark,
+            statusBarBrightness: lastDarkMode
+                ? Brightness.dark
+                : Brightness.light,
+            systemNavigationBarColor: lastDarkMode
+                ? const Color(0xFF050505)
+                : const Color(0xFFF8FAFC),
+            systemNavigationBarIconBrightness: lastDarkMode
+                ? Brightness.light
+                : Brightness.dark,
           ),
 
           child: Stack(
@@ -2415,8 +2524,9 @@ window.scrollTo({
                     .top,
 
                 child: Container(
-                  color:
-                  const Color(0xFF1E88F0),
+                  color: lastDarkMode
+                      ? const Color(0xFF0F172A)
+                      : const Color(0xFFF8FAFC),
                 ),
               ),
 
