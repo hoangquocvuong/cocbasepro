@@ -1323,8 +1323,51 @@ class _WebScreenState extends State<WebScreen>
 
           if (Platform.isIOS) {
             await controller.runJavaScript("""
-document.documentElement.classList.add('cocbase-native-ios');
-document.body?.classList.add('cocbase-native-ios');
+(function () {
+  document.documentElement.classList.add(
+    'ios-app-mode',
+    'cocbase-native-ios'
+  );
+
+  if (document.body) {
+    document.body.classList.add(
+      'ios-app-mode',
+      'cocbase-native-ios'
+    );
+  }
+
+  var style = document.getElementById(
+    'cocbase-ios-native-menu-hide'
+  );
+
+  if (!style) {
+    style = document.createElement('style');
+    style.id = 'cocbase-ios-native-menu-hide';
+    style.textContent = `
+      .bottom-nav,
+      #mobile-nav,
+      #mobile-more-sheet,
+      #coc-more-sheet {
+        display: none !important;
+        visibility: hidden !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
+        width: 0 !important;
+        height: 0 !important;
+        min-height: 0 !important;
+        max-height: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        overflow: hidden !important;
+      }
+
+      body {
+        padding-bottom: 0 !important;
+      }
+    `;
+    document.head.appendChild(style);
+  }
+})();
 """);
           }
 
@@ -2388,20 +2431,11 @@ window.scrollTo({
           border: Border(
             top: BorderSide(
               color: lastDarkMode
-                  ? Colors.white.withValues(alpha: 0.10)
-                  : Colors.black.withValues(alpha: 0.08),
-              width: 1,
+                  ? Colors.white.withValues(alpha: 0.06)
+                  : Colors.black.withValues(alpha: 0.05),
+              width: 0.5,
             ),
           ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(
-                alpha: lastDarkMode ? 0.20 : 0.10,
-              ),
-              blurRadius: 18,
-              offset: const Offset(0, -6),
-            ),
-          ],
         ),
         child: Material(
           color: Colors.transparent,
@@ -2524,14 +2558,13 @@ window.scrollTo({
 
 
               // WEBVIEW
+              // Scaffold already places the body directly above the native
+              // bottomNavigationBar. Do not add another bottom SafeArea or
+              // padding here, otherwise a visible strip appears above the menu.
               SafeArea(
-                child: Padding(
-                  padding: EdgeInsets.only(
-                    bottom: Platform.isIOS && pageLoaded ? 4 : 0,
-                  ),
-                  child: WebViewWidget(
-                    controller: controller,
-                  ),
+                bottom: false,
+                child: WebViewWidget(
+                  controller: controller,
                 ),
               ),
 
