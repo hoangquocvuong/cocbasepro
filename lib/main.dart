@@ -158,6 +158,7 @@ class _WebScreenState extends State<WebScreen>
   Timer? themeTimer;
   bool lastDarkMode = false;
   bool pageLoaded = false;
+  bool isMoreMenuOpen = false;
   bool minSplashFinished = true;
   int unreadNews = 0;
 
@@ -1718,8 +1719,14 @@ document.readyState
     }
   }
 
-  void _showMoreMenu() {
-    showModalBottomSheet(
+  Future<void> _showMoreMenu() async {
+    if (isMoreMenuOpen) return;
+
+    setState(() {
+      isMoreMenuOpen = true;
+    });
+
+    await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
@@ -1727,7 +1734,7 @@ document.readyState
       barrierColor: Colors.black.withValues(alpha: 0.42),
       builder: (sheetContext) {
         final media = MediaQuery.of(sheetContext);
-        final maxHeight = media.size.height * 0.54;
+        final maxHeight = media.size.height * 0.68;
 
         final panelColor = navBgColor;
         final primaryText = navIconColor;
@@ -1812,8 +1819,8 @@ document.readyState
           child: Container(
             width: double.infinity,
             constraints: BoxConstraints(maxHeight: maxHeight),
-            margin: const EdgeInsets.fromLTRB(10, 0, 10, 8),
-            padding: const EdgeInsets.fromLTRB(13, 11, 13, 13),
+            margin: const EdgeInsets.fromLTRB(10, 0, 10, 6),
+            padding: const EdgeInsets.fromLTRB(13, 9, 13, 11),
             decoration: BoxDecoration(
               color: panelColor,
               borderRadius: BorderRadius.circular(21),
@@ -1857,7 +1864,7 @@ document.readyState
                     crossAxisCount: 3,
                     crossAxisSpacing: 8,
                     mainAxisSpacing: 8,
-                    childAspectRatio: 1.06,
+                    childAspectRatio: 1.12,
                     children: [
                       tile(
                         icon: Icons.crop_square_rounded,
@@ -1969,6 +1976,12 @@ if (typeof window.openSimple === 'function') {
         );
       },
     );
+
+    if (mounted) {
+      setState(() {
+        isMoreMenuOpen = false;
+      });
+    }
   }
 
   // =========================
@@ -2508,7 +2521,9 @@ window.scrollTo({
         // NATIVE BOTTOM NAV
         // ======================
         bottomNavigationBar:
-        Platform.isIOS && pageLoaded
+        Platform.isIOS &&
+            pageLoaded &&
+            !isMoreMenuOpen
             ? _syncedAppMenu()
             : null,
         // ======================
