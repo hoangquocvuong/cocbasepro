@@ -176,6 +176,9 @@ class _WebScreenState extends State<WebScreen>
   DateTime lastAnyInterstitialAd =
   DateTime.fromMillisecondsSinceEpoch(0);
 
+  final DateTime appSessionStartedAt = DateTime.now();
+  int interstitialsShownThisSession = 0;
+
   bool isSubscriber = false;
   bool rewardStartedForPremium = false;
   int rewardCancelCount = 0;
@@ -208,11 +211,14 @@ class _WebScreenState extends State<WebScreen>
   // =========================
   // (ADS) UNIFIED INTERSTITIAL MANAGER
   // =========================
-  static const int webNavigationClicksPerAd = 2;
-  static const int aiFinderClicksPerAd = 2;
-  static const int globalInterstitialCooldownSeconds = 45;
-  static const int rewardInterstitialCooldownSeconds = 60;
-  static const int heroSkinAdCooldownSeconds = 45;
+  static const int webNavigationClicksPerAd = 3;
+  static const int aiFinderClicksPerAd = 9999;
+  static const int globalInterstitialCooldownSeconds = 90;
+  static const int rewardInterstitialCooldownSeconds = 180;
+  static const int heroSkinAdCooldownSeconds = 120;
+  static const int minimumSessionSecondsBeforeInterstitial = 45;
+  static const int maxInterstitialsPerSession = 4;
+  static const int navigationClicksAfterFirstAd = 4;
 
   bool _canShowInterstitialBase() {
     final now = DateTime.now();
@@ -221,6 +227,17 @@ class _WebScreenState extends State<WebScreen>
     if (isRewardShowing) return false;
     if (isInterstitialShowing) return false;
     if (interstitialAd == null) return false;
+
+    final sessionAgeSeconds =
+        now.difference(appSessionStartedAt).inSeconds;
+
+    if (sessionAgeSeconds < minimumSessionSecondsBeforeInterstitial) {
+      return false;
+    }
+
+    if (interstitialsShownThisSession >= maxInterstitialsPerSession) {
+      return false;
+    }
 
     final justWatchedReward =
         now.difference(lastRewardTime).inSeconds <
@@ -272,6 +289,7 @@ class _WebScreenState extends State<WebScreen>
 
     isInterstitialShowing = true;
     interstitialAd = null;
+    interstitialsShownThisSession++;
 
     ad.fullScreenContentCallback = FullScreenContentCallback(
       onAdDismissedFullScreenContent: (ad) {
@@ -295,7 +313,12 @@ class _WebScreenState extends State<WebScreen>
 
     internalOpenCount++;
 
-    if (internalOpenCount < webNavigationClicksPerAd) return;
+    final requiredClicks =
+    interstitialsShownThisSession == 0
+        ? webNavigationClicksPerAd
+        : navigationClicksAfterFirstAd;
+
+    if (internalOpenCount < requiredClicks) return;
 
     final shown = requestInterstitialAd(
       source: 'web_navigation',
@@ -488,7 +511,7 @@ class _WebScreenState extends State<WebScreen>
     // THEME WATCHER
     themeTimer = Timer.periodic(
       const Duration(
-        milliseconds: 3,
+        milliseconds: 1200,
       ),
           (_) {
         _watchThemeChange();
@@ -1012,7 +1035,7 @@ class _WebScreenState extends State<WebScreen>
 
           heroSkinClickCount++;
 
-          if (heroSkinClickCount >= 6) {
+          if (heroSkinClickCount >= 10) {
             heroSkinClickCount = 0;
             showHeroSkinAd();
           }
@@ -1842,9 +1865,9 @@ if (typeof openSimple === 'function') {
 
 
   // =========================
-  // (7.12A) SYNCED APP MENU
-  // Same order and visual hierarchy as the web menu:
-  // Home · Bases · AI Finder · Skins · More
+  // (7.12A) WEB-MATCHED IOS MENU
+  // Exact web order:
+  // Home · Skins · AI Find · News · More
   // =========================
 
   Future<void> _openHomeFromAppMenu() async {
@@ -1862,37 +1885,29 @@ window.scrollTo({
     await controller.loadRequest(Uri.parse(homeUrl));
   }
 
-  Future<void> _openBasesFromAppMenu() async {
-    const basesUrl = 'https://www.cocbasepro.com/p/coc-bases.html';
+  Future<void> _openSkinsFromAppMenu() async {
+    await controller.runJavaScript("""
+(function () {
+  if (typeof window.openSimple === 'function') {
+    window.openSimple('heroskins');
+    return;
+  }
 
-    if (currentUrl == basesUrl) {
-      await controller.runJavaScript("""
-window.scrollTo({
-  top: 0,
-  behavior: 'smooth'
-});
+  const button = document.querySelector('[data-popup="heroskins"]');
+
+  if (button) {
+    button.click();
+  }
+})();
 """);
-      return;
-    }
-
-    currentUrl = basesUrl;
-    await controller.loadRequest(Uri.parse(basesUrl));
   }
 
   Future<void> _openAiFinderFromAppMenu() async {
-    /*
-     * AI and Premium are intentionally separated.
-     *
-     * Premium is shown only when canUseAiFinder() returns false because
-     * the real free-search limit has been reached. A normal AI tap never
-     * calls showPremiumSubscribePopup() directly.
-     */
     final allowed = await canUseAiFinder();
 
     if (!allowed) return;
 
-    trackAiFinderAd();
-
+    // No interstitial is attached to a normal AI Finder menu tap.
     try {
       final result = await controller.runJavaScriptReturningResult("""
 (function () {
@@ -1916,13 +1931,11 @@ window.scrollTo({
       return 'CBPMenuOpenAIFinder';
     }
 
-    const button =
-      document.getElementById('cbp-ai-finder-btn-v3') ||
-      document.querySelector('[data-cbp-action="open-ai-finder"]');
+    const button = document.getElementById('nav-ai-btn');
 
     if (button) {
       button.click();
-      return 'menu-button';
+      return 'nav-ai-btn';
     }
 
     return 'not-found';
@@ -1952,129 +1965,76 @@ window.scrollTo({
     }
   }
 
-  Future<void> _openSkinsFromAppMenu() async {
-    showHeroSkinAd();
-
+  Future<void> _openNewsFromAppMenu() async {
     await controller.runJavaScript("""
 (function () {
-  if (typeof window.openSimple === 'function') {
-    window.openSimple('heroskins');
+  if (typeof window.openNewsPopup === 'function') {
+    window.openNewsPopup();
     return;
   }
 
-  document.querySelector('[data-popup="heroskins"]')?.click();
+  const button = document.getElementById('nav-news-btn');
+
+  if (button) {
+    button.click();
+  }
 })();
 """);
+
+    await Future.delayed(
+      const Duration(milliseconds: 450),
+    );
+
+    await _refreshNewsBadge();
   }
 
-  Widget _syncedMenuIcon({
+  Widget _webMenuItem({
     required IconData icon,
     required String label,
     required VoidCallback onTap,
-    bool isCenterAi = false,
+    Widget? badge,
   }) {
-    final iconColor = isCenterAi
-        ? Colors.white
-        : navIconColor.withValues(alpha: 0.88);
-
-    final labelColor = isCenterAi
-        ? Colors.white
-        : navIconColor.withValues(alpha: 0.78);
-
-    if (isCenterAi) {
-      return Expanded(
-        child: Transform.translate(
-          offset: const Offset(0, -12),
-          child: Semantics(
-            button: true,
-            label: label,
-            child: InkWell(
-              borderRadius: BorderRadius.circular(22),
-              onTap: onTap,
-              child: Container(
-                height: 64,
-                margin: const EdgeInsets.symmetric(horizontal: 2),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(22),
-                  gradient: const LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      Color(0xFF0EA5E9),
-                      Color(0xFF2563EB),
-                    ],
-                  ),
-                  border: Border.all(
-                    color: navBgColor,
-                    width: 5,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFF2563EB)
-                          .withValues(alpha: 0.38),
-                      blurRadius: 22,
-                      offset: const Offset(0, 10),
-                    ),
-                  ],
-                ),
-                child: Column(
+    return Expanded(
+      child: Semantics(
+        button: true,
+        label: label,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: onTap,
+          child: SizedBox(
+            height: 48,
+            child: Stack(
+              clipBehavior: Clip.none,
+              alignment: Alignment.center,
+              children: [
+                Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Icon(
                       icon,
-                      color: iconColor,
-                      size: 27,
+                      color: const Color(0xFFF8FAFC),
+                      size: 21,
                     ),
                     const SizedBox(height: 3),
                     Text(
                       label,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: labelColor,
-                        fontSize: 10,
+                      style: const TextStyle(
+                        color: Color(0xFFF8FAFC),
+                        fontSize: 9,
                         fontWeight: FontWeight.w800,
                         height: 1,
                       ),
                     ),
                   ],
                 ),
-              ),
-            ),
-          ),
-        ),
-      );
-    }
-
-    return Expanded(
-      child: Semantics(
-        button: true,
-        label: label,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(14),
-          onTap: onTap,
-          child: SizedBox(
-            height: 54,
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  icon,
-                  color: iconColor,
-                  size: 23,
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: labelColor,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w800,
-                    height: 1,
+                if (badge != null)
+                  Positioned(
+                    top: 2,
+                    right: 8,
+                    child: badge,
                   ),
-                ),
               ],
             ),
           ),
@@ -2083,65 +2043,103 @@ window.scrollTo({
     );
   }
 
+  Widget _newsBadge() {
+    if (unreadNews <= 0) {
+      return const SizedBox.shrink();
+    }
+
+    return Container(
+      constraints: const BoxConstraints(
+        minWidth: 16,
+        minHeight: 16,
+      ),
+      padding: const EdgeInsets.symmetric(
+        horizontal: 4,
+      ),
+      decoration: const BoxDecoration(
+        color: Color(0xFFEF4444),
+        borderRadius: BorderRadius.all(
+          Radius.circular(999),
+        ),
+      ),
+      alignment: Alignment.center,
+      child: Text(
+        unreadNews > 9 ? '9+' : unreadNews.toString(),
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 9,
+          fontWeight: FontWeight.w900,
+          height: 1,
+        ),
+      ),
+    );
+  }
+
   Widget _syncedAppMenu() {
     return SafeArea(
       top: false,
-      minimum: const EdgeInsets.fromLTRB(10, 0, 10, 8),
-      child: Material(
-        color: Colors.transparent,
-        child: Container(
-          height: 70,
-          padding: const EdgeInsets.fromLTRB(7, 7, 7, 5),
-          decoration: BoxDecoration(
-            color: navBgColor,
-            borderRadius: BorderRadius.circular(22),
-            border: Border.all(
-              color: lastDarkMode
-                  ? Colors.white.withValues(alpha: 0.10)
-                  : Colors.black.withValues(alpha: 0.08),
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.22),
-                blurRadius: 30,
-                offset: const Offset(0, 13),
-              ),
+      minimum: const EdgeInsets.fromLTRB(0, 0, 0, 0),
+      child: Container(
+        height: 58,
+        padding: const EdgeInsets.fromLTRB(5, 4, 5, 4),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            begin: Alignment.bottomCenter,
+            end: Alignment.topCenter,
+            colors: [
+              Color(0xF007111F),
+              Color(0xD107111F),
             ],
           ),
+          border: const Border(
+            top: BorderSide(
+              color: Color(0x1FFFFFFF),
+              width: 1,
+            ),
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.20),
+              blurRadius: 20,
+              offset: const Offset(0, -7),
+            ),
+          ],
+        ),
+        child: Material(
+          color: Colors.transparent,
           child: Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              _syncedMenuIcon(
+              _webMenuItem(
                 icon: Icons.home_rounded,
                 label: 'Home',
                 onTap: () {
                   _openHomeFromAppMenu();
                 },
               ),
-              _syncedMenuIcon(
-                icon: Icons.grid_view_rounded,
-                label: 'Bases',
-                onTap: () {
-                  _openBasesFromAppMenu();
-                },
-              ),
-              _syncedMenuIcon(
-                icon: Icons.manage_search_rounded,
-                label: 'AI Finder',
-                isCenterAi: true,
-                onTap: () {
-                  _openAiFinderFromAppMenu();
-                },
-              ),
-              _syncedMenuIcon(
+              _webMenuItem(
                 icon: Icons.auto_awesome_rounded,
                 label: 'Skins',
                 onTap: () {
                   _openSkinsFromAppMenu();
                 },
               ),
-              _syncedMenuIcon(
-                icon: Icons.more_horiz_rounded,
+              _webMenuItem(
+                icon: Icons.search_rounded,
+                label: 'AI Find',
+                onTap: () {
+                  _openAiFinderFromAppMenu();
+                },
+              ),
+              _webMenuItem(
+                icon: Icons.article_rounded,
+                label: 'News',
+                badge: _newsBadge(),
+                onTap: () {
+                  _openNewsFromAppMenu();
+                },
+              ),
+              _webMenuItem(
+                icon: Icons.menu_rounded,
                 label: 'More',
                 onTap: _showMoreMenu,
               ),
