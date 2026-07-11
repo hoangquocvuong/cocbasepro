@@ -1664,72 +1664,267 @@ document.readyState
   void _showMoreMenu() {
     showModalBottomSheet(
       context: context,
-      builder: (_) {
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                leading: const Icon(Icons.refresh),
-                title: const Text('Reload'),
-                onTap: () async {
-                  Navigator.pop(context);
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black.withValues(alpha: 0.42),
+      builder: (sheetContext) {
+        final media = MediaQuery.of(sheetContext);
+        final maxHeight = media.size.height * 0.58;
 
-                  setState(() {
-                    pageLoaded = false;
-                    showResumeOverlay = true;
-                    isInitialLaunch = false;
-                  });
+        final panelColor = navBgColor;
+        final primaryText = navIconColor;
+        final secondaryText = navIconColor.withValues(alpha: 0.72);
+        final tileColor = lastDarkMode
+            ? Colors.white.withValues(alpha: 0.06)
+            : Colors.black.withValues(alpha: 0.035);
+        final tileBorder = lastDarkMode
+            ? Colors.white.withValues(alpha: 0.10)
+            : Colors.black.withValues(alpha: 0.08);
+        final accentColor = lastDarkMode
+            ? const Color(0xFFFFD54F)
+            : const Color(0xFFFFB300);
 
-                  try {
-                    await controller.clearCache();
-                    await controller.reload();
-                  } catch (_) {}
-                },
+        Future<void> closeThen(Future<void> Function() action) async {
+          Navigator.pop(sheetContext);
+          await Future.delayed(const Duration(milliseconds: 120));
+          await action();
+        }
+
+        Widget tile({
+          required IconData icon,
+          required String label,
+          required Future<void> Function() action,
+          bool accent = false,
+        }) {
+          return Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(14),
+              onTap: () => closeThen(action),
+              child: Ink(
+                decoration: BoxDecoration(
+                  color: accent
+                      ? accentColor.withValues(
+                    alpha: lastDarkMode ? 0.20 : 0.16,
+                  )
+                      : tileColor,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: accent
+                        ? accentColor.withValues(alpha: 0.72)
+                        : tileBorder,
+                  ),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 5,
+                    vertical: 8,
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        icon,
+                        size: 22,
+                        color: accent ? accentColor : primaryText,
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        label,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: primaryText,
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w800,
+                          height: 1.08,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
+            ),
+          );
+        }
 
-              ListTile(
-                leading: const Icon(Icons.bookmark),
-                title: const Text('Saved'),
-                onTap: () async {
-                  Navigator.pop(context);
-
-                  await controller.runJavaScript("""
-if (typeof openSimple === 'function') {
-  openSimple('saved');
+        return Align(
+          alignment: Alignment.bottomCenter,
+          child: Container(
+            width: double.infinity,
+            constraints: BoxConstraints(maxHeight: maxHeight),
+            margin: const EdgeInsets.fromLTRB(10, 0, 10, 8),
+            padding: const EdgeInsets.fromLTRB(13, 11, 13, 13),
+            decoration: BoxDecoration(
+              color: panelColor,
+              borderRadius: BorderRadius.circular(21),
+              border: Border.all(color: tileBorder),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.24),
+                  blurRadius: 24,
+                  offset: const Offset(0, 10),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Explore CocBasePro',
+                        style: TextStyle(
+                          color: primaryText,
+                          fontSize: 17,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                    Material(
+                      color: tileColor,
+                      borderRadius: BorderRadius.circular(999),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(999),
+                        onTap: () => Navigator.pop(sheetContext),
+                        child: SizedBox(
+                          width: 34,
+                          height: 34,
+                          child: Icon(
+                            Icons.close_rounded,
+                            size: 19,
+                            color: secondaryText,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Flexible(
+                  child: GridView.count(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    crossAxisCount: 3,
+                    crossAxisSpacing: 8,
+                    mainAxisSpacing: 8,
+                    childAspectRatio: 1.06,
+                    children: [
+                      tile(
+                        icon: Icons.crop_square_rounded,
+                        label: 'Free Bases',
+                        action: () async {
+                          const url =
+                              'https://www.cocbasepro.com/p/coc-bases.html';
+                          currentUrl = url;
+                          await controller.loadRequest(Uri.parse(url));
+                        },
+                      ),
+                      tile(
+                        icon: Icons.workspace_premium_outlined,
+                        label: 'Premium Bases',
+                        action: () async {
+                          const url =
+                              'https://www.cocbasepro.com/p/premium-coc-bases.html';
+                          currentUrl = url;
+                          await controller.loadRequest(Uri.parse(url));
+                        },
+                      ),
+                      tile(
+                        icon: Icons.calendar_month_rounded,
+                        label: 'Events',
+                        action: () async {
+                          await controller.runJavaScript("""
+if (typeof window.openEventPopup === 'function') {
+  window.openEventPopup();
 }
 """);
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.emoji_events),
-                title: const Text('Top Rankings'),
-                onTap: () async {
-                  Navigator.pop(context);
-
-                  await controller.runJavaScript("""
-if (typeof openSimple === 'function') {
-  openSimple('topclans');
+                        },
+                      ),
+                      tile(
+                        icon: Icons.bookmark_rounded,
+                        label: 'Saved Bases',
+                        action: () async {
+                          await controller.runJavaScript("""
+if (typeof window.openSimple === 'function') {
+  window.openSimple('saved');
 }
 """);
-                },
-              ),
-
-              ListTile(
-                leading: const Icon(Icons.workspace_premium),
-                title: const Text('Premium / No Ads'),
-                onTap: () async {
-                  Navigator.pop(context);
-
-                  await showPremiumSubscribePopup('');
-                },
-              ),
-            ],
+                        },
+                      ),
+                      tile(
+                        icon: Icons.emoji_events_rounded,
+                        label: 'Rankings',
+                        action: () async {
+                          await controller.runJavaScript("""
+if (typeof window.openSimple === 'function') {
+  window.openSimple('topclans');
+}
+""");
+                        },
+                      ),
+                      tile(
+                        icon: Icons.star_rounded,
+                        label: 'Hero Skins',
+                        action: () async {
+                          await _openSkinsFromAppMenu();
+                        },
+                      ),
+                      tile(
+                        icon: Icons.refresh_rounded,
+                        label: 'Reload',
+                        accent: true,
+                        action: () async {
+                          if (!mounted) return;
+                          setState(() {
+                            pageLoaded = false;
+                            showResumeOverlay = true;
+                            isInitialLaunch = false;
+                          });
+                          try {
+                            await controller.reload();
+                          } catch (_) {
+                            if (!mounted) return;
+                            setState(() {
+                              showResumeOverlay = false;
+                            });
+                          }
+                        },
+                      ),
+                      tile(
+                        icon: Icons.info_outline_rounded,
+                        label: 'About',
+                        action: () async {
+                          const url =
+                              'https://www.cocbasepro.com/p/about.html';
+                          currentUrl = url;
+                          await controller.loadRequest(Uri.parse(url));
+                        },
+                      ),
+                      tile(
+                        icon: Icons.shield_outlined,
+                        label: 'Privacy',
+                        action: () async {
+                          const url =
+                              'https://www.cocbasepro.com/p/privacy-policy.html';
+                          currentUrl = url;
+                          await controller.loadRequest(Uri.parse(url));
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         );
       },
     );
   }
+
   // =========================
   // (7.12) DISPOSE
   // =========================
