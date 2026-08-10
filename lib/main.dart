@@ -677,18 +677,124 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    final bg = isDarkMode ? const Color(0xFF020617) : const Color(0xFFF8FAFC);
-    final overlay = SystemUiOverlayStyle(statusBarColor:bg,statusBarIconBrightness:isDarkMode?Brightness.light:Brightness.dark,statusBarBrightness:isDarkMode?Brightness.dark:Brightness.light,systemNavigationBarColor:bg,systemNavigationBarIconBrightness:isDarkMode?Brightness.light:Brightness.dark);
-    return PopScope(canPop:false,onPopInvokedWithResult:(didPop,_)async{if(!didPop)await _back();},child:Scaffold(
-      backgroundColor:bg,
-      bottomNavigationBar:Platform.isIOS&&!moreMenuOpen?_compactNativeMenu():null,
-      body:AnnotatedRegion<SystemUiOverlayStyle>(value:overlay,child:Stack(children:[
-        SafeArea(bottom:false,child:WebViewWidget(controller:controller)),
-        if(webProgress>0&&webProgress<100) SafeArea(bottom:false,child:Align(alignment:Alignment.topCenter,child:LinearProgressIndicator(minHeight:2,value:webProgress/100,backgroundColor:Colors.transparent,valueColor:const AlwaysStoppedAnimation<Color>(Color(0xFFFACC15))))),
-        if(isOffline) Positioned.fill(child:ColoredBox(color:const Color(0xEE020617),child:SafeArea(child:Center(child:Padding(padding:const EdgeInsets.all(24),child:Column(mainAxisSize:MainAxisSize.min,children:[
-          const Icon(Icons.wifi_off_rounded,size:44,color:Color(0xFFFACC15)),const SizedBox(height:12),const Text('You are offline',style:TextStyle(color:Colors.white,fontSize:18,fontWeight:FontWeight.w900)),const SizedBox(height:6),const Text('Reconnect to continue browsing base layouts.',textAlign:TextAlign.center,style:TextStyle(color:Color(0xFFCBD5E1),fontSize:12)),const SizedBox(height:14),FilledButton.icon(onPressed:()async{final results=await Connectivity().checkConnectivity();final offline=results.isEmpty||results.every((r)=>r==ConnectivityResult.none);if(!mounted)return;setState(()=>isOffline=offline);if(!offline)controller.reload();},icon:const Icon(Icons.refresh_rounded),label:const Text('Try Again'))
-        ]))))))
-      ]))),
-    ));
+    final bg = isDarkMode
+        ? const Color(0xFF020617)
+        : const Color(0xFFF8FAFC);
+
+    final overlay = SystemUiOverlayStyle(
+      statusBarColor: bg,
+      statusBarIconBrightness:
+          isDarkMode ? Brightness.light : Brightness.dark,
+      statusBarBrightness:
+          isDarkMode ? Brightness.dark : Brightness.light,
+      systemNavigationBarColor: bg,
+      systemNavigationBarIconBrightness:
+          isDarkMode ? Brightness.light : Brightness.dark,
+    );
+
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) async {
+        if (!didPop) {
+          await _back();
+        }
+      },
+      child: Scaffold(
+        backgroundColor: bg,
+        bottomNavigationBar:
+            Platform.isIOS && !moreMenuOpen ? _compactNativeMenu() : null,
+        body: AnnotatedRegion<SystemUiOverlayStyle>(
+          value: overlay,
+          child: Stack(
+            children: [
+              SafeArea(
+                bottom: false,
+                child: WebViewWidget(controller: controller),
+              ),
+              if (webProgress > 0 && webProgress < 100)
+                SafeArea(
+                  bottom: false,
+                  child: Align(
+                    alignment: Alignment.topCenter,
+                    child: LinearProgressIndicator(
+                      minHeight: 2,
+                      value: webProgress / 100,
+                      backgroundColor: Colors.transparent,
+                      valueColor: const AlwaysStoppedAnimation<Color>(
+                        Color(0xFFFACC15),
+                      ),
+                    ),
+                  ),
+                ),
+              if (isOffline)
+                Positioned.fill(
+                  child: ColoredBox(
+                    color: const Color(0xEE020617),
+                    child: SafeArea(
+                      child: Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.wifi_off_rounded,
+                                size: 44,
+                                color: Color(0xFFFACC15),
+                              ),
+                              const SizedBox(height: 12),
+                              const Text(
+                                'You are offline',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              const Text(
+                                'Reconnect to continue browsing base layouts.',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: Color(0xFFCBD5E1),
+                                  fontSize: 12,
+                                ),
+                              ),
+                              const SizedBox(height: 14),
+                              FilledButton.icon(
+                                onPressed: () async {
+                                  final results =
+                                      await Connectivity().checkConnectivity();
+
+                                  final offline = results.isEmpty ||
+                                      results.every(
+                                        (r) =>
+                                            r == ConnectivityResult.none,
+                                      );
+
+                                  if (!mounted) return;
+
+                                  setState(() => isOffline = offline);
+
+                                  if (!offline) {
+                                    controller.reload();
+                                  }
+                                },
+                                icon: const Icon(Icons.refresh_rounded),
+                                label: const Text('Try Again'),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
+
 }
