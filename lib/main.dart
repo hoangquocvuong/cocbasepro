@@ -88,8 +88,10 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _createWebView();
-    _setupConnectivity();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _initDeferredServices());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _setupConnectivity();
+      _initDeferredServices();
+    });
   }
 
   void _createWebView() {
@@ -128,7 +130,14 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _initDeferredServices() async {
-    unawaited(_loadPremiumMapCacheThenFresh());
+    // First-paint priority: local state only, no startup network fetch.
+    unawaited(_loadPremiumMapCacheOnly());
+    unawaited(_loadSupportRewardState());
+
+    // Let the homepage paint before AdMob SDK initialization.
+    await Future<void>.delayed(const Duration(milliseconds: 1400));
+    if (!mounted) return;
+
     try {
       await MobileAds.instance.initialize();
       _adsReady = true;
@@ -335,7 +344,7 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
     return (index >= 0 && index + 1 < parts.length) ? parts[index + 1] : '';
   }
 
-  Future<void> _loadPremiumMapCacheThenFresh() async {
+  Future<void> _loadPremiumMapCacheOnly() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final cached = prefs.getString('cbp_premium_map_ios_v5');
@@ -348,7 +357,6 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
         }
       }
     } catch (_) {}
-    await _loadPremiumMapFresh();
   }
 
   Future<void> _loadPremiumMapFresh() async {
@@ -483,24 +491,82 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
             Container(width:38,height:4,margin:const EdgeInsets.only(bottom:10),decoration:BoxDecoration(color:fg.withValues(alpha:.20),borderRadius:BorderRadius.circular(999))),
             Row(children:[Expanded(child:Text('Explore CocBasePro',style:TextStyle(color:fg,fontSize:16,fontWeight:FontWeight.w900))),IconButton(visualDensity:VisualDensity.compact,onPressed:()=>Navigator.pop(sheetContext),icon:Icon(Icons.close_rounded,color:fg))]),
             const SizedBox(height:4),
-            GridView.count(crossAxisCount:3,shrinkWrap:true,physics:const NeverScrollableScrollPhysics(),mainAxisSpacing:8,crossAxisSpacing:8,childAspectRatio:1.22,children:[
-              _moreTile(Icons.home_work_rounded,'Town Hall',fg,()=>_navigateInternal('/p/free-coc-bases.html?th=all')),
-              _moreTile(Icons.cottage_rounded,'Builder Hall',fg,()=>_navigateInternal('/p/free-coc-bases.html?bh=all')),
-              _moreTile(Icons.account_balance_rounded,'Capital Hall',fg,()=>_navigateInternal('/p/free-coc-bases.html?ch=all')),
-              _moreTile(Icons.calendar_month_rounded,'Events',fg,()=>_openWebPopup(r'''(function(){if(typeof window.openEventPopup==='function'){window.openEventPopup();return true;}return false;})();''')),
-              _moreTile(Icons.emoji_events_rounded,'Rankings',fg,()=>_openWebPopup(r'''(function(){if(typeof window.openSimple==='function'){window.openSimple('topclans');return true;}return false;})();''')),
-              _moreTile(Icons.auto_awesome_rounded,'Hero Skins',fg,()=>_openWebPopup(r'''(function(){if(typeof window.openSimple==='function'){window.openSimple('heroskins');return true;}return false;})();''')),
-              _moreTile(
-                Icons.favorite_rounded,
-                'Support',
-                const Color(0xFFFACC15),
-                () {
-                  Navigator.of(context).pop();
-                  _showSupportSheet();
-                },
-              ),
-              _moreTile(Icons.grid_view_rounded,'All Bases',fg,()=>_navigateInternal('/p/coc-bases.html')),
-            ]),
+            GridView.count(
+              crossAxisCount: 3,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              mainAxisSpacing: 7,
+              crossAxisSpacing: 7,
+              childAspectRatio: 1.28,
+              children: [
+                _moreTile(
+                  Icons.home_work_rounded,
+                  'Town Hall',
+                  fg,
+                  () => _navigateInternal('/p/free-coc-bases.html?th=all'),
+                ),
+                _moreTile(
+                  Icons.cottage_rounded,
+                  'Builder Hall',
+                  fg,
+                  () => _navigateInternal('/p/free-coc-bases.html?bh=all'),
+                ),
+                _moreTile(
+                  Icons.account_balance_rounded,
+                  'Capital Hall',
+                  fg,
+                  () => _navigateInternal('/p/free-coc-bases.html?ch=all'),
+                ),
+                _moreTile(
+                  Icons.calendar_month_rounded,
+                  'Events',
+                  fg,
+                  () => _openWebPopup(
+                    r'''(function(){if(typeof window.openEventPopup==='function'){window.openEventPopup();return true;}return false;})();''',
+                  ),
+                ),
+                _moreTile(
+                  Icons.emoji_events_rounded,
+                  'Rankings',
+                  fg,
+                  () => _openWebPopup(
+                    r'''(function(){if(typeof window.openSimple==='function'){window.openSimple('topclans');return true;}return false;})();''',
+                  ),
+                ),
+                _moreTile(
+                  Icons.auto_awesome_rounded,
+                  'Hero Skins',
+                  fg,
+                  () => _openWebPopup(
+                    r'''(function(){if(typeof window.openSimple==='function'){window.openSimple('heroskins');return true;}return false;})();''',
+                  ),
+                ),
+                _moreTile(
+                  Icons.favorite_rounded,
+                  'Support',
+                  const Color(0xFFFACC15),
+                  () {
+                    Navigator.of(context).pop();
+                    _showSupportSheet();
+                  },
+                ),
+                _moreTile(
+                  Icons.refresh_rounded,
+                  'Reload',
+                  fg,
+                  () {
+                    Navigator.of(context).pop();
+                    controller.reload();
+                  },
+                ),
+                _moreTile(
+                  Icons.info_outline_rounded,
+                  'About',
+                  fg,
+                  () => _navigateInternal('/p/about.html'),
+                ),
+              ],
+            ),
           ]),
         ));
       },
