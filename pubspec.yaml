@@ -1,0 +1,43 @@
+name: ai_find_base
+description: "AI Find Base"
+publish_to: 'none'
+
+version: 6.0.0+1
+
+environment:
+  sdk: ^3.11.5
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  http: ^1.2.2
+  image_picker: ^1.1.2
+  shared_preferences: ^2.3.2
+  url_launcher: ^6.3.1
+  google_mobile_ads: ^5.3.1
+  crypto: ^3.0.6
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.3
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/app_icon.png"
+  remove_alpha_ios: true
+
+flutter:
+  config:
+    enable-swift-package-manager: false
+
+  uses-material-design: true
+
+  assets:
+    - assets/bg_ai_finder.png
+    - assets/ic_header_logo.png
+    - assets/app_icon.png
