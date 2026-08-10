@@ -1,3279 +1,694 @@
-// =========================
-// (0) IMPORTS
-// =========================
 import 'dart:async';
-import 'dart:developer';
+import 'dart:convert';
 import 'dart:io';
+
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'dart:convert';
-import 'package:http/http.dart' as http;
-import 'package:webview_flutter/webview_flutter.dart';
-import 'package:connectivity_plus/connectivity_plus.dart';
-import 'package:url_launcher/url_launcher.dart';
-import 'package:in_app_purchase/in_app_purchase.dart';
-
 import 'package:google_mobile_ads/google_mobile_ads.dart';
+import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:webview_flutter/webview_flutter.dart';
 
-import 'package:in_app_review/in_app_review.dart';
-
-
-// =========================
-// (1) FIREBASE BACKGROUND
-// =========================
-Future<void> firebaseBgHandler(RemoteMessage message) async {
-  await Firebase.initializeApp();
-}
-
-// =========================
-// (2) INTERSTITIAL AD
-// =========================
-InterstitialAd? interstitialAd;
-RewardedAd? rewardedAd;
-
-void loadRewardedAd() {
-  RewardedAd.load(
-    adUnitId: 'ca-app-pub-9371341402256787/5585456052',
-    request: const AdRequest(
-      nonPersonalizedAds: true,
-    ),
-    rewardedAdLoadCallback:
-    RewardedAdLoadCallback(
-
-      onAdLoaded: (ad) {
-        rewardedAd = ad;
-      },
-
-      onAdFailedToLoad: (error) {
-        debugPrint(
-          'Rewarded failed: $error',
-        );
-      },
-    ),
-  );
-}
-
-void loadInterstitial() {
-  InterstitialAd.load(
-    adUnitId: 'ca-app-pub-9371341402256787/5085734937',
-    request: const AdRequest(nonPersonalizedAds: true),
-    adLoadCallback: InterstitialAdLoadCallback(
-      onAdLoaded: (ad) => interstitialAd = ad,
-      onAdFailedToLoad: (error) => debugPrint(error.toString()),
-    ),
-  );
-}
-
-void main() async {
+void main() {
   WidgetsFlutterBinding.ensureInitialized();
-
-  // ===== STATUS BAR STYLE =====
-  SystemChrome.setSystemUIOverlayStyle(
-    const SystemUiOverlayStyle(
-
-      // TOP STATUS BAR
-      statusBarColor:
-      Color(0xFF101A08),
-
-      // ANDROID ICONS
-      statusBarIconBrightness: Brightness.light,
-
-      // IOS ICONS
-      statusBarBrightness: Brightness.light,
-
-      // ANDROID NAVIGATION BAR
-      systemNavigationBarColor:
-      Color(0xFF050505),
-
-      systemNavigationBarIconBrightness:
-      Brightness.light,
-    ),
-  );
-
-  try {
-    await Firebase.initializeApp();
-  } catch (e) {
-    debugPrint('Firebase error: $e');
-  }
-
-  FirebaseMessaging.onBackgroundMessage(
-    firebaseBgHandler,
-  );
-
-  await MobileAds.instance.initialize();
-
-  SystemChrome.setEnabledSystemUIMode(
-    SystemUiMode.edgeToEdge,
-  );
-
-  runApp(const MyApp());
+  SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+    statusBarColor: Colors.transparent,
+    statusBarIconBrightness: Brightness.light,
+    statusBarBrightness: Brightness.dark,
+    systemNavigationBarColor: Color(0xFF050505),
+    systemNavigationBarIconBrightness: Brightness.light,
+  ));
+  runApp(const CocBaseProApp());
 }
 
-// =========================
-// (4) APP ROOT
-// =========================
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
-
+class CocBaseProApp extends StatelessWidget {
+  const CocBaseProApp({super.key});
   @override
   Widget build(BuildContext context) {
-    return const MaterialApp(
+    return MaterialApp(
       debugShowCheckedModeBanner: false,
-      home: WebScreen(),
+      title: 'Base Layout Pro',
+      theme: ThemeData(useMaterial3: true, brightness: Brightness.light),
+      darkTheme: ThemeData(useMaterial3: true, brightness: Brightness.dark),
+      home: const WebScreen(),
     );
   }
 }
 
-// =========================
-// (6) WEB SCREEN
-// =========================
 class WebScreen extends StatefulWidget {
   const WebScreen({super.key});
-
   @override
   State<WebScreen> createState() => _WebScreenState();
 }
 
-// =========================
-// (7) STATE
-// =========================
-class _WebScreenState extends State<WebScreen>
-    with WidgetsBindingObserver {
+class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
+  static const String homeUrl = 'https://www.cocbasepro.com';
+  static const String premiumMapUrl =
+      'https://raw.githubusercontent.com/hoangquocvuong/premium-map.json/refs/heads/main/premium-map.json';
+  static const String interstitialAdUnitId =
+      'ca-app-pub-9371341402256787/5085734937';
 
-  late WebViewController controller;
-  late StreamSubscription<List<ConnectivityResult>> netSub;
-  Map<String, String> premiumMap = {};
+  static const String rewardedAdUnitId =
+      'ca-app-pub-9371341402256787/5585456052';
 
-  final homeUrl = 'https://www.cocbasepro.com';
+  static const int supportAdFreeMinutes = 15;
+  static const int supportAdFreeMs = supportAdFreeMinutes * 60 * 1000;
 
+  static const int pagesPerInterstitial = 5;
+  static const int firstAdDelaySeconds = 60;
+  static const int interstitialCooldownSeconds = 120;
+
+  late final WebViewController controller;
+  StreamSubscription<List<ConnectivityResult>>? _netSub;
+  final Map<String, String> premiumMap = <String, String>{};
+  final DateTime sessionStartedAt = DateTime.now();
+
+  InterstitialAd? _interstitialAd;
+  RewardedAd? _rewardedAd;
+  bool _adsReady = false;
+  bool _interstitialShowing = false;
+  bool _rewardedReady = false;
+  int _supportAdFreeUntil = 0;
   bool isOffline = false;
-  bool isReloading = false;
-  bool isHomePage = true;
-  Color navBgColor = Colors.white;
-  Color navIconColor = Colors.black;
-  Timer? themeTimer;
-  bool lastDarkMode = false;
   bool pageLoaded = false;
-  bool isMoreMenuOpen = false;
-  bool minSplashFinished = true;
+  bool isDarkMode = true;
+  bool moreMenuOpen = false;
+  int webProgress = 0;
+  int internalPagesSinceAd = 0;
   int unreadNews = 0;
+  String currentUrl = homeUrl;
+  String lastFinishedInternalUrl = '';
+  DateTime lastInterstitialAt = DateTime.fromMillisecondsSinceEpoch(0);
 
-  Timer? newsTimer;
-  Timer? _badgeDebounce;
-  bool appJustResumed = false;
-  bool showResumeOverlay = false;
-  bool isInitialLaunch = true;
-  bool firstInternalLoad = true;
-  final Set<String> unlockedPremiumLinks = {};
-  bool isRewardShowing = false;
-  bool isInterstitialShowing = false;
-  DateTime lastRewardTime =
-  DateTime.fromMillisecondsSinceEpoch(0);
-
-  DateTime lastAnyInterstitialAd =
-  DateTime.fromMillisecondsSinceEpoch(0);
-
-  final DateTime appSessionStartedAt = DateTime.now();
-  int interstitialsShownThisSession = 0;
-
-  bool isSubscriber = false;
-  bool rewardStartedForPremium = false;
-  int rewardCancelCount = 0;
-  int rewardSuccessCount = 0;
-  int heroSkinClickCount = 0;
-
-  int aiFinderClickCount = 0;
-
-  DateTime lastHeroSkinAdTime =
-  DateTime.fromMillisecondsSinceEpoch(0);
-
-  final InAppPurchase iap = InAppPurchase.instance;
-  StreamSubscription<List<PurchaseDetails>>? purchaseSub;
-
-  ProductDetails? monthlyProduct;
-  ProductDetails? yearlyProduct;
-  String currentUrl = '';
-  String? pendingPremiumBaseLink;
-
-  int openCount = 0;
-  bool hasRequestedReview = false;
-
-  int internalOpenCount = 0;
-  int aiFinderFreeUsed = 0;
-  static const int aiFinderFreeLimit = 5;
-  bool purchaseStartedByUser = false;
-
-  DateTime lastInterstitialTime =
-  DateTime.fromMillisecondsSinceEpoch(0);
-  // =========================
-  // (ADS) UNIFIED INTERSTITIAL MANAGER
-  // =========================
-  static const int webNavigationClicksPerAd = 3;
-  static const int aiFinderClicksPerAd = 9999;
-  static const int globalInterstitialCooldownSeconds = 90;
-  static const int rewardInterstitialCooldownSeconds = 180;
-  static const int heroSkinAdCooldownSeconds = 120;
-  static const int minimumSessionSecondsBeforeInterstitial = 45;
-  static const int maxInterstitialsPerSession = 4;
-  static const int navigationClicksAfterFirstAd = 4;
-
-  bool _canShowInterstitialBase() {
-    final now = DateTime.now();
-
-    if (isSubscriber) return false;
-    if (isRewardShowing) return false;
-    if (isInterstitialShowing) return false;
-    if (interstitialAd == null) return false;
-
-    final sessionAgeSeconds =
-        now.difference(appSessionStartedAt).inSeconds;
-
-    if (sessionAgeSeconds < minimumSessionSecondsBeforeInterstitial) {
-      return false;
-    }
-
-    if (interstitialsShownThisSession >= maxInterstitialsPerSession) {
-      return false;
-    }
-
-    final justWatchedReward =
-        now.difference(lastRewardTime).inSeconds <
-            rewardInterstitialCooldownSeconds;
-
-    if (justWatchedReward) return false;
-
-    final globalCooldownOk =
-        now.difference(lastAnyInterstitialAd).inSeconds >=
-            globalInterstitialCooldownSeconds;
-
-    return globalCooldownOk;
-  }
-
-  void showDebug(String text) {
-    if (!mounted) return;
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(text),
-        duration: const Duration(seconds: 5),
-      ),
-    );
-  }
-
-  bool requestInterstitialAd({
-    required String source,
-    bool respectHeroCooldown = false,
-  }) {
-    if (!_canShowInterstitialBase()) return false;
-
-    final now = DateTime.now();
-
-    if (respectHeroCooldown &&
-        now.difference(lastHeroSkinAdTime).inSeconds <
-            heroSkinAdCooldownSeconds) {
-      return false;
-    }
-
-    final ad = interstitialAd;
-    if (ad == null) return false;
-
-    lastAnyInterstitialAd = now;
-    lastInterstitialTime = now;
-
-    if (respectHeroCooldown) {
-      lastHeroSkinAdTime = now;
-    }
-
-    isInterstitialShowing = true;
-    interstitialAd = null;
-    interstitialsShownThisSession++;
-
-    ad.fullScreenContentCallback = FullScreenContentCallback(
-      onAdDismissedFullScreenContent: (ad) {
-        isInterstitialShowing = false;
-        ad.dispose();
-        loadInterstitial();
-      },
-      onAdFailedToShowFullScreenContent: (ad, error) {
-        isInterstitialShowing = false;
-        ad.dispose();
-        loadInterstitial();
-      },
-    );
-
-    ad.show();
-    return true;
-  }
-
-  void tryShowInterstitial() {
-    if (isSubscriber) return;
-
-    internalOpenCount++;
-
-    final requiredClicks =
-    interstitialsShownThisSession == 0
-        ? webNavigationClicksPerAd
-        : navigationClicksAfterFirstAd;
-
-    if (internalOpenCount < requiredClicks) return;
-
-    final shown = requestInterstitialAd(
-      source: 'web_navigation',
-    );
-
-    if (shown) {
-      internalOpenCount = 0;
-    }
-  }
-
-  bool canShowHeroSkinAd() {
-    return _canShowInterstitialBase() &&
-        DateTime.now().difference(lastHeroSkinAdTime).inSeconds >=
-            heroSkinAdCooldownSeconds;
-  }
-
-  void trackAiFinderAd() {
-    if (isSubscriber) return;
-
-    aiFinderClickCount++;
-
-    if (aiFinderClickCount < aiFinderClicksPerAd) return;
-
-    final shown = requestInterstitialAd(
-      source: 'ai_finder',
-    );
-
-    if (shown) {
-      aiFinderClickCount = 0;
-    }
-  }
-
-  Future<bool> canUseAiFinder() async {
-    if (isSubscriber) return true;
-
-    final prefs = await SharedPreferences.getInstance();
-
-    aiFinderFreeUsed = prefs.getInt('ai_finder_free_used') ?? 0;
-
-    if (aiFinderFreeUsed >= aiFinderFreeLimit) {
-      await showPremiumSubscribePopup('');
-      return false;
-    }
-
-    aiFinderFreeUsed++;
-
-    await prefs.setInt(
-      'ai_finder_free_used',
-      aiFinderFreeUsed,
-    );
-
-    return true;
-  }
-
-  void showHeroSkinAd() {
-    requestInterstitialAd(
-      source: 'hero_skins',
-      respectHeroCooldown: true,
-    );
-  }
-
-
-  String normalizeBuyMeCoffeeUrl(String url) {
-    final uri = Uri.parse(url);
-
-    var path = uri.path;
-
-    path = path
-        .replaceAll('/hoangquocvh/', '/cocbase/')
-        .replaceAll('/hoangvuong/', '/cocbase/');
-
-    if (path.endsWith('/')) {
-      path = path.substring(0, path.length - 1);
-    }
-
-    return 'https://buymeacoffee.com$path';
-  }
-
-  String extractBuyMeCoffeeId(String url) {
-    final uri = Uri.parse(url);
-
-    final parts = uri.path
-        .split('/')
-        .where((e) => e.isNotEmpty)
-        .toList();
-
-    final index = parts.indexOf('e');
-
-    if (index != -1 && index + 1 < parts.length) {
-      return parts[index + 1];
-    }
-
-    return '';
-  }
-
-
-
-  Future<void> loadPremiumMap() async {
-    try {
-      final res = await http.get(
-        Uri.parse(
-          'https://raw.githubusercontent.com/hoangquocvuong/premium-map.json/refs/heads/main/premium-map.json?v=${DateTime.now().millisecondsSinceEpoch}',
-        ),
-      ).timeout(
-        const Duration(seconds: 8),
-
-      );
-
-      if (res.statusCode == 200) {
-        final data = jsonDecode(res.body) as Map<String, dynamic>;
-
-        premiumMap = {};
-
-        premiumMap = data.map(
-              (key, value) => MapEntry(
-            key.toString(),
-            value.toString(),
-          ),
-        );
-
-        debugPrint('Premium map loaded: ${premiumMap.length}');
-      }
-    } catch (e) {
-      debugPrint('Premium map error: $e');
-    }
-  }
-
-  // ===== FIX WEBVIEW DIE =====
-  bool isCheckingAlive = false;
-  DateTime lastPaused = DateTime.now();
-
-  // =========================
-// (7.1) INIT
-// =========================
   @override
   void initState() {
     super.initState();
-
     WidgetsBinding.instance.addObserver(this);
-
-    currentUrl = homeUrl;
-
     _createWebView();
-
     _setupConnectivity();
-
-    Future.delayed(
-      const Duration(milliseconds: 300),
-          () {
-        if (!mounted) return;
-        loadInterstitial();
-      },
-    );
-
-    Future.delayed(
-      const Duration(seconds: 1),
-          () {
-        if (!mounted) return;
-        loadRewardedAd();
-      },
-    );
-
-    Future.delayed(
-      const Duration(seconds: 1),
-          () {
-        if (!mounted) return;
-        loadPremiumMap();
-      },
-    );
-
-    Future.delayed(
-      const Duration(seconds: 2),
-          () {
-        if (!mounted) return;
-        initPurchases();
-      },
-    );
-
-    Future.delayed(
-      const Duration(seconds: 3),
-          () {
-        if (!mounted) return;
-        _setupFirebase();
-      },
-    );
-
-
-
-
-    // THEME WATCHER
-    themeTimer = Timer.periodic(
-      const Duration(
-        milliseconds: 1200,
-      ),
-          (_) {
-        _watchThemeChange();
-      },
-    );
-
-  }
-  Future<void> initPurchases() async {
-
-    final available = await iap.isAvailable();
-
-    if (!available) return;
-
-    purchaseSub = iap.purchaseStream.listen((purchases) async {
-
-      for (final purchase in purchases) {
-
-        if (purchase.status == PurchaseStatus.purchased ||
-            purchase.status == PurchaseStatus.restored) {
-
-          isSubscriber = true;
-
-          await syncPremiumToWebView();
-
-          if (purchase.pendingCompletePurchase) {
-            await iap.completePurchase(purchase);
-          }
-
-          if (mounted) {
-            setState(() {});
-          }
-
-          if (
-          purchase.status == PurchaseStatus.purchased &&
-              purchaseStartedByUser
-          ) {
-
-            purchaseStartedByUser = false;
-
-            await showPremiumActivatedDialog();
-
-          }
-
-          if (pendingPremiumBaseLink != null &&
-              pendingPremiumBaseLink!.isNotEmpty) {
-            final link = pendingPremiumBaseLink!;
-            pendingPremiumBaseLink = null;
-
-            await launchUrl(
-              Uri.parse(link),
-              mode: LaunchMode.platformDefault,
-            );
-          }
-        }
-      }
-    });
-
-    const ids = {
-      'premium_monthly',
-      'premium_yearly',
-    };
-
-    final response =
-    await iap.queryProductDetails(ids);
-
-    for (final p in response.productDetails) {
-
-      if (p.id == 'premium_monthly') {
-        monthlyProduct = p;
-      }
-
-      if (p.id == 'premium_yearly') {
-        yearlyProduct = p;
-      }
-    }
-
-    await iap.restorePurchases();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _initDeferredServices());
   }
 
-  Future<void> syncPremiumToWebView() async {
-    final value = isSubscriber ? '1' : '0';
-
-    await controller.runJavaScript('''
-    localStorage.setItem("APP_SUBSCRIBER", "$value");
-    window.APP_SUBSCRIBER = "$value";
-    document.documentElement.classList.toggle("app-subscriber", "$value" === "1");
-  ''');
-  }
-  void buyMonthly() {
-
-    if (monthlyProduct == null) {
-      return;
-    }
-
-    purchaseStartedByUser = true;
-
-    final purchaseParam =
-    PurchaseParam(
-      productDetails: monthlyProduct!,
-    );
-
-    iap.buyNonConsumable(
-      purchaseParam: purchaseParam,
-    );
-  }
-  void buyYearly() {
-
-    if (yearlyProduct == null) {
-      return;
-    }
-
-    purchaseStartedByUser = true;
-
-    final purchaseParam =
-    PurchaseParam(
-      productDetails: yearlyProduct!,
-    );
-
-    iap.buyNonConsumable(
-      purchaseParam: purchaseParam,
-    );
-  }
-
-  Future<void> showPremiumSubscribePopup(String baseLink) async {
-    if (!mounted) return;
-
-    Widget benefit(String text) {
-      return Padding(
-        padding: const EdgeInsets.only(bottom: 8),
-        child: Row(
-          children: [
-            const Icon(Icons.check_circle, color: Colors.green, size: 18),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                text,
-                style: const TextStyle(fontSize: 14),
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    await showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(24),
-        ),
-        titlePadding: const EdgeInsets.fromLTRB(20, 18, 8, 0),
-        contentPadding: const EdgeInsets.fromLTRB(22, 10, 22, 6),
-        actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 18),
-
-        title: Row(
-          children: [
-            const Expanded(
-              child: Text(
-                '🚀 Go Premium',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 23,
-                ),
-              ),
-            ),
-            IconButton(
-              icon: const Icon(Icons.close),
-              onPressed: () => Navigator.pop(context),
-            ),
-          ],
-        ),
-
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Unlock 2000+ Premium Bases Instantly',
-              style: TextStyle(
-                fontSize: 17,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-
-            const SizedBox(height: 12),
-
-            benefit('Remove All Ads'),
-            benefit('Unlimited AI Image Base Finder'),
-            benefit('Unlimited Premium Base Access'),
-            benefit('Faster Access, No Waiting'),
-            benefit('Daily Updated Premium Bases'),
-            benefit('Browse Hero Skins Without Ads'),
-
-            const SizedBox(height: 6),
-
-            const Text(
-              'Get unlimited access to premium layouts and exclusive app features.',
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.grey,
-              ),
-            ),
-
-            const SizedBox(height: 4),
-
-            const Text(
-              'Subscriptions renew automatically unless cancelled.',
-              style: TextStyle(
-                fontSize: 11,
-                color: Colors.grey,
-              ),
-            ),
-
-            const SizedBox(height: 4),
-
-            Row(
-              children: [
-                TextButton(
-                  style: TextButton.styleFrom(
-                    padding: EdgeInsets.zero,
-                    minimumSize: const Size(0, 30),
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
-                  onPressed: () async {
-                    await launchUrl(
-                      Uri.parse(
-                        'https://www.cocbasepro.com/p/privacy-policy.html',
-                      ),
-                    );
-                  },
-                  child: const Text(
-                    'Privacy Policy',
-                    style: TextStyle(fontSize: 12),
-                  ),
-                ),
-
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 8),
-                  child: Text(
-                    '|',
-                    style: TextStyle(
-                      color: Colors.grey,
-                      fontSize: 12,
-                    ),
-                  ),
-                ),
-
-                TextButton(
-                  style: TextButton.styleFrom(
-                    padding: EdgeInsets.zero,
-                    minimumSize: const Size(0, 30),
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
-                  onPressed: () async {
-                    await launchUrl(
-                      Uri.parse(
-                        'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/',
-                      ),
-                    );
-                  },
-                  child: const Text(
-                    'Terms of Use',
-                    style: TextStyle(fontSize: 12),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-
-        actions: [
-          Row(
-            children: [
-              Expanded(
-                child: ElevatedButton(
-                  onPressed: () {
-                    pendingPremiumBaseLink = baseLink;
-                    Navigator.pop(context);
-                    buyMonthly();
-                  },
-                  style: ElevatedButton.styleFrom(
-                    minimumSize: const Size(double.infinity, 56),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                  ),
-                  child: const Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        'Monthly Plan',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(fontSize: 11),
-                      ),
-                      SizedBox(height: 2),
-                      Text(
-                        '\$6.99 / Month',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
-              const SizedBox(width: 10),
-
-              Expanded(
-                child: ElevatedButton(
-                  onPressed: () {
-                    pendingPremiumBaseLink = baseLink;
-                    Navigator.pop(context);
-                    buyYearly();
-                  },
-                  style: ElevatedButton.styleFrom(
-                    minimumSize: const Size(double.infinity, 56),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                  ),
-                  child: const Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        'Yearly Plan',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(fontSize: 11),
-                      ),
-                      SizedBox(height: 2),
-                      Text(
-                        '\$49.99 / Year',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      SizedBox(height: 2),
-                      Text(
-                        'Save 40%',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.green,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-  Future<void> showPremiumActivatedDialog() async {
-    if (!mounted) return;
-
-    await showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-        ),
-        title: const Text(
-          '🎉 Premium Activated',
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        content: const Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Your subscription is now active.',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-
-            SizedBox(height: 12),
-
-            Text('✓ Remove All Ads'),
-            Text('✓ Unlimited AI Image Base Finder'),
-            Text('✓ Unlimited Premium Base Access'),
-            Text('✓ Faster Access, No Waiting'),
-            Text('✓ Daily Updated Premium Bases'),
-            Text('✓ Browse Hero Skins Without Ads'),
-          ],
-        ),
-        actions: [
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: () {
-                Navigator.pop(context);
-              },
-              child: const Text('Continue'),
-            ),
-          ),
-        ],
-      ),
-    );
-
-    if (!mounted) return;
-
-    controller.reload();
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'Premium features unlocked successfully 🚀',
-        ),
-      ),
-    );
-  }
-
-  Future<void> showPremiumPopupAfterAdCancel(String baseLink) async {
-    if (isSubscriber) return;
-    if (!mounted) return;
-
-
-    final prefs = await SharedPreferences.getInstance();
-
-    if (!mounted) return;
-
-    const countKey = 'premium_cancel_popup_count';
-    const lastKey = 'premium_cancel_popup_last_time';
-
-    final count = prefs.getInt(countKey) ?? 0;
-    final lastTime = prefs.getInt(lastKey) ?? 0;
-    final now = DateTime
-        .now()
-        .millisecondsSinceEpoch;
-
-// Đã hiện đủ 3 lần -> không hiện nữa
-    if (count >= 3) {
-      return;
-    }
-
-// 2 ngày
-    final twoDaysMs =
-        const Duration(days: 2).inMilliseconds;
-
-// Chưa đủ 2 ngày từ lần popup trước
-    if (
-    lastTime > 0 &&
-        now - lastTime < twoDaysMs
-    ) {
-      return;
-    }
-
-    await prefs.setInt(
-      countKey,
-      count + 1,
-    );
-
-    await prefs.setInt(
-      lastKey,
-      now,
-    );
-
-    if (!mounted) return;
-
-    await showPremiumSubscribePopup(baseLink);
-  }
-
-  // =========================
-// (7.2) CREATE WEBVIEW
-// =========================
   void _createWebView() {
     controller = WebViewController()
-      ..setJavaScriptMode(
-        JavaScriptMode.unrestricted,
-      )
-
-    // APP MODE FOR IOS
-      ..setUserAgent(
-        Platform.isIOS
-            ? 'CocBaseProApp-iOS'
-            : 'CocBaseProApp-Android',
-      )
-
-      ..setBackgroundColor(
-        const Color(0xFF050505),
-      )
-
-    // 🔥 JS CHANNEL (giữ nguyên)
-      ..addJavaScriptChannel(
-        'Flutter',
-        onMessageReceived: (message) {
-          final newCount = int.tryParse(message.message) ?? 0;
-
-          _badgeDebounce?.cancel();
-
-          _badgeDebounce = Timer(
-            const Duration(milliseconds: 300),
-                () {
-              if (!mounted) return;
-
-              if (newCount == unreadNews) return;
-
-              setState(() {
-                unreadNews = newCount;
-              });
-
-              debugPrint("🔥 badge updated = $unreadNews");
-            },
-          );
+      ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..setUserAgent(Platform.isIOS ? 'CocBaseProApp-iOS' : 'CocBaseProApp-Android')
+      ..setBackgroundColor(const Color(0xFF050505))
+      ..addJavaScriptChannel('Flutter', onMessageReceived: (message) {
+        final count = int.tryParse(message.message) ?? 0;
+        if (!mounted || count == unreadNews) return;
+        setState(() => unreadNews = count);
+      })
+      ..addJavaScriptChannel('AppTheme', onMessageReceived: (message) {
+        _setTheme(message.message.trim().toLowerCase() == 'dark');
+      })
+      ..setNavigationDelegate(NavigationDelegate(
+        onProgress: (progress) {
+          if (mounted) setState(() => webProgress = progress);
         },
-      )
-
-      ..addJavaScriptChannel(
-        'AppTheme',
-        onMessageReceived: (message) {
-          final mode = message.message.trim().toLowerCase();
-
-          if (mode == 'dark') {
-            _applyNativeTheme(true);
-          } else if (mode == 'light') {
-            _applyNativeTheme(false);
-          }
+        onPageStarted: (url) {
+          currentUrl = url;
+          if (mounted) setState(() => webProgress = 5);
         },
-      )
-
-      ..addJavaScriptChannel(
-        'HeroSkinAd',
-        onMessageReceived: (message) {
-
-          if(message.message != "skin_detail_click"){
-            return;
-          }
-
-          heroSkinClickCount++;
-
-          if (heroSkinClickCount >= 10) {
-            heroSkinClickCount = 0;
-            showHeroSkinAd();
-          }
-        },
-      )
-
-      ..setNavigationDelegate(_navigation())
-
-      ..loadRequest(Uri.parse(currentUrl));
-
-  }
-
-  // =========================
-  // (7.3) NAVIGATION
-  // =========================
-  NavigationDelegate _navigation() {
-    return NavigationDelegate(
-        onNavigationRequest: (request) async {
-          final uri = Uri.parse(request.url);
-
-          if (uri.host.contains('firebaseio.com')) {
-            return NavigationDecision.prevent;
-          }
-
-          if (isOffline) {
-            return NavigationDecision.prevent;
-          }
-
-          // ===== INTERNAL WEBSITE =====
-          if (uri.host.contains('cocbasepro.com')) {
-
-            final newUrl = uri.toString();
-
-            if (newUrl != currentUrl) {
-
-              currentUrl = newUrl;
-
-              if (firstInternalLoad) {
-
-                firstInternalLoad = false;
-
-              } else {
-
-                tryShowInterstitial();
-              }
-            }
-
-            return NavigationDecision.navigate;
-          }
-
-// ===== BUY ME A COFFEE =====
-          final host = uri.host.toLowerCase();
-
-          if (
-          host.contains('buymeacoffee') ||
-              host.contains('bmc.link')
-          ) {
-
-            final cleanUrl =
-            Uri.decodeFull(request.url);
-            final pathParts = uri.path
-                .split('/')
-                .where((e) => e.isNotEmpty)
-                .toList();
-
-            final isPremiumProductLink =
-            pathParts.contains('e');
-
-            if (!isPremiumProductLink) {
-              await launchUrl(
-                uri,
-                mode: LaunchMode.externalApplication,
-              );
-
-              return NavigationDecision.prevent;
-            }
-
-            final productId =
-            extractBuyMeCoffeeId(cleanUrl);
-
-            debugPrint(
-              'PREMIUM ID = $productId',
-            );
-
-            debugPrint(
-              'MAP HAS = ${premiumMap.containsKey(productId)}',
-            );
-
-            final baseLink = premiumMap[productId];
-
-
-            if (baseLink == null) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Premium link not found'),
-                ),
-              );
-
-              return NavigationDecision.prevent;
-            }
-
-            Future<void> openBaseLink() async {
-              final ok = await launchUrl(
-                Uri.parse(baseLink),
-                mode: LaunchMode.platformDefault,
-              );
-
-              if (!mounted) return;
-
-              if (!ok) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Cannot open base link'),
-                  ),
-                );
-              }
-            }
-
-            if (isSubscriber) {
-              await openBaseLink();
-              return NavigationDecision.prevent;
-            }
-
-            // Đã unlock trong session -> mở luôn
-            if (unlockedPremiumLinks.contains(productId)) {
-              await openBaseLink();
-              return NavigationDecision.prevent;
-            }
-
-            if (isRewardShowing) {
-              return NavigationDecision.prevent;
-            }
-
-            isRewardShowing = true;
-
-            // Thông báo trước khi xem video
-            final agree = await showDialog<bool>(
-              context: context,
-              builder: (_) {
-                return AlertDialog(
-                  backgroundColor: const Color(0xFF0B1207),
-                  title: const Text(
-                    'Unlock Premium Base',
-                    style: TextStyle(
-                      color: Color(0xFFB7FF00),
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  content: const Text(
-                    'Watch a short video to unlock this premium base link.',
-                    style: TextStyle(
-                      color: Colors.white,
-                    ),
-                  ),
-                  actions: [
-                    TextButton(
-                      onPressed: () {
-                        Navigator.pop(context, false);
-                      },
-                      child: const Text('Cancel'),
-                    ),
-                    TextButton(
-                      onPressed: () {
-                        Navigator.pop(context, true);
-                      },
-                      child: const Text(
-                        'Watch Video',
-                        style: TextStyle(
-                          color: Color(0xFFB7FF00),
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ],
-                );
-              },
-            );
-            if (!mounted) {
-              return NavigationDecision.prevent;
-            }
-            if (agree != true) {
-              isRewardShowing = false;
-              await showPremiumSubscribePopup(baseLink);
-              return NavigationDecision.prevent;
-            }
-
-            if (rewardedAd == null) {
-              isRewardShowing = false;
-              loadRewardedAd();
-              if (!mounted) {
-                return NavigationDecision.prevent;
-              }
-
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Ad is loading... Please try again.'),
-                ),
-              );
-
-              return NavigationDecision.prevent;
-            }
-
-
-            bool earnedReward = false;
-
-            rewardedAd!.fullScreenContentCallback =
-                FullScreenContentCallback(
-                  onAdDismissedFullScreenContent: (ad) async {
-                    ad.dispose();
-
-                    rewardedAd = null;
-                    isRewardShowing = false;
-
-                    loadRewardedAd();
-
-                    if (earnedReward) {
-                      unlockedPremiumLinks.add(productId);
-                      lastRewardTime = DateTime.now();
-
-                      await openBaseLink();
-                    } else {
-                      await showPremiumPopupAfterAdCancel(baseLink);
-                    }
-                  },
-                  onAdFailedToShowFullScreenContent: (ad, error) {
-                    ad.dispose();
-
-                    rewardedAd = null;
-                    isRewardShowing = false;
-
-                    loadRewardedAd();
-                  },
-                );
-
-            rewardedAd!.show(
-              onUserEarnedReward: (ad, reward) {
-                earnedReward = true;
-              },
-            );
-
-            return NavigationDecision.prevent;
-          }
-
-          // ===== BLOCK ADS / HIDDEN TRACKING ONLY =====
-          final url = request.url.toLowerCase();
-
-          final isGoogleAdInternal =
-              url.contains('googlesyndication.com') ||
-                  url.contains('doubleclick.net') ||
-                  url.contains('googleadservices.com') ||
-                  url.contains('pagead2.googlesyndication.com') ||
-                  url.contains('adtrafficquality.google') ||
-                  url.contains('google.com/recaptcha') ||
-                  url.contains('/recaptcha/api2/aframe') ||
-                  url.contains('/pagead/') ||
-                  url.contains('/sodar/');
-
-          if (isGoogleAdInternal) {
-            return NavigationDecision.prevent;
-          }
-
-
-          // OTHER LINKS -> OPEN DIRECT
-          await launchUrl(uri,
-              mode: LaunchMode.externalApplication);
-
-          return NavigationDecision.prevent;
-        },
-
         onPageFinished: (url) async {
-          await syncPremiumToWebView();
-
-          if (Platform.isIOS) {
-            await controller.runJavaScript("""
-(function () {
-  document.documentElement.classList.add(
-    'ios-app-mode',
-    'cocbase-native-ios'
-  );
-
-  if (document.body) {
-    document.body.classList.add(
-      'ios-app-mode',
-      'cocbase-native-ios'
-    );
-  }
-
-  var style = document.getElementById(
-    'cocbase-ios-native-menu-hide'
-  );
-
-  if (!style) {
-    style = document.createElement('style');
-    style.id = 'cocbase-ios-native-menu-hide';
-    style.textContent = `
-      .bottom-nav,
-      #mobile-nav,
-      #mobile-more-sheet,
-      #coc-more-sheet {
-        display: none !important;
-        visibility: hidden !important;
-        opacity: 0 !important;
-        pointer-events: none !important;
-        width: 0 !important;
-        height: 0 !important;
-        min-height: 0 !important;
-        max-height: 0 !important;
-        margin: 0 !important;
-        padding: 0 !important;
-        overflow: hidden !important;
-      }
-
-      body {
-        padding-bottom: 0 !important;
-      }
-    `;
-    document.head.appendChild(style);
-  }
-})();
-""");
-          }
-
-          isReloading = false;
-
-          setState(() {
-            pageLoaded = true;
-            showResumeOverlay = false;
-
-            isHomePage =
-                url == homeUrl ||
-                    url == '$homeUrl/';
-          });
-
-          await Future.delayed(
-            const Duration(milliseconds: 500),
-          );
-
-          // ===== REFRESH BADGE =====
+          currentUrl = url;
+          if (mounted) setState(() { pageLoaded = true; webProgress = 100; });
+          await _applyIOSAppWebMode();
+          await _syncThemeFromPage();
           await _refreshNewsBadge();
-
-
-          // ===== THEME SYNC =====
-          await _installWebThemeObserver();
-          await _syncNavTheme();
-
-          // ===== REVIEW =====
-          _handleReview();
-        }
-    );
-
-  }
-
-  // =========================
-  // (7.4) CONNECTIVITY
-  // =========================
-  void _setupConnectivity() {
-    netSub =
-        Connectivity().onConnectivityChanged.listen((results) {
-          final offline = results.contains(ConnectivityResult.none);
-
-          if (offline == isOffline || !mounted) return;
-
-          setState(() {
-            isOffline = offline;
-          });
-        });
-  }
-
-  // =========================
-  // (7.5) LIFECYCLE FIX
-  // =========================
-
-  @override
-  void didChangeAppLifecycleState(
-      AppLifecycleState state) {
-
-    if (state == AppLifecycleState.paused) {
-      lastPaused = DateTime.now();
-    }
-
-    if (state == AppLifecycleState.resumed) {
-
-      appJustResumed = true;
-
-      final diff =
-          DateTime.now()
-              .difference(lastPaused)
-              .inMinutes;
-
-      // chỉ check nếu ngủ lâu
-      if (diff >= 10) {
-
-        if(mounted){
-          setState(() {
-            showResumeOverlay = true;
-          });
-        }
-
-        _safeCheckAlive();
-      }
-
-      // resume xong reset cờ
-      Future.delayed(
-        const Duration(seconds: 5),
-            () {
-          appJustResumed = false;
+          _countFinishedInternalPage(url);
         },
-      );
+        onWebResourceError: (error) => debugPrint('WebView error: ${error.description}'),
+        onNavigationRequest: _handleNavigationRequest,
+      ))
+      ..loadRequest(Uri.parse(homeUrl));
+  }
+
+  Future<void> _initDeferredServices() async {
+    unawaited(_loadPremiumMapCacheThenFresh());
+    try {
+      await MobileAds.instance.initialize();
+      _adsReady = true;
+      _loadInterstitial();
+      _loadRewarded();
+    } catch (e) {
+      debugPrint('AdMob init error: $e');
     }
   }
 
-  // =========================
-  // (7.6) SAFE CHECK
-  // =========================
-  Future<void> _safeCheckAlive() async {
-    if (isCheckingAlive) return;
-
-    isCheckingAlive = true;
-    await _checkAlive();
-    isCheckingAlive = false;
+  void _setupConnectivity() {
+    _netSub = Connectivity().onConnectivityChanged.listen((results) {
+      final offline = results.isEmpty || results.every((r) => r == ConnectivityResult.none);
+      if (!mounted || offline == isOffline) return;
+      setState(() => isOffline = offline);
+      if (!offline && pageLoaded) _applyIOSAppWebMode();
+    });
   }
 
-  // =========================
-// (7.7) CHECK WEBVIEW DIE (FAST + STABLE)
-// =========================
-  Future<void> _checkAlive() async {
-    await Future.delayed(
-      const Duration(milliseconds: 700),
-    );
+  bool get _supportAdFreeActive =>
+      DateTime.now().millisecondsSinceEpoch < _supportAdFreeUntil;
 
-    if (!mounted) return;
-
-    bool isDead = false;
-
+  Future<void> _loadSupportRewardState() async {
     try {
-      final result =
-      await controller.runJavaScriptReturningResult("""
-document.readyState
-""").timeout(
-        const Duration(seconds: 4),
-      );
-
-      final state = result.toString();
-
-      if (!state.contains('complete') &&
-          !state.contains('interactive')) {
-        isDead = true;
-      }
+      final prefs = await SharedPreferences.getInstance();
+      _supportAdFreeUntil =
+          prefs.getInt('cbp_support_ad_free_until') ?? 0;
     } catch (_) {
-      isDead = true;
+      _supportAdFreeUntil = 0;
     }
-
-    if (isDead) {
-      await _forceRecreateWebView();
-    }
-
-    if (mounted) {
-      setState(() {
-        showResumeOverlay = false;
-      });
-    }
+    if (mounted) setState(() {});
   }
 
-  // =========================
-  // (7.8) FORCE RECREATE
-  // =========================
-  Future<void> _forceRecreateWebView() async {
-
-    if (!mounted) return;
-
-    // tránh recreate giả sau resume
-    if (appJustResumed) {
-
-      await Future.delayed(
-        const Duration(seconds: 2),
+  Future<void> _saveSupportRewardState() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt(
+        'cbp_support_ad_free_until',
+        _supportAdFreeUntil,
       );
-
-      try {
-        await controller.runJavaScriptReturningResult(
-          'document.readyState',
-        );
-
-        if (mounted) {
-          setState(() {
-            showResumeOverlay = false;
-          });
-        }
-
-        return;
-      } catch (_) {}
-    }
-
-    try {
-
-      if (mounted) {
-        setState(() {
-          pageLoaded = false;
-          showResumeOverlay = true;
-          isInitialLaunch = false;
-
-        });
-      }
-
-      _createWebView();
-
-    } catch (_) {
-
-      if (mounted) {
-        setState(() {
-          showResumeOverlay = false;
-        });
-      }
-
-    }
-  }
-
-  // =========================
-  // (7.9) REVIEW
-  // =========================
-  void _handleReview() {
-    if (hasRequestedReview) return;
-
-    openCount++;
-
-    if (openCount >= 6) {
-      hasRequestedReview = true;
-      _requestReview();
-    }
-  }
-
-  Future<void> _requestReview() async {
-
-    try {
-
-      final review = InAppReview.instance;
-
-      if (await review.isAvailable()) {
-        await review.requestReview();
-      }
-
     } catch (_) {}
-
   }
 
-  // =========================
-  // =========================
-  Future<void> _setupFirebase() async {
-    final messaging =
-        FirebaseMessaging.instance;
+  void _loadRewarded() {
+    if (!_adsReady || _rewardedAd != null) return;
 
-    final settings =
-    await messaging.requestPermission(
-      alert: true,
-      badge: true,
-      sound: true,
+    RewardedAd.load(
+      adUnitId: rewardedAdUnitId,
+      request: const AdRequest(nonPersonalizedAds: true),
+      rewardedAdLoadCallback: RewardedAdLoadCallback(
+        onAdLoaded: (ad) {
+          _rewardedAd?.dispose();
+          _rewardedAd = ad;
+          if (mounted) setState(() => _rewardedReady = true);
+        },
+        onAdFailedToLoad: (error) {
+          _rewardedAd = null;
+          if (mounted) setState(() => _rewardedReady = false);
+          debugPrint('Rewarded load failed: $error');
+        },
+      ),
+    );
+  }
+
+  Future<void> _watchSupportAd() async {
+    if (_supportAdFreeActive) {
+      final leftMs = _supportAdFreeUntil -
+          DateTime.now().millisecondsSinceEpoch;
+      final leftMin =
+          ((leftMs + 59999) ~/ 60000).clamp(1, supportAdFreeMinutes);
+
+      _toast(
+        'Thanks for supporting CocBasePro. '
+        'Ad-free browsing is active for $leftMin more min.',
+      );
+      return;
+    }
+
+    final ad = _rewardedAd;
+    if (ad == null || !_rewardedReady) {
+      _toast('Support ad is not ready yet. Please try again shortly.');
+      _loadRewarded();
+      return;
+    }
+
+    _rewardedAd = null;
+    _rewardedReady = false;
+
+    ad.fullScreenContentCallback = FullScreenContentCallback(
+      onAdDismissedFullScreenContent: (ad) {
+        ad.dispose();
+        _loadRewarded();
+      },
+      onAdFailedToShowFullScreenContent: (ad, error) {
+        ad.dispose();
+        _loadRewarded();
+        _toast('Ad could not be shown. Please try again later.');
+      },
     );
 
-    log(
-      'Permission: ${settings.authorizationStatus}',
-    );
+    ad.show(
+      onUserEarnedReward: (_, __) async {
+        _supportAdFreeUntil =
+            DateTime.now().millisecondsSinceEpoch + supportAdFreeMs;
+        internalPagesSinceAd = 0;
+        await _saveSupportRewardState();
 
-    await messaging.subscribeToTopic(
-      'all',
-    );
-
-    log(
-      'Subscribed topic: all',
-    );
-
-    final token =
-    await messaging.getToken();
-
-    log(
-      'FCM TOKEN: $token',
-    );
-
-    FirebaseMessaging.onMessage.listen(
-          (RemoteMessage message) {
-
-        log(
-            'Foreground: '
-                '${message.notification?.title}'
+        if (!mounted) return;
+        setState(() {});
+        _toast(
+          'Thanks for supporting CocBasePro! '
+          'Enjoy $supportAdFreeMinutes minutes without interstitial ads.',
         );
-
       },
     );
   }
 
-  // =========================
-  // (7.11) BACK
-  // =========================
-  Future<void> _back() async {
-    if (await controller.canGoBack()) {
-      await controller.goBack();
+  void _loadInterstitial() {
+    if (!_adsReady || _interstitialAd != null || _interstitialShowing) return;
+    InterstitialAd.load(
+      adUnitId: interstitialAdUnitId,
+      request: const AdRequest(nonPersonalizedAds: true),
+      adLoadCallback: InterstitialAdLoadCallback(
+        onAdLoaded: (ad) { _interstitialAd?.dispose(); _interstitialAd = ad; },
+        onAdFailedToLoad: (error) {
+          _interstitialAd = null;
+          debugPrint('Interstitial load failed: $error');
+        },
+      ),
+    );
+  }
+
+  void _countFinishedInternalPage(String url) {
+    final uri = Uri.tryParse(url);
+    if (uri == null || !uri.host.contains('cocbasepro.com')) return;
+    if (url == lastFinishedInternalUrl) return;
+    lastFinishedInternalUrl = url;
+    if ((url == homeUrl || url == '$homeUrl/') && internalPagesSinceAd == 0) return;
+    internalPagesSinceAd++;
+    _maybeShowInterstitial();
+  }
+
+  void _maybeShowInterstitial() {
+    if (_supportAdFreeActive) return;
+    if (_interstitialShowing || internalPagesSinceAd < pagesPerInterstitial) return;
+    final now = DateTime.now();
+    if (now.difference(sessionStartedAt).inSeconds < firstAdDelaySeconds) return;
+    if (now.difference(lastInterstitialAt).inSeconds < interstitialCooldownSeconds) return;
+    final ad = _interstitialAd;
+    if (ad == null) { _loadInterstitial(); return; }
+
+    _interstitialAd = null;
+    _interstitialShowing = true;
+    internalPagesSinceAd = 0;
+    lastInterstitialAt = now;
+    ad.fullScreenContentCallback = FullScreenContentCallback(
+      onAdDismissedFullScreenContent: (ad) {
+        _interstitialShowing = false;
+        ad.dispose();
+        _loadInterstitial();
+      },
+      onAdFailedToShowFullScreenContent: (ad, error) {
+        _interstitialShowing = false;
+        ad.dispose();
+        _loadInterstitial();
+      },
+    );
+    ad.show();
+  }
+
+  Future<NavigationDecision> _handleNavigationRequest(NavigationRequest request) async {
+    final uri = Uri.tryParse(request.url);
+    if (uri == null || isOffline) return NavigationDecision.prevent;
+    final host = uri.host.toLowerCase();
+
+    if (host.contains('cocbasepro.com')) {
+      currentUrl = request.url;
+      return NavigationDecision.navigate;
+    }
+    if (host.contains('firebaseio.com')) return NavigationDecision.prevent;
+
+    if (host.contains('buymeacoffee.com') || host.contains('bmc.link')) {
+      final productId = _extractPremiumProductId(uri);
+      if (productId.isNotEmpty) {
+        final resolved = await _resolvePremiumBase(productId);
+        if (resolved != null && resolved.isNotEmpty) {
+          await _openExternal(resolved);
+        } else {
+          _toast('Base link is preparing. Please try again.');
+        }
+      } else {
+        _toast('Support links are available on cocbasepro.com in your browser.');
+      }
+      return NavigationDecision.prevent;
+    }
+
+    await _openExternal(request.url);
+    return NavigationDecision.prevent;
+  }
+
+  String _extractPremiumProductId(Uri uri) {
+    final parts = uri.pathSegments.where((e) => e.isNotEmpty).toList();
+    final index = parts.indexOf('e');
+    return (index >= 0 && index + 1 < parts.length) ? parts[index + 1] : '';
+  }
+
+  Future<void> _loadPremiumMapCacheThenFresh() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final cached = prefs.getString('cbp_premium_map_ios_v5');
+      if (cached != null && cached.isNotEmpty) {
+        final data = jsonDecode(cached);
+        if (data is Map) {
+          premiumMap
+            ..clear()
+            ..addAll(data.map((key, value) => MapEntry(key.toString(), value.toString())));
+        }
+      }
+    } catch (_) {}
+    await _loadPremiumMapFresh();
+  }
+
+  Future<void> _loadPremiumMapFresh() async {
+    try {
+      final response = await http.get(Uri.parse('$premiumMapUrl?v=${DateTime.now().millisecondsSinceEpoch}'))
+          .timeout(const Duration(seconds: 6));
+      if (response.statusCode != 200) return;
+      final data = jsonDecode(response.body);
+      if (data is! Map) return;
+      final parsed = <String, String>{};
+      data.forEach((key, value) {
+        final link = value.toString().trim();
+        if (link.startsWith('https://link.clashofclans.com/')) parsed[key.toString()] = link;
+      });
+      if (parsed.isEmpty) return;
+      premiumMap..clear()..addAll(parsed);
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('cbp_premium_map_ios_v5', jsonEncode(parsed));
+    } catch (e) {
+      debugPrint('Premium map refresh error: $e');
     }
   }
 
-  // =========================
-// REFRESH NEWS BADGE
-// =========================
-  Future<void> _refreshNewsBadge() async {
+  Future<String?> _resolvePremiumBase(String id) async {
+    final cached = premiumMap[id];
+    if (cached != null && cached.isNotEmpty) return cached;
+    await _loadPremiumMapFresh();
+    return premiumMap[id];
+  }
 
-    for (int i = 0; i < 10; i++) {
+  Future<void> _openExternal(String url) async {
+    final uri = Uri.tryParse(url);
+    if (uri == null) return;
+    final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!ok) _toast('Cannot open this link.');
+  }
 
-      try {
-
-        final result =
-        await controller
-            .runJavaScriptReturningResult("""
-(() => {
-
-  const el =
-      document.getElementById(
-        'news-count'
-      );
-
-  if(!el) return -1;
-
-  const txt =
-      (el.textContent || '')
-      .replace(/[^0-9]/g,'');
-
-  return txt
-      ? parseInt(txt,10)
-      : 0;
-
+  Future<void> _applyIOSAppWebMode() async {
+    try {
+      await controller.runJavaScript(r'''
+(function () {
+  document.documentElement.classList.add('ios-app-mode','cocbase-native-ios','cocbase-app-webview','cocbase-no-ads');
+  if (document.body) document.body.classList.add('ios-app-mode','cocbase-native-ios','cocbase-app-webview','cocbase-no-ads');
+  const styleId = 'cbp-ios-native-shell-v5';
+  let style = document.getElementById(styleId);
+  if (!style) { style = document.createElement('style'); style.id = styleId; document.head.appendChild(style); }
+  style.textContent = `#mobile-nav,.bottom-nav,#nav-donate-btn,#cbp-support-popup,[href="#donate-center"],.cbp-support-progress{display:none!important;visibility:hidden!important;pointer-events:none!important}`;
 })();
-""");
+''');
+    } catch (_) {}
+  }
 
-        final count =
-        int.tryParse(
-          result
-              .toString()
-              .replaceAll(
-            RegExp(r'[^0-9-]'),
-            '',
-          ),
-        );
+  Future<void> _syncThemeFromPage() async {
+    try {
+      final result = await controller.runJavaScriptReturningResult(r'''
+(function(){const m=document.documentElement.getAttribute('data-mode')||(document.body&&document.body.getAttribute('data-mode'));if(m==='dark')return'dark';if(m==='light')return'light';return window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';})();
+''');
+      _setTheme(result.toString().replaceAll('"','').trim().toLowerCase() == 'dark');
+    } catch (_) {}
+  }
 
-        if(count != null &&
-            count >= 0){
+  void _setTheme(bool dark) {
+    if (!mounted || dark == isDarkMode) return;
+    setState(() => isDarkMode = dark);
+  }
 
-          if(!mounted) return;
+  Future<void> _refreshNewsBadge() async {
+    try {
+      final result = await controller.runJavaScriptReturningResult(r'''(function(){const b=document.getElementById('news-badge');return b?(parseInt(b.textContent||'0',10)||0):0;})();''');
+      final value = int.tryParse(result.toString().replaceAll('"','').trim()) ?? 0;
+      if (mounted && value != unreadNews) setState(() => unreadNews = value);
+    } catch (_) {}
+  }
 
-          if(count != unreadNews){
-
-            setState(() {
-              unreadNews = count;
-            });
-
-          }
-
-          debugPrint(
-              "🔥 badge refreshed = $unreadNews"
-          );
-
-          return;
-        }
-
-      } catch (_) {}
-
-      await Future.delayed(
-        const Duration(
-          milliseconds: 500,
-        ),
-      );
+  Future<void> _openHome() async {
+    if (currentUrl == homeUrl || currentUrl == '$homeUrl/') {
+      await controller.runJavaScript("window.scrollTo({top:0,behavior:'smooth'});");
+    } else {
+      currentUrl = homeUrl;
+      await controller.loadRequest(Uri.parse(homeUrl));
     }
+  }
+
+  Future<bool> _runMenuScript(String script) async {
+    try {
+      final result = await controller.runJavaScriptReturningResult(script);
+      return result.toString().toLowerCase().contains('true');
+    } catch (_) { return false; }
+  }
+
+  Future<void> _openNews() async {
+    await _runMenuScript(r'''(function(){if(typeof window.openNewsPopup==='function'){window.openNewsPopup();return true;}const b=document.getElementById('nav-news-btn');if(b){b.click();return true;}return false;})();''');
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    await _refreshNewsBadge();
+  }
+
+  Future<void> _openFindSource() async {
+    final opened = await _runMenuScript(r'''(function(){if(typeof window.closeMobileMore==='function')window.closeMobileMore();if(typeof window.openAIFinder==='function'){window.openAIFinder();return true;}if(typeof window.openAIFinderPopup==='function'){window.openAIFinderPopup();return true;}if(typeof window.CBPMenuOpenAIFinder==='function'){window.CBPMenuOpenAIFinder();return true;}const b=document.getElementById('nav-ai-btn');if(b){b.click();return true;}return false;})();''');
+    if (!opened) _toast('Find Source is not available on this page.');
+  }
+
+  Future<void> _openSaved() async {
+    final opened = await _runMenuScript(r'''(function(){if(typeof window.openSimple==='function'){window.openSimple('saved');return true;}const b=document.getElementById('nav-saved-btn');if(b){b.click();return true;}return false;})();''');
+    if (!opened) _toast('Saved Bases is not available on this page.');
+  }
+
+  Future<void> _navigateInternal(String path) async {
+    Navigator.of(context).pop();
+    final uri = Uri.parse('$homeUrl$path');
+    currentUrl = uri.toString();
+    await controller.loadRequest(uri);
+  }
+
+  Future<void> _openWebPopup(String script) async {
+    Navigator.of(context).pop();
+    await _runMenuScript(script);
   }
 
   Future<void> _showMoreMenu() async {
-    if (isMoreMenuOpen) return;
-
-    setState(() {
-      isMoreMenuOpen = true;
-    });
-
-    await showModalBottomSheet(
+    if (moreMenuOpen) return;
+    setState(() => moreMenuOpen = true);
+    await showModalBottomSheet<void>(
       context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
       backgroundColor: Colors.transparent,
-      barrierColor: Colors.black.withValues(alpha: 0.42),
       builder: (sheetContext) {
-        final media = MediaQuery.of(sheetContext);
-        final maxHeight = media.size.height * 0.68;
-
-        final panelColor = navBgColor;
-        final primaryText = navIconColor;
-        final secondaryText = navIconColor.withValues(alpha: 0.72);
-        final tileColor = lastDarkMode
-            ? Colors.white.withValues(alpha: 0.06)
-            : Colors.black.withValues(alpha: 0.035);
-        final tileBorder = lastDarkMode
-            ? Colors.white.withValues(alpha: 0.10)
-            : Colors.black.withValues(alpha: 0.08);
-        final accentColor = lastDarkMode
-            ? const Color(0xFFFFD54F)
-            : const Color(0xFFFFB300);
-
-        Future<void> closeThen(Future<void> Function() action) async {
-          Navigator.pop(sheetContext);
-          await Future.delayed(const Duration(milliseconds: 120));
-          await action();
-        }
-
-        Widget tile({
-          required IconData icon,
-          required String label,
-          required Future<void> Function() action,
-          bool accent = false,
-        }) {
-          return Material(
-            color: Colors.transparent,
-            child: InkWell(
-              borderRadius: BorderRadius.circular(14),
-              onTap: () => closeThen(action),
-              child: Ink(
-                decoration: BoxDecoration(
-                  color: accent
-                      ? accentColor.withValues(
-                    alpha: lastDarkMode ? 0.20 : 0.16,
-                  )
-                      : tileColor,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(
-                    color: accent
-                        ? accentColor.withValues(alpha: 0.72)
-                        : tileBorder,
-                  ),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 5,
-                    vertical: 8,
-                  ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        icon,
-                        size: 22,
-                        color: accent ? accentColor : primaryText,
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        label,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: primaryText,
-                          fontSize: 10.5,
-                          fontWeight: FontWeight.w800,
-                          height: 1.08,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+        final fg = isDarkMode ? const Color(0xFFF8FAFC) : const Color(0xFF111827);
+        final bg = isDarkMode ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC);
+        return SafeArea(top: false, child: Container(
+          padding: const EdgeInsets.fromLTRB(14,8,14,14),
+          decoration: BoxDecoration(color:bg,borderRadius:const BorderRadius.vertical(top:Radius.circular(22))),
+          child: Column(mainAxisSize:MainAxisSize.min,children:[
+            Container(width:38,height:4,margin:const EdgeInsets.only(bottom:10),decoration:BoxDecoration(color:fg.withValues(alpha:.20),borderRadius:BorderRadius.circular(999))),
+            Row(children:[Expanded(child:Text('Explore CocBasePro',style:TextStyle(color:fg,fontSize:16,fontWeight:FontWeight.w900))),IconButton(visualDensity:VisualDensity.compact,onPressed:()=>Navigator.pop(sheetContext),icon:Icon(Icons.close_rounded,color:fg))]),
+            const SizedBox(height:4),
+            GridView.count(crossAxisCount:3,shrinkWrap:true,physics:const NeverScrollableScrollPhysics(),mainAxisSpacing:8,crossAxisSpacing:8,childAspectRatio:1.22,children:[
+              _moreTile(Icons.home_work_rounded,'Town Hall',fg,()=>_navigateInternal('/p/free-coc-bases.html?th=all')),
+              _moreTile(Icons.cottage_rounded,'Builder Hall',fg,()=>_navigateInternal('/p/free-coc-bases.html?bh=all')),
+              _moreTile(Icons.account_balance_rounded,'Capital Hall',fg,()=>_navigateInternal('/p/free-coc-bases.html?ch=all')),
+              _moreTile(Icons.calendar_month_rounded,'Events',fg,()=>_openWebPopup(r'''(function(){if(typeof window.openEventPopup==='function'){window.openEventPopup();return true;}return false;})();''')),
+              _moreTile(Icons.emoji_events_rounded,'Rankings',fg,()=>_openWebPopup(r'''(function(){if(typeof window.openSimple==='function'){window.openSimple('topclans');return true;}return false;})();''')),
+              _moreTile(Icons.auto_awesome_rounded,'Hero Skins',fg,()=>_openWebPopup(r'''(function(){if(typeof window.openSimple==='function'){window.openSimple('heroskins');return true;}return false;})();''')),
+              _moreTile(
+                Icons.favorite_rounded,
+                'Support',
+                const Color(0xFFFACC15),
+                () {
+                  Navigator.of(context).pop();
+                  _showSupportSheet();
+                },
               ),
-            ),
-          );
-        }
+              _moreTile(Icons.grid_view_rounded,'All Bases',fg,()=>_navigateInternal('/p/coc-bases.html')),
+            ]),
+          ]),
+        ));
+      },
+    );
+    if (mounted) setState(() => moreMenuOpen = false);
+  }
 
-        return Align(
-          alignment: Alignment.bottomCenter,
+  Future<void> _showSupportSheet() async {
+    final leftMs =
+        _supportAdFreeUntil - DateTime.now().millisecondsSinceEpoch;
+    final leftMin = leftMs > 0
+        ? ((leftMs + 59999) ~/ 60000).clamp(1, supportAdFreeMinutes)
+        : 0;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        final fg = isDarkMode
+            ? const Color(0xFFF8FAFC)
+            : const Color(0xFF111827);
+        final bg = isDarkMode
+            ? const Color(0xFF0F172A)
+            : const Color(0xFFF8FAFC);
+
+        return SafeArea(
+          top: false,
           child: Container(
-            width: double.infinity,
-            constraints: BoxConstraints(maxHeight: maxHeight),
-            margin: const EdgeInsets.fromLTRB(10, 0, 10, 6),
-            padding: const EdgeInsets.fromLTRB(13, 9, 13, 11),
+            margin: const EdgeInsets.all(10),
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
             decoration: BoxDecoration(
-              color: panelColor,
-              borderRadius: BorderRadius.circular(21),
-              border: Border.all(color: tileBorder),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.24),
-                  blurRadius: 24,
-                  offset: const Offset(0, 10),
-                ),
-              ],
+              color: bg,
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(color: const Color(0x33FACC15)),
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: Material(
-                    color: tileColor,
-                    borderRadius: BorderRadius.circular(999),
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(999),
-                      onTap: () => Navigator.pop(sheetContext),
-                      child: SizedBox(
-                        width: 32,
-                        height: 32,
-                        child: Icon(
-                          Icons.close_rounded,
-                          size: 18,
-                          color: secondaryText,
-                        ),
-                      ),
-                    ),
+                const Icon(
+                  Icons.favorite_rounded,
+                  color: Color(0xFFFACC15),
+                  size: 34,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Support CocBasePro',
+                  style: TextStyle(
+                    color: fg,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
                   ),
                 ),
                 const SizedBox(height: 6),
-                Flexible(
-                  child: GridView.count(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    crossAxisCount: 3,
-                    crossAxisSpacing: 8,
-                    mainAxisSpacing: 8,
-                    childAspectRatio: 1.12,
-                    children: [
-                      tile(
-                        icon: Icons.crop_square_rounded,
-                        label: 'Free Bases',
-                        action: () async {
-                          const url =
-                              'https://www.cocbasepro.com/p/coc-bases.html';
-                          currentUrl = url;
-                          await controller.loadRequest(Uri.parse(url));
-                        },
-                      ),
-                      tile(
-                        icon: Icons.workspace_premium_outlined,
-                        label: 'Premium Bases',
-                        action: () async {
-                          const url =
-                              'https://www.cocbasepro.com/p/premium-coc-bases.html';
-                          currentUrl = url;
-                          await controller.loadRequest(Uri.parse(url));
-                        },
-                      ),
-                      tile(
-                        icon: Icons.calendar_month_rounded,
-                        label: 'Events',
-                        action: () async {
-                          await controller.runJavaScript("""
-if (typeof window.openEventPopup === 'function') {
-  window.openEventPopup();
-}
-""");
-                        },
-                      ),
-                      tile(
-                        icon: Icons.bookmark_rounded,
-                        label: 'Saved Bases',
-                        action: () async {
-                          await controller.runJavaScript("""
-if (typeof window.openSimple === 'function') {
-  window.openSimple('saved');
-}
-""");
-                        },
-                      ),
-                      tile(
-                        icon: Icons.emoji_events_rounded,
-                        label: 'Rankings',
-                        action: () async {
-                          await controller.runJavaScript("""
-if (typeof window.openSimple === 'function') {
-  window.openSimple('topclans');
-}
-""");
-                        },
-                      ),
-                      tile(
-                        icon: Icons.subscriptions_rounded,
-                        label: 'Subscription',
-                        action: () async {
-                          await showPremiumSubscribePopup('');
-                        },
-                      ),
-                      tile(
-                        icon: Icons.refresh_rounded,
-                        label: 'Reload',
-                        accent: true,
-                        action: () async {
-                          if (!mounted) return;
-                          setState(() {
-                            pageLoaded = false;
-                            showResumeOverlay = true;
-                            isInitialLaunch = false;
-                          });
-                          try {
-                            await controller.reload();
-                          } catch (_) {
-                            if (!mounted) return;
-                            setState(() {
-                              showResumeOverlay = false;
-                            });
-                          }
-                        },
-                      ),
-                      tile(
-                        icon: Icons.info_outline_rounded,
-                        label: 'About',
-                        action: () async {
-                          const url =
-                              'https://www.cocbasepro.com/p/about.html';
-                          currentUrl = url;
-                          await controller.loadRequest(Uri.parse(url));
-                        },
-                      ),
-                      tile(
-                        icon: Icons.shield_outlined,
-                        label: 'Privacy',
-                        action: () async {
-                          const url =
-                              'https://www.cocbasepro.com/p/privacy-policy.html';
-                          currentUrl = url;
-                          await controller.loadRequest(Uri.parse(url));
-                        },
-                      ),
-                    ],
+                Text(
+                  'Watch one short ad to support ongoing development '
+                  'and server costs.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: fg.withValues(alpha: 0.68),
+                    fontSize: 11.5,
+                    height: 1.35,
                   ),
                 ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-
-    if (mounted) {
-      setState(() {
-        isMoreMenuOpen = false;
-      });
-    }
-  }
-
-  // =========================
-  // (7.12) DISPOSE
-  // =========================
-  @override
-  void dispose() {
-    purchaseSub?.cancel();
-    _badgeDebounce?.cancel();
-    WidgetsBinding.instance.removeObserver(this);
-
-    netSub.cancel();
-    interstitialAd?.dispose();
-    rewardedAd?.dispose();
-    themeTimer?.cancel();
-    newsTimer?.cancel();
-    super.dispose();
-  }
-
-  void _applyNativeTheme(bool isDark) {
-    if (!mounted) return;
-
-    if (lastDarkMode == isDark &&
-        ((isDark && navBgColor == const Color(0xFF0F172A)) ||
-            (!isDark && navBgColor != const Color(0xFF0F172A)))) {
-      return;
-    }
-
-    lastDarkMode = isDark;
-
-    final background = isDark
-        ? const Color(0xFF0F172A)
-        : Colors.white.withValues(alpha: 0.96);
-
-    final foreground = isDark
-        ? Colors.white.withValues(alpha: 0.92)
-        : const Color(0xFF111827);
-
-    setState(() {
-      navBgColor = background;
-      navIconColor = foreground;
-    });
-
-    SystemChrome.setSystemUIOverlayStyle(
-      SystemUiOverlayStyle(
-        statusBarColor: isDark
-            ? const Color(0xFF0F172A)
-            : const Color(0xFFF8FAFC),
-        statusBarIconBrightness:
-        isDark ? Brightness.light : Brightness.dark,
-        statusBarBrightness:
-        isDark ? Brightness.dark : Brightness.light,
-        systemNavigationBarColor: isDark
-            ? const Color(0xFF050505)
-            : const Color(0xFFF8FAFC),
-        systemNavigationBarIconBrightness:
-        isDark ? Brightness.light : Brightness.dark,
-      ),
-    );
-  }
-
-  Future<void> _installWebThemeObserver() async {
-    try {
-      await controller.runJavaScript("""
-(function () {
-  if (window.__cocbaseThemeObserverInstalled) {
-    if (typeof window.__cocbaseSendTheme === 'function') {
-      window.__cocbaseSendTheme();
-    }
-    return;
-  }
-
-  window.__cocbaseThemeObserverInstalled = true;
-
-  function resolveTheme() {
-    const htmlMode =
-      document.documentElement.getAttribute('data-mode');
-
-    const bodyMode =
-      document.body &&
-      document.body.getAttribute('data-mode');
-
-    const storedMode =
-      localStorage.getItem('mode') ||
-      localStorage.getItem('theme') ||
-      localStorage.getItem('darkMode');
-
-    if (htmlMode === 'light' || bodyMode === 'light') {
-      return 'light';
-    }
-
-    if (htmlMode === 'dark' || bodyMode === 'dark') {
-      return 'dark';
-    }
-
-    if (storedMode === 'light') {
-      return 'light';
-    }
-
-    if (storedMode === 'dark' || storedMode === 'true') {
-      return 'dark';
-    }
-
-    return window.matchMedia('(prefers-color-scheme: dark)').matches
-      ? 'dark'
-      : 'light';
-  }
-
-  window.__cocbaseSendTheme = function () {
-    const mode = resolveTheme();
-
-    if (window.AppTheme &&
-        typeof window.AppTheme.postMessage === 'function') {
-      window.AppTheme.postMessage(mode);
-    }
-  };
-
-  const observer = new MutationObserver(function () {
-    window.__cocbaseSendTheme();
-  });
-
-  observer.observe(document.documentElement, {
-    attributes: true,
-    attributeFilter: ['data-mode', 'class']
-  });
-
-  if (document.body) {
-    observer.observe(document.body, {
-      attributes: true,
-      attributeFilter: ['data-mode', 'class']
-    });
-  }
-
-  const media = window.matchMedia('(prefers-color-scheme: dark)');
-
-  if (typeof media.addEventListener === 'function') {
-    media.addEventListener('change', window.__cocbaseSendTheme);
-  }
-
-  window.addEventListener('storage', window.__cocbaseSendTheme);
-  document.addEventListener('click', function () {
-    setTimeout(window.__cocbaseSendTheme, 80);
-    setTimeout(window.__cocbaseSendTheme, 300);
-  }, true);
-
-  window.__cocbaseSendTheme();
-})();
-""");
-    } catch (e) {
-      debugPrint('Theme observer error: $e');
-    }
-  }
-
-  Future<void> _syncNavTheme() async {
-    try {
-      final result =
-      await controller.runJavaScriptReturningResult("""
-(function () {
-  const htmlMode =
-    document.documentElement.getAttribute('data-mode');
-
-  const bodyMode =
-    document.body &&
-    document.body.getAttribute('data-mode');
-
-  const storedMode =
-    localStorage.getItem('mode') ||
-    localStorage.getItem('theme') ||
-    localStorage.getItem('darkMode');
-
-  if (htmlMode === 'light' || bodyMode === 'light') {
-    return 'light';
-  }
-
-  if (htmlMode === 'dark' || bodyMode === 'dark') {
-    return 'dark';
-  }
-
-  if (storedMode === 'light') {
-    return 'light';
-  }
-
-  if (storedMode === 'dark' || storedMode === 'true') {
-    return 'dark';
-  }
-
-  return window.matchMedia('(prefers-color-scheme: dark)').matches
-    ? 'dark'
-    : 'light';
-})();
-""");
-
-      final mode = result
-          .toString()
-          .replaceAll('"', '')
-          .trim()
-          .toLowerCase();
-
-      _applyNativeTheme(mode == 'dark');
-    } catch (e) {
-      debugPrint('Theme sync error: $e');
-    }
-  }
-
-  Future<void> _watchThemeChange() async {
-    try {
-      final result =
-      await controller.runJavaScriptReturningResult("""
-(function () {
-  const mode =
-    document.documentElement.getAttribute('data-mode') ||
-    (document.body && document.body.getAttribute('data-mode'));
-
-  if (mode === 'light') return 'light';
-  if (mode === 'dark') return 'dark';
-
-  return window.matchMedia('(prefers-color-scheme: dark)').matches
-    ? 'dark'
-    : 'light';
-})();
-""");
-
-      final mode = result
-          .toString()
-          .replaceAll('"', '')
-          .trim()
-          .toLowerCase();
-
-      _applyNativeTheme(mode == 'dark');
-    } catch (_) {}
-  }
-
-
-  // =========================
-  // (7.12A) WEB-MATCHED IOS MENU
-  // Exact web order:
-  // Home · Skins · AI Find · News · More
-  // =========================
-
-  Future<void> _openHomeFromAppMenu() async {
-    if (currentUrl == homeUrl || currentUrl == '$homeUrl/') {
-      await controller.runJavaScript("""
-window.scrollTo({
-  top: 0,
-  behavior: 'smooth'
-});
-""");
-      return;
-    }
-
-    currentUrl = homeUrl;
-    await controller.loadRequest(Uri.parse(homeUrl));
-  }
-
-  Future<void> _openSkinsFromAppMenu() async {
-    await controller.runJavaScript("""
-(function () {
-  if (typeof window.openSimple === 'function') {
-    window.openSimple('heroskins');
-    return;
-  }
-
-  const button = document.querySelector('[data-popup="heroskins"]');
-
-  if (button) {
-    button.click();
-  }
-})();
-""");
-  }
-
-  Future<void> _openAiFinderFromAppMenu() async {
-    final allowed = await canUseAiFinder();
-
-    if (!allowed) return;
-
-    // No interstitial is attached to a normal AI Finder menu tap.
-    try {
-      final result = await controller.runJavaScriptReturningResult("""
-(function () {
-  try {
-    if (typeof window.closeMobileMore === 'function') {
-      window.closeMobileMore();
-    }
-
-    if (typeof window.openAIFinder === 'function') {
-      window.openAIFinder();
-      return 'openAIFinder';
-    }
-
-    if (typeof window.openAIFinderPopup === 'function') {
-      window.openAIFinderPopup();
-      return 'openAIFinderPopup';
-    }
-
-    if (typeof window.CBPMenuOpenAIFinder === 'function') {
-      window.CBPMenuOpenAIFinder();
-      return 'CBPMenuOpenAIFinder';
-    }
-
-    const button = document.getElementById('nav-ai-btn');
-
-    if (button) {
-      button.click();
-      return 'nav-ai-btn';
-    }
-
-    return 'not-found';
-  } catch (error) {
-    return 'error:' + String(error);
-  }
-})();
-""");
-
-      final message = result.toString();
-
-      if (message.contains('not-found') && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('AI Finder is not available on this page.'),
-          ),
-        );
-      }
-    } catch (error) {
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Cannot open AI Finder: $error'),
-        ),
-      );
-    }
-  }
-
-  Future<void> _openNewsFromAppMenu() async {
-    await controller.runJavaScript("""
-(function () {
-  if (typeof window.openNewsPopup === 'function') {
-    window.openNewsPopup();
-    return;
-  }
-
-  const button = document.getElementById('nav-news-btn');
-
-  if (button) {
-    button.click();
-  }
-})();
-""");
-
-    await Future.delayed(
-      const Duration(milliseconds: 450),
-    );
-
-    await _refreshNewsBadge();
-  }
-
-  Widget _webMenuItem({
-    required IconData icon,
-    required String label,
-    required VoidCallback onTap,
-    Widget? badge,
-  }) {
-    return Expanded(
-      child: Semantics(
-        button: true,
-        label: label,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(12),
-          onTap: onTap,
-          child: SizedBox(
-            height: 48,
-            child: Stack(
-              clipBehavior: Clip.none,
-              alignment: Alignment.center,
-              children: [
-                Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      icon,
-                      color: lastDarkMode
-                          ? const Color(0xFFF8FAFC)
-                          : const Color(0xFF111827),
-                      size: 21,
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: lastDarkMode
-                            ? const Color(0xFFF8FAFC)
-                            : const Color(0xFF111827),
-                        fontSize: 9,
-                        fontWeight: FontWeight.w800,
-                        height: 1,
-                      ),
-                    ),
-                  ],
-                ),
-                if (badge != null)
-                  Positioned(
-                    top: 2,
-                    right: 8,
-                    child: badge,
+                const SizedBox(height: 6),
+                Text(
+                  'As a thank-you, you get $supportAdFreeMinutes minutes '
+                  'without interstitial ads.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: fg.withValues(alpha: 0.82),
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w700,
                   ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _newsBadge() {
-    if (unreadNews <= 0) {
-      return const SizedBox.shrink();
-    }
-
-    return Container(
-      constraints: const BoxConstraints(
-        minWidth: 16,
-        minHeight: 16,
-      ),
-      padding: const EdgeInsets.symmetric(
-        horizontal: 4,
-      ),
-      decoration: const BoxDecoration(
-        color: Color(0xFFEF4444),
-        borderRadius: BorderRadius.all(
-          Radius.circular(999),
-        ),
-      ),
-      alignment: Alignment.center,
-      child: Text(
-        unreadNews > 9 ? '9+' : unreadNews.toString(),
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 9,
-          fontWeight: FontWeight.w900,
-          height: 1,
-        ),
-      ),
-    );
-  }
-
-  Widget _syncedAppMenu() {
-    return SafeArea(
-      top: false,
-      minimum: const EdgeInsets.fromLTRB(0, 0, 0, 0),
-      child: Container(
-        height: 58,
-        padding: const EdgeInsets.fromLTRB(5, 4, 5, 4),
-        decoration: BoxDecoration(
-          color: lastDarkMode
-              ? const Color(0xF007111F)
-              : Colors.white.withValues(alpha: 0.96),
-          border: Border(
-            top: BorderSide(
-              color: lastDarkMode
-                  ? Colors.white.withValues(alpha: 0.06)
-                  : Colors.black.withValues(alpha: 0.05),
-              width: 0.5,
-            ),
-          ),
-        ),
-        child: Material(
-          color: Colors.transparent,
-          child: Row(
-            children: [
-              _webMenuItem(
-                icon: Icons.home_rounded,
-                label: 'Home',
-                onTap: () {
-                  _openHomeFromAppMenu();
-                },
-              ),
-              _webMenuItem(
-                icon: Icons.auto_awesome_rounded,
-                label: 'Skins',
-                onTap: () {
-                  _openSkinsFromAppMenu();
-                },
-              ),
-              _webMenuItem(
-                icon: Icons.search_rounded,
-                label: 'AI Find',
-                onTap: () {
-                  _openAiFinderFromAppMenu();
-                },
-              ),
-              _webMenuItem(
-                icon: Icons.article_rounded,
-                label: 'News',
-                badge: _newsBadge(),
-                onTap: () {
-                  _openNewsFromAppMenu();
-                },
-              ),
-              _webMenuItem(
-                icon: Icons.menu_rounded,
-                label: 'More',
-                onTap: _showMoreMenu,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  // =========================
-// (7.13) UI
-// =========================
-  @override
-  Widget build(BuildContext context) {
-
-    return PopScope(
-      canPop: false,
-
-      onPopInvokedWithResult:
-          (didPop, _) async {
-        if (!didPop) {
-          await _back();
-        }
-      },
-
-      child: Scaffold(
-        backgroundColor:
-        lastDarkMode
-            ? const Color(0xFF050505)
-            : const Color(0xFFF8FAFC),
-
-        // ======================
-        // NATIVE BOTTOM NAV
-        // ======================
-        bottomNavigationBar:
-        Platform.isIOS &&
-            pageLoaded &&
-            !isMoreMenuOpen
-            ? _syncedAppMenu()
-            : null,
-        // ======================
-        // BODY
-        // ======================
-        // ======================
-// BODY
-// ======================
-        body: AnnotatedRegion<SystemUiOverlayStyle>(
-          value: SystemUiOverlayStyle(
-            statusBarColor: lastDarkMode
-                ? const Color(0xFF0F172A)
-                : const Color(0xFFF8FAFC),
-            statusBarIconBrightness: lastDarkMode
-                ? Brightness.light
-                : Brightness.dark,
-            statusBarBrightness: lastDarkMode
-                ? Brightness.dark
-                : Brightness.light,
-            systemNavigationBarColor: lastDarkMode
-                ? const Color(0xFF050505)
-                : const Color(0xFFF8FAFC),
-            systemNavigationBarIconBrightness: lastDarkMode
-                ? Brightness.light
-                : Brightness.dark,
-          ),
-
-          child: Stack(
-            children: [
-
-              // ===== TOP SAFE AREA BG =====
-              Positioned(
-                top: 0,
-                left: 0,
-                right: 0,
-                height:
-                MediaQuery.of(context)
-                    .padding
-                    .top,
-
-                child: Container(
-                  color: lastDarkMode
-                      ? const Color(0xFF0F172A)
-                      : const Color(0xFFF8FAFC),
                 ),
-              ),
-
-
-              // WEBVIEW
-              // Scaffold already places the body directly above the native
-              // bottomNavigationBar. Do not add another bottom SafeArea or
-              // padding here, otherwise a visible strip appears above the menu.
-              SafeArea(
-                bottom: false,
-                child: WebViewWidget(
-                  controller: controller,
-                ),
-              ),
-
-              // Custom splash removed: WebView is shown immediately on launch.
-              if (isOffline)
-                Container(
+                const SizedBox(height: 14),
+                SizedBox(
                   width: double.infinity,
-                  height: double.infinity,
-                  color: const Color(0xFF030503),
-                  child: SafeArea(
-                    child: Stack(
-                      children: [
-                        Positioned.fill(
-                          child: CustomPaint(
-                            painter: StatusBackgroundPainter(progress: 0.35),
-                          ),
-                        ),
-
-                        Center(
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 22),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  Icons.wifi_off_rounded,
-                                  size: 82,
-                                  color: const Color(0xFFB7FF00),
-                                  shadows: [
-                                    Shadow(
-                                      color: const Color(0xFFB7FF00)
-                                          .withValues(alpha: 0.75),
-                                      blurRadius: 24,
-                                    ),
-                                  ],
-                                ),
-
-                                const SizedBox(height: 28),
-
-                                _GamingTitle(
-                                  text: 'NO INTERNET',
-                                ),
-
-                                const SizedBox(height: 14),
-
-                                Text(
-                                  'CHECK YOUR CONNECTION',
-                                  textAlign: TextAlign.center,
-                                  style: GoogleFonts.orbitron(
-                                    color: Colors.white.withValues(alpha: 0.85),
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w700,
-                                    letterSpacing: 2.1,
-                                  ),
-                                ),
-
-                                const SizedBox(height: 42),
-
-                                GestureDetector(
-                                  onTap: () async {
-                                    final result =
-                                    await Connectivity().checkConnectivity();
-
-                                    final offline = result.contains(
-                                      ConnectivityResult.none,
-                                    );
-
-                                    if (!offline) {
-                                      setState(() {
-                                        isOffline = false;
-                                        pageLoaded = false;
-                                        showResumeOverlay = true;
-                                        isInitialLaunch = false;
-                                      });
-
-                                      controller.reload();
-                                    }
-                                  },
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 34,
-                                      vertical: 15,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      borderRadius: BorderRadius.circular(999),
-                                      color: const Color(0xFFB7FF00),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: const Color(0xFFB7FF00)
-                                              .withValues(alpha: 0.45),
-                                          blurRadius: 22,
-                                          spreadRadius: 1,
-                                        ),
-                                      ],
-                                    ),
-                                    child: Text(
-                                      'RETRY',
-                                      style: GoogleFonts.orbitron(
-                                        color: Colors.black,
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w900,
-                                        letterSpacing: 2,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-
-                                const SizedBox(height: 26),
-
-                                Text(
-                                  'BASE LAYOUT PRO',
-                                  style: GoogleFonts.orbitron(
-                                    color: Colors.white.withValues(alpha: 0.38),
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w700,
-                                    letterSpacing: 2.2,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
+                  height: 46,
+                  child: FilledButton.icon(
+                    onPressed: () {
+                      Navigator.pop(sheetContext);
+                      _watchSupportAd();
+                    },
+                    icon: Icon(
+                      _supportAdFreeActive
+                          ? Icons.check_circle_rounded
+                          : Icons.ondemand_video_rounded,
+                      size: 20,
+                    ),
+                    label: Text(
+                      _supportAdFreeActive
+                          ? 'Ad-Free Active · ${leftMin}m left'
+                          : 'Watch Ad · Support CocBasePro',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w900,
+                        fontSize: 12,
+                      ),
+                    ),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: const Color(0xFFFACC15),
+                      foregroundColor: const Color(0xFF111827),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
                     ),
                   ),
                 ),
-            ],
+                const SizedBox(height: 7),
+                Text(
+                  'Optional · No features are locked behind this ad',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: fg.withValues(alpha: 0.48),
+                    fontSize: 9.5,
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
-
   }
 
-}
+  Widget _moreTile(IconData icon,String label,Color color,VoidCallback onTap) => Material(
+    color:color.withValues(alpha:.055),borderRadius:BorderRadius.circular(14),
+    child:InkWell(borderRadius:BorderRadius.circular(14),onTap:onTap,child:Padding(
+      padding:const EdgeInsets.symmetric(horizontal:6,vertical:8),child:Column(mainAxisAlignment:MainAxisAlignment.center,children:[Icon(icon,size:22,color:color),const SizedBox(height:5),Text(label,maxLines:1,overflow:TextOverflow.ellipsis,style:TextStyle(color:color,fontSize:9.5,fontWeight:FontWeight.w800))]),
+    )),
+  );
 
+  Widget _navItem({required IconData icon,required String label,required VoidCallback onTap,int badge=0,bool emphasized=false}) {
+    final fg = isDarkMode ? const Color(0xFFF8FAFC) : const Color(0xFF111827);
+    final c = emphasized ? const Color(0xFFFACC15) : fg;
+    return Expanded(child:InkWell(borderRadius:BorderRadius.circular(11),onTap:onTap,child:SizedBox(height:45,child:Stack(alignment:Alignment.center,children:[
+      Column(mainAxisAlignment:MainAxisAlignment.center,children:[Icon(icon,size:20,color:c),const SizedBox(height:2),Text(label,maxLines:1,overflow:TextOverflow.fade,softWrap:false,style:TextStyle(color:c,fontSize:8.4,fontWeight:FontWeight.w800,height:1))]),
+      if(badge>0) Positioned(top:1,right:7,child:Container(constraints:const BoxConstraints(minWidth:15,minHeight:15),padding:const EdgeInsets.symmetric(horizontal:3),alignment:Alignment.center,decoration:const BoxDecoration(color:Color(0xFFEF4444),borderRadius:BorderRadius.all(Radius.circular(999))),child:Text(badge>9?'9+':'$badge',style:const TextStyle(color:Colors.white,fontSize:8,fontWeight:FontWeight.w900))))
+    ]))));
+  }
 
-class AppStatusOverlay extends StatefulWidget {
-  final bool isRestore;
+  Widget _compactNativeMenu() {
+    final bg = isDarkMode ? const Color(0xF207111F) : Colors.white.withValues(alpha:.97);
+    return SafeArea(top:false,child:Container(height:52,padding:const EdgeInsets.symmetric(horizontal:4,vertical:3),decoration:BoxDecoration(color:bg,border:Border(top:BorderSide(color:isDarkMode?Colors.white.withValues(alpha:.07):Colors.black.withValues(alpha:.06),width:.5))),child:Material(color:Colors.transparent,child:Row(children:[
+      _navItem(icon:Icons.home_rounded,label:'Home',onTap:_openHome),
+      _navItem(icon:Icons.article_outlined,label:'News',badge:unreadNews,onTap:_openNews),
+      _navItem(icon:Icons.document_scanner_outlined,label:'Find Source',emphasized:true,onTap:_openFindSource),
+      _navItem(icon:Icons.bookmark_rounded,label:'Saved',onTap:_openSaved),
+      _navItem(icon:Icons.menu_rounded,label:'More',onTap:_showMoreMenu),
+    ]))));
+  }
 
-  const AppStatusOverlay({
-    super.key,
-    required this.isRestore,
-  });
+  void _toast(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(message),duration:const Duration(seconds:2)));
+  }
+
+  Future<void> _back() async {
+    if (await controller.canGoBack()) await controller.goBack(); else if (mounted) SystemNavigator.pop();
+  }
 
   @override
-  State<AppStatusOverlay> createState() => _AppStatusOverlayState();
-}
-
-class _AppStatusOverlayState extends State<AppStatusOverlay>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
-
-  @override
-  void initState() {
-    super.initState();
-
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1600),
-    )..repeat();
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && pageLoaded) _applyIOSAppWebMode();
   }
 
   @override
   void dispose() {
-    _controller.dispose();
+    WidgetsBinding.instance.removeObserver(this);
+    _netSub?.cancel();
+    _interstitialAd?.dispose();
+    _rewardedAd?.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final title = widget.isRestore ? 'RESTORING SESSION' : 'LAUNCHING APP';
-
-    final subtitle = widget.isRestore
-        ? 'REBUILDING WEB SESSION'
-        : 'PREPARING LATEST LAYOUTS';
-
-    return Container(
-      width: double.infinity,
-      height: double.infinity,
-      color: const Color(0xFF030503),
-      child: SafeArea(
-        child: Stack(
-          children: [
-            Positioned.fill(
-              child: AnimatedBuilder(
-                animation: _controller,
-                builder: (_, __) {
-                  return CustomPaint(
-                    painter: StatusBackgroundPainter(
-                      progress: _controller.value,
-                    ),
-                  );
-                },
-              ),
-            ),
-
-            Center(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 18),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    SizedBox(
-                      width: 250,
-                      height: 250,
-                      child: AnimatedBuilder(
-                        animation: _controller,
-                        builder: (_, __) {
-                          return CustomPaint(
-                            painter: StatusShieldPainter(
-                              progress: _controller.value,
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-
-                    const SizedBox(height: 26),
-
-                    _GamingTitle(text: title),
-
-                    const SizedBox(height: 12),
-
-                    Text(
-                      subtitle,
-                      textAlign: TextAlign.center,
-                      style: GoogleFonts.orbitron(
-                        color: Colors.white.withValues(alpha: 0.9),
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 2.2,
-                      ),
-                    ),
-
-                    const SizedBox(height: 56),
-
-                    Text(
-                      'LOADING',
-                      style: GoogleFonts.orbitron(
-                        color: const Color(0xFFB7FF00),
-                        fontSize: 15,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 2,
-                        shadows: [
-                          Shadow(
-                            color: const Color(0xFFB7FF00)
-                                .withValues(alpha: 0.75),
-                            blurRadius: 16,
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    const SizedBox(height: 14),
-
-                    SizedBox(
-                      width: 118,
-                      height: 18,
-                      child: AnimatedBuilder(
-                        animation: _controller,
-                        builder: (_, __) {
-                          return CustomPaint(
-                            painter: ShortLoadingBarPainter(
-                              progress: _controller.value,
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-
-                    const SizedBox(height: 74),
-
-                    FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: RichText(
-                        textAlign: TextAlign.center,
-                        text: TextSpan(
-                          children: [
-                            TextSpan(
-                              text: 'BASE LAYOUT ',
-                              style: GoogleFonts.orbitron(
-                                color: Colors.white,
-                                fontSize: 28,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: 2.4,
-                                shadows: [
-                                  Shadow(
-                                    color: Colors.white.withValues(alpha: 0.42),
-                                    blurRadius: 12,
-                                  ),
-                                ],
-                              ),
-                            ),
-                            TextSpan(
-                              text: 'PRO',
-                              style: GoogleFonts.orbitron(
-                                color: const Color(0xFFB7FF00),
-                                fontSize: 28,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: 2.4,
-                                shadows: [
-                                  Shadow(
-                                    color: const Color(0xFFB7FF00)
-                                        .withValues(alpha: 0.8),
-                                    blurRadius: 16,
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _GamingTitle extends StatelessWidget {
-  final String text;
-
-  const _GamingTitle({
-    required this.text,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return FittedBox(
-      fit: BoxFit.scaleDown,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          Text(
-            text,
-            textAlign: TextAlign.center,
-            style: GoogleFonts.orbitron(
-              color: const Color(0xFFB7FF00).withValues(alpha: 0.42),
-              fontSize: 32,
-              fontWeight: FontWeight.w900,
-              letterSpacing: 2.2,
-              shadows: [
-                Shadow(
-                  color: const Color(0xFFB7FF00).withValues(alpha: 0.85),
-                  blurRadius: 24,
-                ),
-              ],
-            ),
-          ),
-          Text(
-            text,
-            textAlign: TextAlign.center,
-            style: GoogleFonts.orbitron(
-              color: Colors.white,
-              fontSize: 31,
-              fontWeight: FontWeight.w900,
-              letterSpacing: 2.1,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class StatusBackgroundPainter extends CustomPainter {
-  final double progress;
-
-  StatusBackgroundPainter({
-    required this.progress,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height * 0.31);
-
-    final glowPaint = Paint()
-      ..shader = RadialGradient(
-        colors: [
-          const Color(0xFFB7FF00).withValues(alpha: 0.22),
-          const Color(0xFFB7FF00).withValues(alpha: 0.06),
-          Colors.transparent,
-        ],
-      ).createShader(
-        Rect.fromCircle(center: center, radius: 180),
-      );
-
-    canvas.drawCircle(center, 180, glowPaint);
-
-    final ringPaint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1
-      ..color = const Color(0xFFB7FF00).withValues(alpha: 0.24);
-
-    for (int i = 0; i < 5; i++) {
-      canvas.drawCircle(
-        center,
-        82 + i * 18,
-        ringPaint,
-      );
-    }
-
-    final arcPaint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.4
-      ..strokeCap = StrokeCap.round
-      ..color = const Color(0xFFB7FF00).withValues(alpha: 0.72);
-
-    for (int i = 0; i < 4; i++) {
-      final radius = 94.0 + i * 22;
-      final start = progress * 6.28318530718 + i * 0.75;
-
-      canvas.drawArc(
-        Rect.fromCircle(center: center, radius: radius),
-        start,
-        0.42,
-        false,
-        arcPaint,
-      );
-    }
-
-    final dotPaint = Paint()
-      ..color = const Color(0xFFB7FF00).withValues(alpha: 0.78);
-
-    for (int i = 0; i < 42; i++) {
-      final angle = i * 0.82 + progress * 0.45;
-      final radius = 78 + (i % 9) * 14;
-
-      final p = Offset(
-        center.dx + MathHelper.cos(angle) * radius,
-        center.dy + MathHelper.sin(angle) * radius,
-      );
-
-      canvas.drawCircle(
-        p,
-        i % 6 == 0 ? 2.2 : 1.2,
-        dotPaint,
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant StatusBackgroundPainter oldDelegate) {
-    return oldDelegate.progress != progress;
-  }
-}
-
-class StatusShieldPainter extends CustomPainter {
-  final double progress;
-
-  StatusShieldPainter({
-    required this.progress,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final c = Offset(size.width / 2, size.height / 2);
-
-    final glowPaint = Paint()
-      ..shader = RadialGradient(
-        colors: [
-          const Color(0xFFB7FF00).withValues(alpha: 0.45),
-          const Color(0xFFB7FF00).withValues(alpha: 0.12),
-          Colors.transparent,
-        ],
-      ).createShader(
-        Rect.fromCircle(center: c, radius: 105),
-      );
-
-    canvas.drawCircle(c, 105, glowPaint);
-
-    final shield = Path()
-      ..moveTo(c.dx, c.dy - 72)
-      ..cubicTo(c.dx - 22, c.dy - 58, c.dx - 54, c.dy - 52, c.dx - 70, c.dy - 45)
-      ..lineTo(c.dx - 58, c.dy + 25)
-      ..cubicTo(c.dx - 47, c.dy + 64, c.dx - 20, c.dy + 88, c.dx, c.dy + 106)
-      ..cubicTo(c.dx + 20, c.dy + 88, c.dx + 47, c.dy + 64, c.dx + 58, c.dy + 25)
-      ..lineTo(c.dx + 70, c.dy - 45)
-      ..cubicTo(c.dx + 54, c.dy - 52, c.dx + 22, c.dy - 58, c.dx, c.dy - 72)
-      ..close();
-
-    canvas.drawShadow(
-      shield,
-      const Color(0xFFB7FF00),
-      18,
-      true,
-    );
-
-    canvas.drawPath(
-      shield,
-      Paint()
-        ..shader = const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Color(0xFFEFFFF5),
-            Color(0xFFB7FF00),
-            Color(0xFF174112),
-            Color(0xFF020804),
-          ],
-        ).createShader(
-          Rect.fromCircle(center: c, radius: 105),
-        ),
-    );
-
-    final inner = Path()
-      ..moveTo(c.dx, c.dy - 47)
-      ..cubicTo(c.dx - 14, c.dy - 38, c.dx - 36, c.dy - 33, c.dx - 47, c.dy - 28)
-      ..lineTo(c.dx - 39, c.dy + 16)
-      ..cubicTo(c.dx - 30, c.dy + 43, c.dx - 12, c.dy + 61, c.dx, c.dy + 74)
-      ..cubicTo(c.dx + 12, c.dy + 61, c.dx + 30, c.dy + 43, c.dx + 39, c.dy + 16)
-      ..lineTo(c.dx + 47, c.dy - 28)
-      ..cubicTo(c.dx + 36, c.dy - 33, c.dx + 14, c.dy - 38, c.dx, c.dy - 47)
-      ..close();
-
-    canvas.drawPath(
-      inner,
-      Paint()
-        ..shader = const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Color(0xFF123F17),
-            Color(0xFF061509),
-            Color(0xFF000000),
-          ],
-        ).createShader(
-          Rect.fromCircle(center: c, radius: 80),
-        ),
-    );
-
-    canvas.drawPath(
-      shield,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 3
-        ..strokeJoin = StrokeJoin.round
-        ..color = Colors.white.withValues(alpha: 0.86),
-    );
-
-    canvas.drawPath(
-      inner,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2
-        ..strokeJoin = StrokeJoin.round
-        ..color = const Color(0xFFB7FF00),
-    );
-
-    const dotSize = 8.0;
-    const gap = 10.0;
-
-    final startX = c.dx - dotSize - gap;
-    final startY = c.dy - dotSize - gap;
-
-    final dotGlow = Paint()
-      ..color = const Color(0xFFB7FF00).withValues(alpha: 0.35)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
-
-    final dotPaint = Paint()
-      ..color = const Color(0xFFB7FF00);
-
-    for (int y = 0; y < 3; y++) {
-      for (int x = 0; x < 3; x++) {
-        final p = Offset(
-          startX + x * (dotSize + gap),
-          startY + y * (dotSize + gap),
-        );
-
-        canvas.drawCircle(p, 6, dotGlow);
-        canvas.drawCircle(p, 4.2, dotPaint);
-      }
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant StatusShieldPainter oldDelegate) {
-    return oldDelegate.progress != progress;
-  }
-}
-
-class ShortLoadingBarPainter extends CustomPainter {
-  final double progress;
-
-  ShortLoadingBarPainter({
-    required this.progress,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-
-    // ===== TRACK / KHUNG CŨ =====
-    final trackRect = RRect.fromRectAndRadius(
-      Rect.fromLTWH(
-        0,
-        5,
-        size.width,
-        8,
-      ),
-      const Radius.circular(999),
-    );
-
-    // BG
-    canvas.drawRRect(
-      trackRect,
-      Paint()
-        ..color = Colors.black.withValues(alpha: 0.42),
-    );
-
-    // BORDER
-    canvas.drawRRect(
-      trackRect,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1
-        ..color = const Color(0xFFB7FF00)
-            .withValues(alpha: 0.55),
-    );
-
-    // ===== FILL =====
-    final fillRect = RRect.fromRectAndRadius(
-      Rect.fromLTWH(
-        4,
-        7,
-        (size.width - 8) *
-            (0.18 + (progress * 0.82)),
-        4,
-      ),
-      const Radius.circular(999),
-    );
-
-    // GLOW
-    canvas.drawRRect(
-      fillRect,
-      Paint()
-        ..color = const Color(0xFFB7FF00)
-            .withValues(alpha: 0.38)
-        ..maskFilter =
-        const MaskFilter.blur(
-          BlurStyle.normal,
-          8,
-        ),
-    );
-
-    // FILL
-    canvas.drawRRect(
-      fillRect,
-      Paint()
-        ..shader = const LinearGradient(
-          colors: [
-            Color(0xFF7CC800),
-            Color(0xFFB7FF00),
-            Color(0xFFDFFF4A),
-          ],
-        ).createShader(fillRect.outerRect),
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant ShortLoadingBarPainter oldDelegate) {
-    return oldDelegate.progress != progress;
-  }
-}
-
-class MathHelper {
-  static double sin(double x) {
-    return _sin(x);
-  }
-
-  static double cos(double x) {
-    return _sin(x + 1.57079632679);
-  }
-
-  static double _sin(double x) {
-    const pi = 3.14159265359;
-
-    x = x % (2 * pi);
-
-    if (x > pi) {
-      x -= 2 * pi;
-    }
-
-    if (x < -pi) {
-      x += 2 * pi;
-    }
-
-    return x
-        - (x * x * x) / 6
-        + (x * x * x * x * x) / 120;
+    final bg = isDarkMode ? const Color(0xFF020617) : const Color(0xFFF8FAFC);
+    final overlay = SystemUiOverlayStyle(statusBarColor:bg,statusBarIconBrightness:isDarkMode?Brightness.light:Brightness.dark,statusBarBrightness:isDarkMode?Brightness.dark:Brightness.light,systemNavigationBarColor:bg,systemNavigationBarIconBrightness:isDarkMode?Brightness.light:Brightness.dark);
+    return PopScope(canPop:false,onPopInvokedWithResult:(didPop,_)async{if(!didPop)await _back();},child:Scaffold(
+      backgroundColor:bg,
+      bottomNavigationBar:Platform.isIOS&&!moreMenuOpen?_compactNativeMenu():null,
+      body:AnnotatedRegion<SystemUiOverlayStyle>(value:overlay,child:Stack(children:[
+        SafeArea(bottom:false,child:WebViewWidget(controller:controller)),
+        if(webProgress>0&&webProgress<100) SafeArea(bottom:false,child:Align(alignment:Alignment.topCenter,child:LinearProgressIndicator(minHeight:2,value:webProgress/100,backgroundColor:Colors.transparent,valueColor:const AlwaysStoppedAnimation<Color>(Color(0xFFFACC15))))),
+        if(isOffline) Positioned.fill(child:ColoredBox(color:const Color(0xEE020617),child:SafeArea(child:Center(child:Padding(padding:const EdgeInsets.all(24),child:Column(mainAxisSize:MainAxisSize.min,children:[
+          const Icon(Icons.wifi_off_rounded,size:44,color:Color(0xFFFACC15)),const SizedBox(height:12),const Text('You are offline',style:TextStyle(color:Colors.white,fontSize:18,fontWeight:FontWeight.w900)),const SizedBox(height:6),const Text('Reconnect to continue browsing base layouts.',textAlign:TextAlign.center,style:TextStyle(color:Color(0xFFCBD5E1),fontSize:12)),const SizedBox(height:14),FilledButton.icon(onPressed:()async{final results=await Connectivity().checkConnectivity();final offline=results.isEmpty||results.every((r)=>r==ConnectivityResult.none);if(!mounted)return;setState(()=>isOffline=offline);if(!offline)controller.reload();},icon:const Icon(Icons.refresh_rounded),label:const Text('Try Again'))
+        ]))))))
+      ]))),
+    ));
   }
 }
