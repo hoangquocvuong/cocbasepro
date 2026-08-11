@@ -79,6 +79,8 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
   int webProgress = 0;
   int internalPagesSinceAd = 0;
   int unreadNews = 0;
+  bool _newsBadgeKnown = false;
+  Timer? _loadingFinishTimer;
   String currentUrl = homeUrl;
   String lastFinishedInternalUrl = '';
   DateTime lastInterstitialAt = DateTime.fromMillisecondsSinceEpoch(0);
@@ -100,9 +102,9 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
       ..setUserAgent(Platform.isIOS ? 'CocBaseProApp-iOS' : 'CocBaseProApp-Android')
       ..setBackgroundColor(const Color(0xFF050505))
       ..addJavaScriptChannel('Flutter', onMessageReceived: (message) {
-        final count = int.tryParse(message.message) ?? 0;
-        if (!mounted || count == unreadNews) return;
-        setState(() => unreadNews = count);
+        final count = int.tryParse(message.message.trim());
+        if (count == null || count < 0) return;
+        _setNewsBadge(count, explicit: true);
       })
       ..addJavaScriptChannel('AppTheme', onMessageReceived: (message) {
         final dark = message.message.trim().toLowerCase() == 'dark';
@@ -111,17 +113,43 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
       ..setNavigationDelegate(NavigationDelegate(
         onProgress: (progress) {
           if (!mounted) return;
-          if (progress == 100 || (progress - webProgress).abs() >= 12) {
+
+          if (progress >= 100) {
+            _loadingFinishTimer?.cancel();
+            setState(() => webProgress = 100);
+            return;
+          }
+
+          if ((progress - webProgress).abs() >= 10) {
             setState(() => webProgress = progress);
+          }
+
+          // WKWebView can occasionally stop reporting around 90-99 even when
+          // the visible page is ready. Never leave the yellow bar stranded.
+          if (progress >= 88) {
+            _loadingFinishTimer?.cancel();
+            _loadingFinishTimer = Timer(
+              const Duration(milliseconds: 700),
+              () {
+                if (mounted && webProgress >= 88 && webProgress < 100) {
+                  setState(() => webProgress = 100);
+                }
+              },
+            );
           }
         },
         onPageStarted: (url) {
+          _loadingFinishTimer?.cancel();
           currentUrl = url;
-          if (mounted && webProgress != 5) {
-            setState(() => webProgress = 5);
+          if (mounted) {
+            setState(() {
+              pageLoaded = false;
+              webProgress = 5;
+            });
           }
         },
         onPageFinished: (url) {
+          _loadingFinishTimer?.cancel();
           currentUrl = url;
           if (mounted) {
             setState(() {
@@ -146,6 +174,7 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
 
   Future<void> _initDeferredServices() async {
     unawaited(_loadNativeTheme());
+    unawaited(_loadNativeNewsBadge());
     unawaited(_loadPremiumMapCacheOnly());
     unawaited(_loadSupportRewardState());
 
@@ -426,11 +455,45 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
     } catch (_) {}
   }
 
+  Future<void> _loadNativeNewsBadge() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final saved = prefs.getInt('cbp_ios_unread_news');
+      if (saved != null && saved > 0 && mounted) {
+        setState(() {
+          unreadNews = saved;
+          _newsBadgeKnown = true;
+        });
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _saveNativeNewsBadge(int count) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt('cbp_ios_unread_news', count);
+    } catch (_) {}
+  }
+
+  void _setNewsBadge(int count, {bool explicit = false}) {
+    if (count < 0) return;
+
+    // A missing/temporarily empty web badge must not erase a native unread
+    // badge. Zero is accepted only from an explicit bridge/read action.
+    if (count == 0 && !explicit && _newsBadgeKnown && unreadNews > 0) {
+      return;
+    }
+
+    _newsBadgeKnown = true;
+    if (mounted && count != unreadNews) {
+      setState(() => unreadNews = count);
+    }
+    unawaited(_saveNativeNewsBadge(count));
+  }
+
   Future<void> _applyIOSAppWebMode() async {
     try {
-      final nativeMode = isDarkMode ? 'dark' : 'light';
-
-      await controller.runJavaScript('''
+      await controller.runJavaScript(r'''
 (function () {
   const html = document.documentElement;
   const body = document.body;
@@ -451,10 +514,10 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
     );
   }
 
-  let style = document.getElementById('cbp-ios-single-menu-v54');
+  let style = document.getElementById('cbp-ios-single-menu-v55');
   if (!style) {
     style = document.createElement('style');
-    style.id = 'cbp-ios-single-menu-v54';
+    style.id = 'cbp-ios-single-menu-v55';
     document.head.appendChild(style);
   }
 
@@ -479,45 +542,90 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
     }
   `;
 
-  if (!html.getAttribute('data-mode')) {
-    html.setAttribute('data-mode', '$nativeMode');
-  }
+  const normalizeMode = function(value) {
+    value = String(value || '').toLowerCase();
+    if (value.includes('dark')) return 'dark';
+    if (value.includes('light')) return 'light';
+    return '';
+  };
 
-  if (!window.__CBP_IOS_THEME_OBSERVER__) {
-    window.__CBP_IOS_THEME_OBSERVER__ = true;
+  const readWebMode = function() {
+    // Follow the WEBSITE as source of truth, not the old native cache.
+    let mode =
+      normalizeMode(html.getAttribute('data-mode')) ||
+      normalizeMode(html.getAttribute('data-theme')) ||
+      normalizeMode(body && body.getAttribute('data-mode')) ||
+      normalizeMode(body && body.getAttribute('data-theme'));
 
-    let lastMode = '';
+    if (!mode) {
+      const hc = String(html.className || '').toLowerCase();
+      const bc = String((body && body.className) || '').toLowerCase();
+      if (hc.includes('dark') || bc.includes('dark')) mode = 'dark';
+      else if (hc.includes('light') || bc.includes('light')) mode = 'light';
+    }
 
-    const sendTheme = function () {
-      const mode =
-        html.getAttribute('data-mode') ||
-        (body && body.getAttribute('data-mode')) ||
-        (window.matchMedia('(prefers-color-scheme: dark)').matches
-          ? 'dark'
-          : 'light');
+    if (!mode) {
+      try {
+        const keys = ['theme','mode','color-mode','data-mode','cbp-theme','cocbase-theme'];
+        for (const key of keys) {
+          mode = normalizeMode(localStorage.getItem(key));
+          if (mode) break;
+        }
+      } catch (_) {}
+    }
 
-      if (mode !== lastMode) {
-        lastMode = mode;
-        try {
-          AppTheme.postMessage(mode);
-        } catch (_) {}
+    if (!mode && body) {
+      const c = getComputedStyle(body).backgroundColor || '';
+      const m = c.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/i);
+      if (m) {
+        const r = Number(m[1]), g = Number(m[2]), b = Number(m[3]);
+        const luminance = (0.2126*r + 0.7152*g + 0.0722*b) / 255;
+        mode = luminance < 0.45 ? 'dark' : 'light';
       }
-    };
+    }
 
-    new MutationObserver(sendTheme).observe(html, {
+    if (!mode) {
+      mode = window.matchMedia('(prefers-color-scheme: dark)').matches
+        ? 'dark'
+        : 'light';
+    }
+
+    return mode;
+  };
+
+  let lastMode = '';
+  const sendTheme = function() {
+    const mode = readWebMode();
+    if (mode && mode !== lastMode) {
+      lastMode = mode;
+      try { AppTheme.postMessage(mode); } catch (_) {}
+    }
+  };
+
+  if (!window.__CBP_IOS_THEME_OBSERVER_V55__) {
+    window.__CBP_IOS_THEME_OBSERVER_V55__ = true;
+
+    const observer = new MutationObserver(function() {
+      requestAnimationFrame(sendTheme);
+    });
+
+    observer.observe(html, {
       attributes: true,
-      attributeFilter: ['data-mode', 'class']
+      attributeFilter: ['data-mode','data-theme','class','style']
     });
 
     if (body) {
-      new MutationObserver(sendTheme).observe(body, {
+      observer.observe(body, {
         attributes: true,
-        attributeFilter: ['data-mode', 'class']
+        attributeFilter: ['data-mode','data-theme','class','style']
       });
     }
 
-    sendTheme();
+    window.addEventListener('storage', sendTheme);
   }
+
+  // Initial native menu background follows the website immediately.
+  sendTheme();
 })();
 ''');
     } catch (_) {}
@@ -527,17 +635,46 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
     if (mounted && dark != isDarkMode) {
       setState(() => isDarkMode = dark);
     }
-
     if (persist) {
       unawaited(_saveNativeTheme(dark));
     }
   }
 
-  Future<void> _refreshNewsBadge() async {
+  Future<void> _refreshNewsBadge({bool explicitZero = false}) async {
     try {
-      final result = await controller.runJavaScriptReturningResult(r'''(function(){const b=document.getElementById('news-badge');return b?(parseInt(b.textContent||'0',10)||0):0;})();''');
-      final value = int.tryParse(result.toString().replaceAll('"','').trim()) ?? 0;
-      if (mounted && value != unreadNews) setState(() => unreadNews = value);
+      final result = await controller.runJavaScriptReturningResult(r'''
+(function(){
+  const selectors = [
+    '#news-badge',
+    '#nav-news-badge',
+    '.news-badge',
+    '[data-news-badge]',
+    '[data-unread-news]'
+  ];
+
+  for (const selector of selectors) {
+    const b = document.querySelector(selector);
+    if (!b) continue;
+
+    const raw =
+      b.getAttribute('data-unread-news') ||
+      b.getAttribute('data-count') ||
+      b.textContent ||
+      '';
+
+    const m = String(raw).match(/\d+/);
+    if (m) return Number(m[0]);
+  }
+
+  // -1 means "badge not present/ready"; never treat that as zero.
+  return -1;
+})();
+''');
+
+      final raw = result.toString().replaceAll('"', '').trim();
+      final value = int.tryParse(raw);
+      if (value == null || value < 0) return;
+      _setNewsBadge(value, explicit: explicitZero);
     } catch (_) {}
   }
 
@@ -559,8 +696,8 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
 
   Future<void> _openNews() async {
     await _runMenuScript(r'''(function(){if(typeof window.openNewsPopup==='function'){window.openNewsPopup();return true;}const b=document.getElementById('nav-news-btn');if(b){b.click();return true;}return false;})();''');
-    await Future<void>.delayed(const Duration(milliseconds: 300));
-    await _refreshNewsBadge();
+    await Future<void>.delayed(const Duration(milliseconds: 450));
+    await _refreshNewsBadge(explicitZero: true);
   }
 
   Future<void> _openFindSource() async {
@@ -846,6 +983,7 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _netSub?.cancel();
+    _loadingFinishTimer?.cancel();
     _interstitialAd?.dispose();
     _rewardedAd?.dispose();
     super.dispose();
