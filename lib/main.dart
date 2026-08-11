@@ -1,12 +1,10 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
-import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:webview_flutter/webview_flutter.dart';
@@ -46,8 +44,6 @@ class WebScreen extends StatefulWidget {
 
 class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
   static const String homeUrl = 'https://www.cocbasepro.com';
-  static const String premiumMapUrl =
-      'https://raw.githubusercontent.com/hoangquocvuong/premium-map.json/refs/heads/main/premium-map.json';
   static const String interstitialAdUnitId =
       'ca-app-pub-9371341402256787/5085734937';
 
@@ -63,7 +59,6 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
 
   late final WebViewController controller;
   StreamSubscription<List<ConnectivityResult>>? _netSub;
-  final Map<String, String> premiumMap = <String, String>{};
   final DateTime sessionStartedAt = DateTime.now();
 
   InterstitialAd? _interstitialAd;
@@ -175,7 +170,6 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
   Future<void> _initDeferredServices() async {
     unawaited(_loadNativeTheme());
     unawaited(_loadNativeNewsBadge());
-    unawaited(_loadPremiumMapCacheOnly());
     unawaited(_loadSupportRewardState());
 
     // Let WebKit paint before starting the AdMob SDK.
@@ -363,117 +357,9 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
     }
     if (host.contains('firebaseio.com')) return NavigationDecision.prevent;
 
-    if (host.contains('buymeacoffee.com') || host.contains('bmc.link')) {
-      final productId = _extractPremiumProductId(uri);
-
-      // Premium product route:
-      // https://buymeacoffee.com/cocbase/e/<id>
-      // Never open the BMC sales page in iOS. Resolve directly to the
-      // original Clash of Clans link using premium-map.json.
-      if (productId.isNotEmpty) {
-        final resolved = await _resolvePremiumBase(productId);
-        if (resolved != null && resolved.isNotEmpty) {
-          await _openExternal(resolved);
-        } else {
-          _toast('Base link is preparing. Please try again.');
-        }
-        return NavigationDecision.prevent;
-      }
-
-      // News/article route:
-      // https://buymeacoffee.com/cocbase/<article-slug>
-      // This is editorial content, not a premium /e/ product route.
-      // Open it in the external browser so the News item works while the
-      // iOS WebView itself still contains no Donate/Support flow.
-      if (_isBuyMeACoffeeArticle(uri)) {
-        await _openExternal(request.url);
-        return NavigationDecision.prevent;
-      }
-
-      // Root/profile/support BMC links remain blocked inside the iOS app.
-      _toast('This support link is available on the CocBasePro website.');
-      return NavigationDecision.prevent;
-    }
 
     await _openExternal(request.url);
     return NavigationDecision.prevent;
-  }
-
-  String _extractPremiumProductId(Uri uri) {
-    final parts = uri.pathSegments.where((e) => e.isNotEmpty).toList();
-    final index = parts.indexOf('e');
-    return (index >= 0 && index + 1 < parts.length) ? parts[index + 1] : '';
-  }
-
-  bool _isBuyMeACoffeeArticle(Uri uri) {
-    final host = uri.host.toLowerCase();
-    if (!host.contains('buymeacoffee.com')) return false;
-
-    final parts = uri.pathSegments
-        .where((e) => e.trim().isNotEmpty)
-        .map((e) => e.toLowerCase())
-        .toList();
-
-    // Expected editorial shape:
-    // /cocbase/<article-slug>
-    // Exclude premium product routes and obvious support/profile routes.
-    if (parts.length < 2) return false;
-    if (parts.contains('e')) return false;
-
-    const blocked = <String>{
-      'support',
-      'membership',
-      'memberships',
-      'extras',
-      'shop',
-      'checkout',
-      'donate',
-    };
-
-    return !parts.any(blocked.contains);
-  }
-
-  Future<void> _loadPremiumMapCacheOnly() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final cached = prefs.getString('cbp_premium_map_ios_v5');
-      if (cached != null && cached.isNotEmpty) {
-        final data = jsonDecode(cached);
-        if (data is Map) {
-          premiumMap
-            ..clear()
-            ..addAll(data.map((key, value) => MapEntry(key.toString(), value.toString())));
-        }
-      }
-    } catch (_) {}
-  }
-
-  Future<void> _loadPremiumMapFresh() async {
-    try {
-      final response = await http.get(Uri.parse('$premiumMapUrl?v=${DateTime.now().millisecondsSinceEpoch}'))
-          .timeout(const Duration(seconds: 6));
-      if (response.statusCode != 200) return;
-      final data = jsonDecode(response.body);
-      if (data is! Map) return;
-      final parsed = <String, String>{};
-      data.forEach((key, value) {
-        final link = value.toString().trim();
-        if (link.startsWith('https://link.clashofclans.com/')) parsed[key.toString()] = link;
-      });
-      if (parsed.isEmpty) return;
-      premiumMap..clear()..addAll(parsed);
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('cbp_premium_map_ios_v5', jsonEncode(parsed));
-    } catch (e) {
-      debugPrint('Premium map refresh error: $e');
-    }
-  }
-
-  Future<String?> _resolvePremiumBase(String id) async {
-    final cached = premiumMap[id];
-    if (cached != null && cached.isNotEmpty) return cached;
-    await _loadPremiumMapFresh();
-    return premiumMap[id];
   }
 
   Future<void> _openExternal(String url) async {
