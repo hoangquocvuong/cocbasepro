@@ -365,6 +365,11 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
 
     if (host.contains('buymeacoffee.com') || host.contains('bmc.link')) {
       final productId = _extractPremiumProductId(uri);
+
+      // Premium product route:
+      // https://buymeacoffee.com/cocbase/e/<id>
+      // Never open the BMC sales page in iOS. Resolve directly to the
+      // original Clash of Clans link using premium-map.json.
       if (productId.isNotEmpty) {
         final resolved = await _resolvePremiumBase(productId);
         if (resolved != null && resolved.isNotEmpty) {
@@ -372,9 +377,21 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
         } else {
           _toast('Base link is preparing. Please try again.');
         }
-      } else {
-        _toast('Support links are available on cocbasepro.com in your browser.');
+        return NavigationDecision.prevent;
       }
+
+      // News/article route:
+      // https://buymeacoffee.com/cocbase/<article-slug>
+      // This is editorial content, not a premium /e/ product route.
+      // Open it in the external browser so the News item works while the
+      // iOS WebView itself still contains no Donate/Support flow.
+      if (_isBuyMeACoffeeArticle(uri)) {
+        await _openExternal(request.url);
+        return NavigationDecision.prevent;
+      }
+
+      // Root/profile/support BMC links remain blocked inside the iOS app.
+      _toast('This support link is available on the CocBasePro website.');
       return NavigationDecision.prevent;
     }
 
@@ -386,6 +403,34 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
     final parts = uri.pathSegments.where((e) => e.isNotEmpty).toList();
     final index = parts.indexOf('e');
     return (index >= 0 && index + 1 < parts.length) ? parts[index + 1] : '';
+  }
+
+  bool _isBuyMeACoffeeArticle(Uri uri) {
+    final host = uri.host.toLowerCase();
+    if (!host.contains('buymeacoffee.com')) return false;
+
+    final parts = uri.pathSegments
+        .where((e) => e.trim().isNotEmpty)
+        .map((e) => e.toLowerCase())
+        .toList();
+
+    // Expected editorial shape:
+    // /cocbase/<article-slug>
+    // Exclude premium product routes and obvious support/profile routes.
+    if (parts.length < 2) return false;
+    if (parts.contains('e')) return false;
+
+    const blocked = <String>{
+      'support',
+      'membership',
+      'memberships',
+      'extras',
+      'shop',
+      'checkout',
+      'donate',
+    };
+
+    return !parts.any(blocked.contains);
   }
 
   Future<void> _loadPremiumMapCacheOnly() async {
