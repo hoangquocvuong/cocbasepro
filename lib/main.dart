@@ -62,6 +62,11 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
   static const int firstAdDelaySeconds = 60;
   static const int interstitialCooldownSeconds = 120;
 
+  static const int resumeHealthCheckDelayMs = 300;
+  static const int resumeLongBackgroundSeconds = 20;
+  static const int recoveryCooldownSeconds = 8;
+  static const String lastInternalUrlKey = 'cbp_last_internal_web_url';
+
   late final WebViewController controller;
   StreamSubscription<List<ConnectivityResult>>? _netSub;
   final DateTime sessionStartedAt = DateTime.now();
@@ -85,9 +90,13 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
   int unreadNews = 0;
   bool _newsBadgeKnown = false;
   Timer? _loadingFinishTimer;
+  Timer? _resumeRecoveryTimer;
   String currentUrl = homeUrl;
   String lastFinishedInternalUrl = '';
   DateTime lastInterstitialAt = DateTime.fromMillisecondsSinceEpoch(0);
+  DateTime? _backgroundedAt;
+  DateTime _lastWebRecoveryAt = DateTime.fromMillisecondsSinceEpoch(0);
+  bool _resumeRecoveryRunning = false;
 
   @override
   void initState() {
@@ -197,13 +206,19 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
           }
 
           _countFinishedInternalPage(url);
+          unawaited(_saveLastInternalUrl(url));
 
           Future<void>.delayed(
             const Duration(milliseconds: 350),
             () => _refreshNewsBadge(),
           );
         },
-        onWebResourceError: (error) => debugPrint('WebView error: ${error.description}'),
+        onWebResourceError: (error) {
+          debugPrint('WebView error: ${error.description} mainFrame=${error.isForMainFrame}');
+          if (error.isForMainFrame == true && !isOffline) {
+            _scheduleResumeRecovery(reason: 'main-frame-error', forceHealthCheck: true);
+          }
+        },
         onNavigationRequest: _handleNavigationRequest,
       ));
 
@@ -243,7 +258,10 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
       final offline = results.isEmpty || results.every((r) => r == ConnectivityResult.none);
       if (!mounted || offline == isOffline) return;
       setState(() => isOffline = offline);
-      if (!offline && pageLoaded) _applyIOSAppWebMode();
+      if (!offline) {
+        if (pageLoaded) unawaited(_applyIOSAppWebMode());
+        _scheduleResumeRecovery(reason: 'network-restored', forceHealthCheck: true);
+      }
     });
   }
 
@@ -1058,9 +1076,156 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
     if (await controller.canGoBack()) await controller.goBack(); else if (mounted) SystemNavigator.pop();
   }
 
+
+  bool _isInternalWebUrl(String? raw) {
+    if (raw == null || raw.trim().isEmpty) return false;
+    final uri = Uri.tryParse(raw.trim());
+    if (uri == null) return false;
+    final host = uri.host.toLowerCase();
+    return host == 'cocbasepro.com' || host == 'www.cocbasepro.com';
+  }
+
+  Future<void> _saveLastInternalUrl(String url) async {
+    if (!_isInternalWebUrl(url)) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(lastInternalUrlKey, url);
+    } catch (_) {}
+  }
+
+  Future<String> _recoveryTargetUrl() async {
+    if (_isInternalWebUrl(currentUrl)) return currentUrl;
+    if (_isInternalWebUrl(lastFinishedInternalUrl)) return lastFinishedInternalUrl;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final saved = prefs.getString(lastInternalUrlKey);
+      if (_isInternalWebUrl(saved)) return saved!;
+    } catch (_) {}
+    return homeUrl;
+  }
+
+  Future<bool> _isWebViewHealthy() async {
+    try {
+      final result = await controller.runJavaScriptReturningResult(
+        r'''(function(){
+          try {
+            var href = String(location.href || '');
+            var ready = String(document.readyState || '');
+            var body = document.body;
+            var bodySize = body ? String(body.innerHTML || '').length : 0;
+            var rootSize = document.documentElement
+              ? String(document.documentElement.innerHTML || '').length : 0;
+            if (!href || href === 'about:blank') return 'BAD|blank';
+            if (!body) return 'BAD|no-body';
+            if (ready !== 'interactive' && ready !== 'complete') return 'BAD|ready-' + ready;
+            if (bodySize < 100 && rootSize < 300) return 'BAD|empty';
+            return 'OK|' + href + '|' + bodySize + '|' + rootSize;
+          } catch (e) {
+            return 'BAD|js|' + String(e);
+          }
+        })();''',
+      );
+      final probe = result.toString();
+      debugPrint('WebView resume probe: $probe');
+      return probe.contains('OK|');
+    } catch (e) {
+      debugPrint('WebView resume probe failed: $e');
+      return false;
+    }
+  }
+
+  void _scheduleResumeRecovery({
+    required String reason,
+    bool forceHealthCheck = false,
+  }) {
+    _resumeRecoveryTimer?.cancel();
+    _resumeRecoveryTimer = Timer(
+      Duration(milliseconds: forceHealthCheck ? 80 : resumeHealthCheckDelayMs),
+      () => unawaited(
+        _recoverWebViewIfNeeded(
+          reason: reason,
+          forceHealthCheck: forceHealthCheck,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _recoverWebViewIfNeeded({
+    required String reason,
+    bool forceHealthCheck = false,
+  }) async {
+    if (!mounted || isOffline || _resumeRecoveryRunning) return;
+
+    final now = DateTime.now();
+    if (now.difference(_lastWebRecoveryAt).inSeconds < recoveryCooldownSeconds) return;
+
+    final backgroundDuration = _backgroundedAt == null
+        ? Duration.zero
+        : now.difference(_backgroundedAt!);
+
+    final shouldProbe = forceHealthCheck ||
+        backgroundDuration.inSeconds >= resumeLongBackgroundSeconds;
+
+    if (!shouldProbe) {
+      if (pageLoaded) {
+        unawaited(_applyIOSAppWebMode());
+        unawaited(_refreshNewsBadge());
+      }
+      return;
+    }
+
+    _resumeRecoveryRunning = true;
+    try {
+      final healthy = await _isWebViewHealthy();
+
+      if (healthy) {
+        if (pageLoaded) {
+          unawaited(_applyIOSAppWebMode());
+          unawaited(_refreshNewsBadge());
+        }
+        return;
+      }
+
+      _lastWebRecoveryAt = DateTime.now();
+      final target = await _recoveryTargetUrl();
+
+      debugPrint(
+        'Recovering WKWebView after $reason '
+        'background=${backgroundDuration.inSeconds}s target=$target',
+      );
+
+      if (mounted) {
+        setState(() {
+          pageLoaded = false;
+          webProgress = 5;
+        });
+      }
+
+      await controller.loadRequest(Uri.parse(target));
+    } catch (e) {
+      debugPrint('WKWebView recovery failed: $e');
+      try {
+        await controller.loadRequest(Uri.parse(homeUrl));
+      } catch (_) {}
+    } finally {
+      _resumeRecoveryRunning = false;
+      _backgroundedAt = null;
+    }
+  }
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed && pageLoaded) _applyIOSAppWebMode();
+    switch (state) {
+      case AppLifecycleState.resumed:
+        _scheduleResumeRecovery(reason: 'app-resumed');
+        break;
+      case AppLifecycleState.inactive:
+      case AppLifecycleState.paused:
+      case AppLifecycleState.hidden:
+      case AppLifecycleState.detached:
+        _backgroundedAt ??= DateTime.now();
+        break;
+    }
   }
 
   @override
@@ -1068,6 +1233,7 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     _netSub?.cancel();
     _loadingFinishTimer?.cancel();
+    _resumeRecoveryTimer?.cancel();
     _interstitialAd?.dispose();
     _rewardedAd?.dispose();
     _bannerAd?.dispose();
