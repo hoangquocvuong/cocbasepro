@@ -70,6 +70,7 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
   bool isOffline = false;
   bool pageLoaded = false;
   bool _webShellReady = false;
+  bool _hasPresentedFirstPage = false;
   bool isDarkMode = true;
   bool moreMenuOpen = false;
   int webProgress = 0;
@@ -152,26 +153,38 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
           if (mounted) {
             setState(() {
               pageLoaded = false;
-              _webShellReady = false;
+              // Only the very first app load is visually covered.
+              // For every later navigation keep the previous page visible
+              // while WKWebView loads the next one behind it.
+              if (!_hasPresentedFirstPage) {
+                _webShellReady = false;
+              }
               webProgress = 5;
             });
           }
 
-          // Try to hide the website nav as early as WebKit allows.
+          // Template + UA already suppress the web navigation. This is only
+          // a lightweight defensive reinforcement and never blocks painting.
           unawaited(_injectEarlyIOSMenuHide());
         },
         onPageFinished: (url) async {
           _loadingFinishTimer?.cancel();
           currentUrl = url;
 
-          // Critical ordering: hide the website navigation BEFORE revealing
-          // the WebView. This prevents the second menu flashing at startup.
-          await _applyIOSAppWebMode();
+          if (!_hasPresentedFirstPage) {
+            // First launch only: make sure iOS web mode is active before
+            // revealing the first page.
+            await _applyIOSAppWebMode();
+          } else {
+            // Later navigations: never wait on JS before showing content.
+            unawaited(_applyIOSAppWebMode());
+          }
 
           if (mounted) {
             setState(() {
               pageLoaded = true;
               _webShellReady = true;
+              _hasPresentedFirstPage = true;
               webProgress = 100;
             });
           }
@@ -1016,13 +1029,15 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
               SafeArea(
                 bottom: false,
                 child: AnimatedOpacity(
-                  opacity: _webShellReady ? 1 : 0,
-                  duration: const Duration(milliseconds: 90),
+                  opacity: (_hasPresentedFirstPage || _webShellReady) ? 1 : 0,
+                  duration: const Duration(milliseconds: 70),
                   child: WebViewWidget(controller: controller),
                 ),
               ),
 
-              if (!_webShellReady)
+              // Cold-start cover only. Never put a solid light/dark screen
+              // between normal page navigations after the first page is shown.
+              if (!_hasPresentedFirstPage && !_webShellReady)
                 Positioned.fill(
                   child: IgnorePointer(
                     child: ColoredBox(
