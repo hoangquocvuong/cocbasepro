@@ -69,6 +69,7 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
   int _supportAdFreeUntil = 0;
   bool isOffline = false;
   bool pageLoaded = false;
+  bool _webShellReady = false;
   bool isDarkMode = true;
   bool moreMenuOpen = false;
   int webProgress = 0;
@@ -84,28 +85,39 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _createWebView();
+    controller = WebViewController();
+    unawaited(_configureAndLoadWebView());
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _setupConnectivity();
       _initDeferredServices();
     });
   }
 
-  void _createWebView() {
-    controller = WebViewController()
-      ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setUserAgent(Platform.isIOS ? 'CocBaseProApp-iOS' : 'CocBaseProApp-Android')
-      ..setBackgroundColor(const Color(0xFF050505))
-      ..addJavaScriptChannel('Flutter', onMessageReceived: (message) {
+  Future<void> _configureAndLoadWebView() async {
+    // IMPORTANT: WebKit must receive the custom UA BEFORE the first request.
+    // In the old cascade, setUserAgent() and loadRequest() were both async
+    // but were invoked without awaiting, so the first page could start with
+    // Safari's default UA. The template then rendered its web navigation for
+    // one frame before the app-side CSS hid it.
+    await controller.setJavaScriptMode(JavaScriptMode.unrestricted);
+    await controller.setUserAgent(
+      Platform.isIOS ? 'CocBaseProApp-iOS' : 'CocBaseProApp-Android',
+    );
+    await controller.setBackgroundColor(const Color(0xFF050505));
+
+    await controller.addJavaScriptChannel('Flutter', onMessageReceived: (message) {
         final count = int.tryParse(message.message.trim());
         if (count == null || count < 0) return;
         _setNewsBadge(count, explicit: true);
-      })
-      ..addJavaScriptChannel('AppTheme', onMessageReceived: (message) {
+      });
+
+    await controller.addJavaScriptChannel('AppTheme', onMessageReceived: (message) {
         final dark = message.message.trim().toLowerCase() == 'dark';
         _setTheme(dark, persist: true);
-      })
-      ..setNavigationDelegate(NavigationDelegate(
+      });
+
+    await controller.setNavigationDelegate(NavigationDelegate(
         onProgress: (progress) {
           if (!mounted) return;
 
@@ -136,24 +148,34 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
         onPageStarted: (url) {
           _loadingFinishTimer?.cancel();
           currentUrl = url;
+
           if (mounted) {
             setState(() {
               pageLoaded = false;
+              _webShellReady = false;
               webProgress = 5;
             });
           }
+
+          // Try to hide the website nav as early as WebKit allows.
+          unawaited(_injectEarlyIOSMenuHide());
         },
-        onPageFinished: (url) {
+        onPageFinished: (url) async {
           _loadingFinishTimer?.cancel();
           currentUrl = url;
+
+          // Critical ordering: hide the website navigation BEFORE revealing
+          // the WebView. This prevents the second menu flashing at startup.
+          await _applyIOSAppWebMode();
+
           if (mounted) {
             setState(() {
               pageLoaded = true;
+              _webShellReady = true;
               webProgress = 100;
             });
           }
 
-          unawaited(_applyIOSAppWebMode());
           _countFinishedInternalPage(url);
 
           Future<void>.delayed(
@@ -163,8 +185,10 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
         },
         onWebResourceError: (error) => debugPrint('WebView error: ${error.description}'),
         onNavigationRequest: _handleNavigationRequest,
-      ))
-      ..loadRequest(Uri.parse(homeUrl));
+      ));
+
+    // UA + delegate are fully installed before the very first navigation.
+    await controller.loadRequest(Uri.parse(homeUrl));
   }
 
   Future<void> _initDeferredServices() async {
@@ -420,6 +444,43 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
       setState(() => unreadNews = count);
     }
     unawaited(_saveNativeNewsBadge(count));
+  }
+
+  Future<void> _injectEarlyIOSMenuHide() async {
+    if (!Platform.isIOS) return;
+
+    try {
+      await controller.runJavaScript(r'''
+(function () {
+  try {
+    const id = 'cbp-ios-early-menu-hide-v58';
+    let style = document.getElementById(id);
+
+    if (!style && document.documentElement) {
+      style = document.createElement('style');
+      style.id = id;
+      style.textContent = `
+        #mobile-nav,
+        .bottom-nav,
+        #mobile-more-sheet,
+        #nav-donate-btn {
+          display:none !important;
+          visibility:hidden !important;
+          opacity:0 !important;
+          pointer-events:none !important;
+          height:0 !important;
+          min-height:0 !important;
+          max-height:0 !important;
+          overflow:hidden !important;
+        }
+      `;
+
+      (document.head || document.documentElement).appendChild(style);
+    }
+  } catch (_) {}
+})();
+''');
+    } catch (_) {}
   }
 
   Future<void> _applyIOSAppWebMode() async {
@@ -954,8 +1015,21 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
             children: [
               SafeArea(
                 bottom: false,
-                child: WebViewWidget(controller: controller),
+                child: AnimatedOpacity(
+                  opacity: _webShellReady ? 1 : 0,
+                  duration: const Duration(milliseconds: 90),
+                  child: WebViewWidget(controller: controller),
+                ),
               ),
+
+              if (!_webShellReady)
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: ColoredBox(
+                      color: bg,
+                    ),
+                  ),
+                ),
               if (webProgress > 0 && webProgress < 100)
                 SafeArea(
                   bottom: false,
