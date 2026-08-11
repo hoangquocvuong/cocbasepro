@@ -50,6 +50,11 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
   static const String rewardedAdUnitId =
       'ca-app-pub-9371341402256787/5585456052';
 
+  static const String bannerAdUnitId =
+      'ca-app-pub-9371341402256787/6534238850';
+
+  static const int bannerStartupDelaySeconds = 8;
+
   static const int supportAdFreeMinutes = 15;
   static const int supportAdFreeMs = supportAdFreeMinutes * 60 * 1000;
 
@@ -63,6 +68,8 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
 
   InterstitialAd? _interstitialAd;
   RewardedAd? _rewardedAd;
+  BannerAd? _bannerAd;
+  bool _bannerLoaded = false;
   bool _adsReady = false;
   bool _interstitialShowing = false;
   bool _rewardedReady = false;
@@ -218,6 +225,14 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
       _adsReady = true;
       _loadInterstitial();
       _loadRewarded();
+
+      // Keep the fast first paint: request the sticky banner later.
+      Future<void>.delayed(
+        const Duration(seconds: bannerStartupDelaySeconds),
+        () {
+          if (mounted) _loadBanner();
+        },
+      );
     } catch (e) {
       debugPrint('AdMob init error: $e');
     }
@@ -254,6 +269,70 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
         _supportAdFreeUntil,
       );
     } catch (_) {}
+  }
+
+  void _loadBanner() {
+    if (!_adsReady || _bannerAd != null || isOffline) return;
+
+    final ad = BannerAd(
+      adUnitId: bannerAdUnitId,
+      size: AdSize.banner,
+      request: const AdRequest(nonPersonalizedAds: true),
+      listener: BannerAdListener(
+        onAdLoaded: (loadedAd) {
+          if (!mounted) {
+            loadedAd.dispose();
+            return;
+          }
+          setState(() => _bannerLoaded = true);
+        },
+        onAdFailedToLoad: (failedAd, error) {
+          failedAd.dispose();
+          _bannerAd = null;
+          if (mounted) {
+            setState(() => _bannerLoaded = false);
+          }
+          debugPrint('Banner load failed: $error');
+        },
+      ),
+    );
+
+    _bannerAd = ad;
+    ad.load();
+  }
+
+  bool get _showStickyBanner =>
+      Platform.isIOS &&
+      _bannerLoaded &&
+      _bannerAd != null &&
+      !isOffline &&
+      !_interstitialShowing &&
+      !moreMenuOpen;
+
+  Widget _stickyBanner() {
+    final ad = _bannerAd;
+    if (ad == null) return const SizedBox.shrink();
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
+      curve: Curves.easeOut,
+      height: _showStickyBanner ? ad.size.height.toDouble() : 0,
+      width: double.infinity,
+      alignment: Alignment.center,
+      clipBehavior: Clip.hardEdge,
+      decoration: BoxDecoration(
+        color: isDarkMode
+            ? const Color(0xFF020617)
+            : const Color(0xFFF8FAFC),
+      ),
+      child: _showStickyBanner
+          ? SizedBox(
+              width: ad.size.width.toDouble(),
+              height: ad.size.height.toDouble(),
+              child: AdWidget(ad: ad),
+            )
+          : const SizedBox.shrink(),
+    );
   }
 
   void _loadRewarded() {
@@ -991,6 +1070,7 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
     _loadingFinishTimer?.cancel();
     _interstitialAd?.dispose();
     _rewardedAd?.dispose();
+    _bannerAd?.dispose();
     super.dispose();
   }
 
@@ -1020,8 +1100,15 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
       },
       child: Scaffold(
         backgroundColor: bg,
-        bottomNavigationBar:
-            Platform.isIOS && !moreMenuOpen ? _compactNativeMenu() : null,
+        bottomNavigationBar: Platform.isIOS
+            ? Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _stickyBanner(),
+                  if (!moreMenuOpen) _compactNativeMenu(),
+                ],
+              )
+            : null,
         body: AnnotatedRegion<SystemUiOverlayStyle>(
           value: overlay,
           child: Stack(
