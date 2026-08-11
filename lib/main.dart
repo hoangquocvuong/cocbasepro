@@ -63,7 +63,7 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
   static const int interstitialCooldownSeconds = 120;
 
   static const int resumeHealthCheckDelayMs = 300;
-  static const int resumeLongBackgroundSeconds = 20;
+  static const int resumeLongBackgroundSeconds = 15;
   static const int recoveryCooldownSeconds = 8;
   static const String lastInternalUrlKey = 'cbp_last_internal_web_url';
 
@@ -1157,56 +1157,110 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
     if (!mounted || isOffline || _resumeRecoveryRunning) return;
 
     final now = DateTime.now();
-    if (now.difference(_lastWebRecoveryAt).inSeconds < recoveryCooldownSeconds) return;
+    if (now.difference(_lastWebRecoveryAt).inSeconds <
+        recoveryCooldownSeconds) {
+      return;
+    }
 
     final backgroundDuration = _backgroundedAt == null
         ? Duration.zero
         : now.difference(_backgroundedAt!);
 
-    final shouldProbe = forceHealthCheck ||
+    final longBackground =
         backgroundDuration.inSeconds >= resumeLongBackgroundSeconds;
 
-    if (!shouldProbe) {
+    _resumeRecoveryRunning = true;
+
+    try {
+      // V7.4 IMPORTANT:
+      // DOM health is NOT enough after iOS background reclaim.
+      // WKWebView can still have HTML/document.readyState while the page's
+      // JavaScript/Firebase runtime is stale or permanently disconnected.
+      //
+      // Therefore after a meaningful background period we ALWAYS perform a
+      // real page reload. This recreates the website JS runtime and forces
+      // Firebase to initialise/reconnect from scratch.
+      if (longBackground) {
+        _lastWebRecoveryAt = DateTime.now();
+        final target = await _recoveryTargetUrl();
+
+        debugPrint(
+          'V7.4 force runtime restore after $reason '
+          'background=${backgroundDuration.inSeconds}s target=$target',
+        );
+
+        if (mounted) {
+          setState(() {
+            pageLoaded = false;
+            webProgress = 5;
+          });
+        }
+
+        try {
+          await controller
+              .reload()
+              .timeout(const Duration(seconds: 6));
+        } catch (e) {
+          debugPrint('V7.4 reload failed/timeout: $e');
+
+          // If the old WKWebView content process is too damaged to reload,
+          // issue a fresh navigation to the last known-good internal URL.
+          await controller
+              .loadRequest(Uri.parse(target))
+              .timeout(const Duration(seconds: 8));
+        }
+
+        return;
+      }
+
+      // Short resumes/network restoration do not force a reload.
+      // Probe the document first so ordinary app switching stays seamless.
+      if (forceHealthCheck) {
+        final healthy = await _isWebViewHealthy()
+            .timeout(
+              const Duration(seconds: 3),
+              onTimeout: () => false,
+            );
+
+        if (!healthy) {
+          _lastWebRecoveryAt = DateTime.now();
+          final target = await _recoveryTargetUrl();
+
+          debugPrint(
+            'V7.4 unhealthy WebView after $reason; '
+            'fresh navigation to $target',
+          );
+
+          if (mounted) {
+            setState(() {
+              pageLoaded = false;
+              webProgress = 5;
+            });
+          }
+
+          await controller
+              .loadRequest(Uri.parse(target))
+              .timeout(const Duration(seconds: 8));
+
+          return;
+        }
+      }
+
       if (pageLoaded) {
         unawaited(_applyIOSAppWebMode());
         unawaited(_refreshNewsBadge());
       }
-      return;
-    }
-
-    _resumeRecoveryRunning = true;
-    try {
-      final healthy = await _isWebViewHealthy();
-
-      if (healthy) {
-        if (pageLoaded) {
-          unawaited(_applyIOSAppWebMode());
-          unawaited(_refreshNewsBadge());
-        }
-        return;
-      }
-
-      _lastWebRecoveryAt = DateTime.now();
-      final target = await _recoveryTargetUrl();
-
-      debugPrint(
-        'Recovering WKWebView after $reason '
-        'background=${backgroundDuration.inSeconds}s target=$target',
-      );
-
-      if (mounted) {
-        setState(() {
-          pageLoaded = false;
-          webProgress = 5;
-        });
-      }
-
-      await controller.loadRequest(Uri.parse(target));
     } catch (e) {
-      debugPrint('WKWebView recovery failed: $e');
+      debugPrint('V7.4 WKWebView/Firebase recovery failed: $e');
+
       try {
-        await controller.loadRequest(Uri.parse(homeUrl));
-      } catch (_) {}
+        final target = await _recoveryTargetUrl();
+        await controller.loadRequest(Uri.parse(target));
+      } catch (_) {
+        try {
+          await controller.loadRequest(Uri.parse(homeUrl));
+        } catch (_) {}
+      }
     } finally {
       _resumeRecoveryRunning = false;
       _backgroundedAt = null;
