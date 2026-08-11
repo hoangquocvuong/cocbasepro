@@ -105,23 +105,38 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
         setState(() => unreadNews = count);
       })
       ..addJavaScriptChannel('AppTheme', onMessageReceived: (message) {
-        _setTheme(message.message.trim().toLowerCase() == 'dark');
+        final dark = message.message.trim().toLowerCase() == 'dark';
+        _setTheme(dark, persist: true);
       })
       ..setNavigationDelegate(NavigationDelegate(
         onProgress: (progress) {
-          if (mounted) setState(() => webProgress = progress);
+          if (!mounted) return;
+          if (progress == 100 || (progress - webProgress).abs() >= 12) {
+            setState(() => webProgress = progress);
+          }
         },
         onPageStarted: (url) {
           currentUrl = url;
-          if (mounted) setState(() => webProgress = 5);
+          if (mounted && webProgress != 5) {
+            setState(() => webProgress = 5);
+          }
         },
-        onPageFinished: (url) async {
+        onPageFinished: (url) {
           currentUrl = url;
-          if (mounted) setState(() { pageLoaded = true; webProgress = 100; });
-          await _applyIOSAppWebMode();
-          await _syncThemeFromPage();
-          await _refreshNewsBadge();
+          if (mounted) {
+            setState(() {
+              pageLoaded = true;
+              webProgress = 100;
+            });
+          }
+
+          unawaited(_applyIOSAppWebMode());
           _countFinishedInternalPage(url);
+
+          Future<void>.delayed(
+            const Duration(milliseconds: 350),
+            () => _refreshNewsBadge(),
+          );
         },
         onWebResourceError: (error) => debugPrint('WebView error: ${error.description}'),
         onNavigationRequest: _handleNavigationRequest,
@@ -130,12 +145,12 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _initDeferredServices() async {
-    // First-paint priority: local state only, no startup network fetch.
+    unawaited(_loadNativeTheme());
     unawaited(_loadPremiumMapCacheOnly());
     unawaited(_loadSupportRewardState());
 
-    // Let the homepage paint before AdMob SDK initialization.
-    await Future<void>.delayed(const Duration(milliseconds: 1400));
+    // Let WebKit paint before starting the AdMob SDK.
+    await Future<void>.delayed(const Duration(milliseconds: 2200));
     if (!mounted) return;
 
     try {
@@ -394,33 +409,128 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
     if (!ok) _toast('Cannot open this link.');
   }
 
+  Future<void> _loadNativeTheme() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final saved = prefs.getString('cbp_ios_theme');
+      if (saved == 'dark' || saved == 'light') {
+        _setTheme(saved == 'dark');
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _saveNativeTheme(bool dark) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('cbp_ios_theme', dark ? 'dark' : 'light');
+    } catch (_) {}
+  }
+
   Future<void> _applyIOSAppWebMode() async {
     try {
-      await controller.runJavaScript(r'''
+      final nativeMode = isDarkMode ? 'dark' : 'light';
+
+      await controller.runJavaScript('''
 (function () {
-  document.documentElement.classList.add('ios-app-mode','cocbase-native-ios','cocbase-app-webview','cocbase-no-ads');
-  if (document.body) document.body.classList.add('ios-app-mode','cocbase-native-ios','cocbase-app-webview','cocbase-no-ads');
-  const styleId = 'cbp-ios-native-shell-v5';
-  let style = document.getElementById(styleId);
-  if (!style) { style = document.createElement('style'); style.id = styleId; document.head.appendChild(style); }
-  style.textContent = `#mobile-nav,.bottom-nav,#nav-donate-btn,#cbp-support-popup,[href="#donate-center"],.cbp-support-progress{display:none!important;visibility:hidden!important;pointer-events:none!important}`;
+  const html = document.documentElement;
+  const body = document.body;
+
+  html.classList.add(
+    'ios-app-mode',
+    'cocbase-native-ios',
+    'cocbase-app-webview',
+    'cocbase-no-ads'
+  );
+
+  if (body) {
+    body.classList.add(
+      'ios-app-mode',
+      'cocbase-native-ios',
+      'cocbase-app-webview',
+      'cocbase-no-ads'
+    );
+  }
+
+  let style = document.getElementById('cbp-ios-single-menu-v54');
+  if (!style) {
+    style = document.createElement('style');
+    style.id = 'cbp-ios-single-menu-v54';
+    document.head.appendChild(style);
+  }
+
+  style.textContent = `
+    #mobile-nav,
+    .bottom-nav,
+    #nav-donate-btn,
+    #cbp-support-popup,
+    [href="#donate-center"],
+    .cbp-support-progress {
+      display:none !important;
+      visibility:hidden !important;
+      opacity:0 !important;
+      pointer-events:none !important;
+      width:0 !important;
+      height:0 !important;
+      min-height:0 !important;
+      max-height:0 !important;
+      padding:0 !important;
+      margin:0 !important;
+      overflow:hidden !important;
+    }
+  `;
+
+  if (!html.getAttribute('data-mode')) {
+    html.setAttribute('data-mode', '$nativeMode');
+  }
+
+  if (!window.__CBP_IOS_THEME_OBSERVER__) {
+    window.__CBP_IOS_THEME_OBSERVER__ = true;
+
+    let lastMode = '';
+
+    const sendTheme = function () {
+      const mode =
+        html.getAttribute('data-mode') ||
+        (body && body.getAttribute('data-mode')) ||
+        (window.matchMedia('(prefers-color-scheme: dark)').matches
+          ? 'dark'
+          : 'light');
+
+      if (mode !== lastMode) {
+        lastMode = mode;
+        try {
+          AppTheme.postMessage(mode);
+        } catch (_) {}
+      }
+    };
+
+    new MutationObserver(sendTheme).observe(html, {
+      attributes: true,
+      attributeFilter: ['data-mode', 'class']
+    });
+
+    if (body) {
+      new MutationObserver(sendTheme).observe(body, {
+        attributes: true,
+        attributeFilter: ['data-mode', 'class']
+      });
+    }
+
+    sendTheme();
+  }
 })();
 ''');
     } catch (_) {}
   }
 
-  Future<void> _syncThemeFromPage() async {
-    try {
-      final result = await controller.runJavaScriptReturningResult(r'''
-(function(){const m=document.documentElement.getAttribute('data-mode')||(document.body&&document.body.getAttribute('data-mode'));if(m==='dark')return'dark';if(m==='light')return'light';return window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';})();
-''');
-      _setTheme(result.toString().replaceAll('"','').trim().toLowerCase() == 'dark');
-    } catch (_) {}
-  }
+  void _setTheme(bool dark, {bool persist = false}) {
+    if (mounted && dark != isDarkMode) {
+      setState(() => isDarkMode = dark);
+    }
 
-  void _setTheme(bool dark) {
-    if (!mounted || dark == isDarkMode) return;
-    setState(() => isDarkMode = dark);
+    if (persist) {
+      unawaited(_saveNativeTheme(dark));
+    }
   }
 
   Future<void> _refreshNewsBadge() async {
