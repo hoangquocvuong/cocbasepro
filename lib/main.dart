@@ -1,3 +1,8 @@
+import 'dart:convert';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:uuid/uuid.dart';
+import 'ios_backend.dart';
 import 'dart:async';
 import 'dart:io';
 
@@ -43,10 +48,7 @@ class WebScreen extends StatefulWidget {
 }
 
 class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
-  static const String homeUrl = 'https://www.cocbasepro.com';
-  static const String interstitialAdUnitId =
-      'ca-app-pub-9371341402256787/5085734937';
-
+  static const String homeUrl = 'https://basecoc.net';
   static const String rewardedAdUnitId =
       'ca-app-pub-9371341402256787/5585456052';
 
@@ -54,13 +56,6 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
       'ca-app-pub-9371341402256787/6534238850';
 
   static const int bannerStartupDelaySeconds = 8;
-
-  static const int supportAdFreeMinutes = 15;
-  static const int supportAdFreeMs = supportAdFreeMinutes * 60 * 1000;
-
-  static const int pagesPerInterstitial = 5;
-  static const int firstAdDelaySeconds = 60;
-  static const int interstitialCooldownSeconds = 120;
 
   static const int resumeHealthCheckDelayMs = 300;
   static const int resumeLongBackgroundSeconds = 15;
@@ -71,14 +66,16 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
   StreamSubscription<List<ConnectivityResult>>? _netSub;
   final DateTime sessionStartedAt = DateTime.now();
 
-  InterstitialAd? _interstitialAd;
   RewardedAd? _rewardedAd;
   BannerAd? _bannerAd;
   bool _bannerLoaded = false;
   bool _adsReady = false;
-  bool _interstitialShowing = false;
+  final _api = IosBackend();
+  bool _vip = false;
+  bool _membershipKnown = false;
+  bool _copyBusy = false;
+  StreamSubscription<String>? _pushRefresh;
   bool _rewardedReady = false;
-  int _supportAdFreeUntil = 0;
   bool isOffline = false;
   bool pageLoaded = false;
   bool _webShellReady = false;
@@ -86,14 +83,12 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
   bool isDarkMode = true;
   bool moreMenuOpen = false;
   int webProgress = 0;
-  int internalPagesSinceAd = 0;
   int unreadNews = 0;
   bool _newsBadgeKnown = false;
   Timer? _loadingFinishTimer;
   Timer? _resumeRecoveryTimer;
   String currentUrl = homeUrl;
   String lastFinishedInternalUrl = '';
-  DateTime lastInterstitialAt = DateTime.fromMillisecondsSinceEpoch(0);
   DateTime? _backgroundedAt;
   DateTime _lastWebRecoveryAt = DateTime.fromMillisecondsSinceEpoch(0);
   bool _resumeRecoveryRunning = false;
@@ -205,7 +200,7 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
             });
           }
 
-          _countFinishedInternalPage(url);
+          if (_isInternalWebUrl(url)) lastFinishedInternalUrl = url;
           unawaited(_saveLastInternalUrl(url));
 
           Future<void>.delayed(
@@ -228,8 +223,16 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
 
   Future<void> _initDeferredServices() async {
     unawaited(_loadNativeTheme());
+    if (Platform.isIOS) {
+      IosBackend.store.setMethodCallHandler((call) async {
+        if (call.method == "transaction") {
+          try { await _api.initialize(); await _api.verify(call.arguments as Map); await _refreshMembership(); } catch (e) { _toast("Purchase verification pending: $e"); }
+        }
+      });
+      await _refreshMembership(sync: true);
+      unawaited(_restorePushRegistration());
+    }
     unawaited(_loadNativeNewsBadge());
-    unawaited(_loadSupportRewardState());
 
     // Let WebKit paint before starting the AdMob SDK.
     await Future<void>.delayed(const Duration(milliseconds: 2200));
@@ -238,7 +241,6 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
     try {
       await MobileAds.instance.initialize();
       _adsReady = true;
-      _loadInterstitial();
       _loadRewarded();
 
       // Keep the fast first paint: request the sticky banner later.
@@ -265,32 +267,8 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
     });
   }
 
-  bool get _supportAdFreeActive =>
-      DateTime.now().millisecondsSinceEpoch < _supportAdFreeUntil;
-
-  Future<void> _loadSupportRewardState() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      _supportAdFreeUntil =
-          prefs.getInt('cbp_support_ad_free_until') ?? 0;
-    } catch (_) {
-      _supportAdFreeUntil = 0;
-    }
-    if (mounted) setState(() {});
-  }
-
-  Future<void> _saveSupportRewardState() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setInt(
-        'cbp_support_ad_free_until',
-        _supportAdFreeUntil,
-      );
-    } catch (_) {}
-  }
-
   void _loadBanner() {
-    if (!_adsReady || _bannerAd != null || isOffline) return;
+    if (!_adsReady || !_membershipKnown || _vip || _bannerAd != null || isOffline) return;
 
     final ad = BannerAd(
       adUnitId: bannerAdUnitId,
@@ -321,10 +299,10 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
 
   bool get _showStickyBanner =>
       Platform.isIOS &&
+      _membershipKnown && !_vip &&
       _bannerLoaded &&
       _bannerAd != null &&
       !isOffline &&
-      !_interstitialShowing &&
       !moreMenuOpen;
 
   Widget _stickyBanner() {
@@ -354,7 +332,7 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
   }
 
   void _loadRewarded() {
-    if (!_adsReady || _rewardedAd != null) return;
+    if (!_adsReady || !_membershipKnown || _vip || _rewardedAd != null) return;
 
     RewardedAd.load(
       adUnitId: rewardedAdUnitId,
@@ -374,125 +352,27 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
     );
   }
 
-  Future<void> _watchSupportAd() async {
-    if (_supportAdFreeActive) {
-      final leftMs = _supportAdFreeUntil -
-          DateTime.now().millisecondsSinceEpoch;
-      final leftMin =
-          ((leftMs + 59999) ~/ 60000).clamp(1, supportAdFreeMinutes);
-
-      _toast(
-        'Thanks for supporting CocBasePro. '
-        'Ad-free browsing is active for $leftMin more min.',
-      );
-      return;
-    }
-
-    final ad = _rewardedAd;
-    if (ad == null || !_rewardedReady) {
-      _toast('Support ad is not ready yet. Please try again shortly.');
-      _loadRewarded();
-      return;
-    }
-
-    _rewardedAd = null;
-    _rewardedReady = false;
-
-    ad.fullScreenContentCallback = FullScreenContentCallback(
-      onAdDismissedFullScreenContent: (ad) {
-        ad.dispose();
-        _loadRewarded();
-      },
-      onAdFailedToShowFullScreenContent: (ad, error) {
-        ad.dispose();
-        _loadRewarded();
-        _toast('Ad could not be shown. Please try again later.');
-      },
-    );
-
-    ad.show(
-      onUserEarnedReward: (_, __) async {
-        _supportAdFreeUntil =
-            DateTime.now().millisecondsSinceEpoch + supportAdFreeMs;
-        internalPagesSinceAd = 0;
-        await _saveSupportRewardState();
-
-        if (!mounted) return;
-        setState(() {});
-        _toast(
-          'Thanks for supporting CocBasePro! '
-          'Enjoy $supportAdFreeMinutes minutes without interstitial ads.',
-        );
-      },
-    );
-  }
-
-  void _loadInterstitial() {
-    if (!_adsReady || _interstitialAd != null || _interstitialShowing) return;
-    InterstitialAd.load(
-      adUnitId: interstitialAdUnitId,
-      request: const AdRequest(nonPersonalizedAds: true),
-      adLoadCallback: InterstitialAdLoadCallback(
-        onAdLoaded: (ad) { _interstitialAd?.dispose(); _interstitialAd = ad; },
-        onAdFailedToLoad: (error) {
-          _interstitialAd = null;
-          debugPrint('Interstitial load failed: $error');
-        },
-      ),
-    );
-  }
-
-  void _countFinishedInternalPage(String url) {
-    final uri = Uri.tryParse(url);
-    if (uri == null || !uri.host.contains('cocbasepro.com')) return;
-    if (url == lastFinishedInternalUrl) return;
-    lastFinishedInternalUrl = url;
-    if ((url == homeUrl || url == '$homeUrl/') && internalPagesSinceAd == 0) return;
-    internalPagesSinceAd++;
-    _maybeShowInterstitial();
-  }
-
-  void _maybeShowInterstitial() {
-    if (_supportAdFreeActive) return;
-    if (_interstitialShowing || internalPagesSinceAd < pagesPerInterstitial) return;
-    final now = DateTime.now();
-    if (now.difference(sessionStartedAt).inSeconds < firstAdDelaySeconds) return;
-    if (now.difference(lastInterstitialAt).inSeconds < interstitialCooldownSeconds) return;
-    final ad = _interstitialAd;
-    if (ad == null) { _loadInterstitial(); return; }
-
-    _interstitialAd = null;
-    _interstitialShowing = true;
-    internalPagesSinceAd = 0;
-    lastInterstitialAt = now;
-    ad.fullScreenContentCallback = FullScreenContentCallback(
-      onAdDismissedFullScreenContent: (ad) {
-        _interstitialShowing = false;
-        ad.dispose();
-        _loadInterstitial();
-      },
-      onAdFailedToShowFullScreenContent: (ad, error) {
-        _interstitialShowing = false;
-        ad.dispose();
-        _loadInterstitial();
-      },
-    );
-    ad.show();
-  }
-
   Future<NavigationDecision> _handleNavigationRequest(NavigationRequest request) async {
     final uri = Uri.tryParse(request.url);
     if (uri == null || isOffline) return NavigationDecision.prevent;
     final host = uri.host.toLowerCase();
 
-    if (host.contains('cocbasepro.com')) {
+    if (uri.scheme == "https" && uri.host == "seo.cocbaseai.com") {
+      final m = RegExp(r"^/api/premium/base/([0-9a-f]{32})$").firstMatch(uri.path);
+      if (m != null) { unawaited(_premiumCopy(m.group(1)!)); return NavigationDecision.prevent; }
+    }
+    if (_isInternalWebUrl(request.url)) {
       currentUrl = request.url;
       return NavigationDecision.navigate;
     }
     if (host.contains('firebaseio.com')) return NavigationDecision.prevent;
 
 
-    await _openExternal(request.url);
+    if (uri.scheme == 'https' && host == 'link.clashofclans.com') {
+      unawaited(_classifyLayout(request.url));
+      return NavigationDecision.prevent;
+    }
+    if (uri.scheme == 'https' || uri.scheme == 'mailto') await _openExternal(request.url);
     return NavigationDecision.prevent;
   }
 
@@ -892,11 +772,11 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
                 ),
                 _moreTile(
                   Icons.favorite_rounded,
-                  'Support',
+                  'My Account',
                   const Color(0xFFFACC15),
                   () {
                     Navigator.of(context).pop();
-                    _showSupportSheet();
+                    _showAccount();
                   },
                 ),
                 _moreTile(
@@ -923,121 +803,183 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
     if (mounted) setState(() => moreMenuOpen = false);
   }
 
-  Future<void> _showSupportSheet() async {
-    final leftMs =
-        _supportAdFreeUntil - DateTime.now().millisecondsSinceEpoch;
-    final leftMin = leftMs > 0
-        ? ((leftMs + 59999) ~/ 60000).clamp(1, supportAdFreeMinutes)
-        : 0;
+  Future<void> _classifyLayout(String link) async {
+    try {
+      final result = await _api.request('base/classify', body: {'link': link}, auth: false);
+      if (result['premium'] == false && result['protected'] != true || result['protected'] == false && result['premium'] != true) {
+        await _openVerifiedLayout(link);
+      } else {
+        _toast('Open this premium base using its secure Copy Base button.');
+      }
+    } catch (_) { _toast('Unable to verify this base. Please try again.'); }
+  }
 
-    await showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (sheetContext) {
-        final fg = isDarkMode
-            ? const Color(0xFFF8FAFC)
-            : const Color(0xFF111827);
-        final bg = isDarkMode
-            ? const Color(0xFF0F172A)
-            : const Color(0xFFF8FAFC);
+  Future<void> _registerPush(String token) async {
+    var device = await _api.storage.read(key: 'ios_device_id');
+    if (device == null) { device = const Uuid().v4(); await _api.storage.write(key: 'ios_device_id', value: device); }
+    await _api.request('notifications/register', body: {'device_id': device, 'fcm_token': token});
+  }
 
-        return SafeArea(
-          top: false,
-          child: Container(
-            margin: const EdgeInsets.all(10),
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
-            decoration: BoxDecoration(
-              color: bg,
-              borderRadius: BorderRadius.circular(22),
-              border: Border.all(color: const Color(0x33FACC15)),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(
-                  Icons.favorite_rounded,
-                  color: Color(0xFFFACC15),
-                  size: 34,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Support CocBasePro',
-                  style: TextStyle(
-                    color: fg,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  'Watch one short ad to support ongoing development '
-                  'and server costs.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: fg.withValues(alpha: 0.68),
-                    fontSize: 11.5,
-                    height: 1.35,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  'As a thank-you, you get $supportAdFreeMinutes minutes '
-                  'without interstitial ads.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: fg.withValues(alpha: 0.82),
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 14),
-                SizedBox(
-                  width: double.infinity,
-                  height: 46,
-                  child: FilledButton.icon(
-                    onPressed: () {
-                      Navigator.pop(sheetContext);
-                      _watchSupportAd();
-                    },
-                    icon: Icon(
-                      _supportAdFreeActive
-                          ? Icons.check_circle_rounded
-                          : Icons.ondemand_video_rounded,
-                      size: 20,
-                    ),
-                    label: Text(
-                      _supportAdFreeActive
-                          ? 'Ad-Free Active · ${leftMin}m left'
-                          : 'Watch Ad · Support CocBasePro',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w900,
-                        fontSize: 12,
-                      ),
-                    ),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: const Color(0xFFFACC15),
-                      foregroundColor: const Color(0xFF111827),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 7),
-                Text(
-                  'Optional · No features are locked behind this ad',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: fg.withValues(alpha: 0.48),
-                    fontSize: 9.5,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
+  Future<void> _restorePushRegistration() async {
+    try {
+      final settings = await _api.request('notifications/settings');
+      if (settings['push_enabled'] == true || settings['push_enabled'] == 1) await _enablePush(true, ask: false);
+    } catch (_) { /* Firebase setup or registration not available yet. */ }
+  }
+
+  Future<void> _enablePush(bool enabled, {bool ask = true}) async {
+    await _api.initialize();
+    final settings = await _api.request('notifications/settings');
+    if (enabled) {
+      if (Firebase.apps.isEmpty) await Firebase.initializeApp();
+      final messaging = FirebaseMessaging.instance;
+      final permission = ask ? await messaging.requestPermission() : await messaging.getNotificationSettings();
+      if (permission.authorizationStatus != AuthorizationStatus.authorized && permission.authorizationStatus != AuthorizationStatus.provisional) throw StateError('Notification permission not granted');
+      await messaging.setForegroundNotificationPresentationOptions(alert: true, badge: true, sound: true);
+      if (await messaging.getAPNSToken() == null) throw StateError('APNs not ready. Try again shortly.');
+      final token = await messaging.getToken();
+      if (token == null) throw StateError('Push token unavailable');
+      await _registerPush(token);
+      await _pushRefresh?.cancel();
+      _pushRefresh = messaging.onTokenRefresh.listen((value) async { try { await _registerPush(value); } catch (_) {} });
+    } else { await _pushRefresh?.cancel(); _pushRefresh = null; }
+    await _api.request('notifications/settings', body: {'push_enabled': enabled, 'email_enabled': settings['email_enabled'] == true || settings['email_enabled'] == 1});
+  }
+
+  Future<void> _refreshMembership({bool sync = false}) async {
+    try {
+      if (_api.accountToken == null) await _api.initialize();
+      if (sync) {
+        final rows = await IosBackend.store.invokeListMethod<dynamic>('entitlements') ?? [];
+        for (final row in rows) {
+          try { await _api.verify(row as Map); } catch (e) { _toast('Restore requires account verification.'); }
+        }
+      }
+      final data = await _api.request('vip/status');
+      if (!mounted) return;
+      setState(() { _vip = data['vip'] == true; _membershipKnown = true; });
+      if (_vip) {
+        _bannerAd?.dispose(); _bannerAd = null; _bannerLoaded = false;
+        _rewardedAd?.dispose(); _rewardedAd = null; _rewardedReady = false;
+      } else { _loadBanner(); _loadRewarded(); }
+    } catch (_) {
+      if (mounted) setState(() => _membershipKnown = false);
+    }
+  }
+
+  Future<void> _showAccount() async {
+    try {
+      await _refreshMembership();
+      final products = await IosBackend.store.invokeListMethod<dynamic>('products') ?? [];
+      if (!mounted) return;
+      final action = await showModalBottomSheet<String>(context: context, isScrollControlled: true, builder: (ctx) => SafeArea(child: SingleChildScrollView(child: Padding(padding: const EdgeInsets.all(20), child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        const Icon(Icons.workspace_premium, color: Colors.amber, size: 40),
+        Text(_membershipKnown ? (_vip ? 'VIP Member' : 'FREE Member') : 'Membership unavailable', textAlign: TextAlign.center, style: const TextStyle(fontSize: 23, fontWeight: FontWeight.bold)),
+        const Text('Ad-free browsing • Unlimited premium base access', textAlign: TextAlign.center),
+        for (final p in products) FilledButton(onPressed: () => Navigator.pop(ctx, p['id'] as String), child: Text('${p['id'] == 'premium_monthly' ? 'Monthly' : 'Yearly'} – ${p['price']}')),
+        const Text('Subscriptions renew automatically unless cancelled. Manage or cancel in Apple subscriptions.'),
+        TextButton(onPressed: () => Navigator.pop(ctx, 'restore'), child: const Text('Restore Purchases')),
+        TextButton(onPressed: () => Navigator.pop(ctx, 'manage'), child: const Text('Manage Subscription')),
+        TextButton(onPressed: () => Navigator.pop(ctx, 'notifications'), child: const Text('Notifications & Inbox')),
+        TextButton(onPressed: () => Navigator.pop(ctx, 'terms'), child: const Text('Terms of Use')),
+        TextButton(onPressed: () => Navigator.pop(ctx, 'privacy'), child: const Text('Privacy Policy')),
+      ])))));
+      if (action == null) return;
+      if (action == 'manage') { await _openExternal('https://apps.apple.com/account/subscriptions'); return; }
+      if (action == 'terms') { await _openExternal('https://www.apple.com/legal/internet-services/itunes/dev/stdeula/'); return; }
+      if (action == 'privacy') { await _openExternal('$homeUrl/p/privacy-policy.html'); return; }
+      if (action == 'notifications') { await _showNotifications(); return; }
+      await _api.initialize();
+      if (action == 'restore') {
+        final rows = await IosBackend.store.invokeListMethod<dynamic>('restore') ?? [];
+        for (final row in rows) { await _api.verify(row as Map, restore: true); }
+        _toast(rows.isEmpty ? 'No active purchase found.' : 'Purchases checked.');
+      } else {
+        final tx = await IosBackend.store.invokeMapMethod<String, dynamic>('buy', {'id': action, 'token': _api.accountToken});
+        if (tx != null) await _api.verify(tx);
+      }
+      await _refreshMembership();
+    } catch (e) { _toast('$e'); }
+  }
+
+  Future<void> _showNotifications() async {
+    try {
+      await _api.initialize();
+      final settings = await _api.request('notifications/settings');
+      final inbox = await _api.request('notifications/inbox');
+      final items = (inbox['items'] ?? inbox['inbox'] ?? []) as List;
+      if (!mounted) return;
+      final email = TextEditingController(text: settings['email'] as String? ?? '');
+      final code = TextEditingController();
+      await showModalBottomSheet<void>(context: context, isScrollControlled: true, builder: (ctx) => SafeArea(child: Padding(padding: EdgeInsets.fromLTRB(18, 18, 18, MediaQuery.of(ctx).viewInsets.bottom + 18), child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
+        const Text('Push, Email & Inbox', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+        TextButton(onPressed: () async { try { await _enablePush(true); _toast('Push enabled'); } catch(e) { _toast('$e'); } }, child: const Text('Enable push notifications')),
+        TextButton(onPressed: () async { try { await _enablePush(false); _toast('Push disabled'); } catch(e) { _toast('$e'); } }, child: const Text('Disable push notifications')),
+        TextField(controller: email, keyboardType: TextInputType.emailAddress, decoration: const InputDecoration(labelText: 'Email address')),
+        TextButton(onPressed: () async { try { await _api.request('notifications/email/start', body: {'email': email.text.trim()}); _toast('Verification code sent.'); } catch(e) { _toast('$e'); } }, child: const Text('Send code')),
+        TextField(controller: code, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Verification code')),
+        FilledButton(onPressed: () async { try { await _api.request('notifications/email/verify', body: {'email': email.text.trim(), 'code': code.text.trim()}); _toast('Email verified.'); } catch(e) { _toast('$e'); } }, child: const Text('Verify email')),
+        for (final enabled in [true, false]) TextButton(onPressed: () async { try { final latest = await _api.request('notifications/settings'); await _api.request('notifications/settings', body: {'email_enabled': enabled, 'push_enabled': latest['push_enabled'] == true || latest['push_enabled'] == 1}); _toast(enabled ? 'Email enabled' : 'Email disabled'); } catch(e) { _toast('$e'); } }, child: Text(enabled ? 'Enable email' : 'Disable email')),
+        TextButton(onPressed: () async { try { await _api.request('notifications/read-all', body: {}); _toast('Marked as read'); } catch(e) { _toast('$e'); } }, child: const Text('Mark all read')),
+        for (final item in items) ListTile(title: Text('${item['title'] ?? ''}'), subtitle: Text('${item['body'] ?? ''}')),
+      ])))));
+      email.dispose(); code.dispose();
+    } catch(e) { _toast('$e'); }
+  }
+
+  Future<void> _premiumCopy(String id) async {
+    if (_copyBusy) return;
+    _copyBusy = true;
+    try {
+      await _refreshMembership();
+      if (!_membershipKnown) throw StateError('Membership unavailable');
+      if (_vip) { await _openVerifiedLayout(await _api.copy(id)); return; }
+      final saved = await _api.storage.read(key: 'reward_$id');
+      if (saved != null) {
+        final previous = Map<String, dynamic>.from(jsonDecode(saved) as Map);
+        if (DateTime.now().millisecondsSinceEpoch < (previous['deadline'] as int)) {
+          if (await _claimReward(id, previous)) return;
+          _toast('Reward verification pending. Try this base again shortly.'); return;
+        }
+        await _api.storage.delete(key: 'reward_$id');
+      }
+      if (!mounted) return;
+      final action = await showDialog<String>(context: context, builder: (ctx) => AlertDialog(title: const Text('Unlock Premium Base'), content: const Text('Watch a rewarded video to unlock this base, or become a VIP member.'), actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')), TextButton(onPressed: () => Navigator.pop(ctx, 'vip'), child: const Text('VIP')), FilledButton(onPressed: () => Navigator.pop(ctx, 'reward'), child: const Text('Watch video'))]));
+      if (action == 'vip') { await _showAccount(); return; }
+      if (action != 'reward') return;
+      final ad = _rewardedAd;
+      if (ad == null || !_rewardedReady) { _loadRewarded(); _toast('Video not ready. Try again shortly.'); return; }
+      final start = await _api.request('reward/start', body: {'base_id': id});
+      await ad.setServerSideOptions(ServerSideVerificationOptions(customData: start['custom_data'] as String));
+      _rewardedAd = null; _rewardedReady = false;
+      final completed = Completer<bool>();
+      bool earned = false;
+      ad.fullScreenContentCallback = FullScreenContentCallback(onAdDismissedFullScreenContent: (a) { a.dispose(); if (!completed.isCompleted) completed.complete(earned); }, onAdFailedToShowFullScreenContent: (a, e) { a.dispose(); if (!completed.isCompleted) completed.complete(false); });
+      await ad.show(onUserEarnedReward: (_, __) { earned = true; });
+      final watched = await completed.future;
+      _loadRewarded();
+      if (!watched) return;
+      start['deadline'] = DateTime.now().millisecondsSinceEpoch + 23 * 3600000;
+      await _api.storage.write(key: 'reward_$id', value: jsonEncode(start));
+      if (!await _claimReward(id, start)) _toast('Reward verification pending. Try this base again shortly.');
+    } catch(e) { _toast('$e'); } finally { _copyBusy = false; }
+  }
+
+  Future<bool> _claimReward(String id, Map<String, dynamic> start) async {
+      for (var i = 0; i < 10; i++) {
+        try {
+          final claim = await _api.request('reward/claim', body: {'nonce': start['custom_data'], 'secret': start['claim_secret']});
+          if (claim['link'] is String) { await _openVerifiedLayout(claim['link'] as String); await _api.storage.delete(key: 'reward_$id'); return true; }
+        } on ApiFailure catch (e) { if (e.status != 409 && e.status != 425) rethrow; }
+        await Future<void>.delayed(const Duration(seconds: 3));
+      }
+      return false;
+  }
+
+  Future<void> _openVerifiedLayout(String link) async {
+    final uri = Uri.parse(link);
+    if (uri.scheme != 'https' || uri.host != 'link.clashofclans.com') throw StateError('Invalid layout link');
+    await _openExternal(link);
   }
 
   Widget _moreTile(IconData icon,String label,Color color,VoidCallback onTap) => Material(
@@ -1060,7 +1002,7 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
     final bg = isDarkMode ? const Color(0xF207111F) : Colors.white.withValues(alpha:.97);
     return SafeArea(top:false,child:Container(height:52,padding:const EdgeInsets.symmetric(horizontal:4,vertical:3),decoration:BoxDecoration(color:bg,border:Border(top:BorderSide(color:isDarkMode?Colors.white.withValues(alpha:.07):Colors.black.withValues(alpha:.06),width:.5))),child:Material(color:Colors.transparent,child:Row(children:[
       _navItem(icon:Icons.home_rounded,label:'Home',onTap:_openHome),
-      _navItem(icon:Icons.article_outlined,label:'News',badge:unreadNews,onTap:_openNews),
+      _navItem(icon:Icons.person_outline,label:'Account',onTap:_showAccount),
       _navItem(icon:Icons.document_scanner_outlined,label:'Find Source',emphasized:true,onTap:_openFindSource),
       _navItem(icon:Icons.bookmark_rounded,label:'Saved',onTap:_openSaved),
       _navItem(icon:Icons.menu_rounded,label:'More',onTap:_showMoreMenu),
@@ -1073,7 +1015,9 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _back() async {
-    if (await controller.canGoBack()) await controller.goBack(); else if (mounted) SystemNavigator.pop();
+    if (await controller.canGoBack()) {
+      await controller.goBack();
+    } else if (mounted) SystemNavigator.pop();
   }
 
 
@@ -1082,7 +1026,7 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
     final uri = Uri.tryParse(raw.trim());
     if (uri == null) return false;
     final host = uri.host.toLowerCase();
-    return host == 'cocbasepro.com' || host == 'www.cocbasepro.com';
+    return uri.scheme == 'https' && (host == 'basecoc.net' || host == 'www.basecoc.net');
   }
 
   Future<void> _saveLastInternalUrl(String url) async {
@@ -1272,6 +1216,7 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
     switch (state) {
       case AppLifecycleState.resumed:
         _scheduleResumeRecovery(reason: 'app-resumed');
+        if (Platform.isIOS) unawaited(_refreshMembership());
         break;
       case AppLifecycleState.inactive:
       case AppLifecycleState.paused:
@@ -1285,10 +1230,11 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    IosBackend.store.setMethodCallHandler(null);
     _netSub?.cancel();
+    _pushRefresh?.cancel();
     _loadingFinishTimer?.cancel();
     _resumeRecoveryTimer?.cancel();
-    _interstitialAd?.dispose();
     _rewardedAd?.dispose();
     _bannerAd?.dispose();
     super.dispose();
