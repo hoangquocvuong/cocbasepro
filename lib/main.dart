@@ -202,6 +202,14 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
             });
           }
 
+          final finishedUri = Uri.tryParse(url);
+          if (finishedUri != null && (finishedUri.path.startsWith('/api/') || finishedUri.path.startsWith('/e/'))) {
+            final id = _premiumId(finishedUri);
+            final backUrl = lastFinishedInternalUrl.isEmpty ? homeUrl : lastFinishedInternalUrl;
+            await controller.loadRequest(Uri.parse(backUrl));
+            if (id != null) unawaited(_premiumCopy(id));
+            return;
+          }
           if (_isInternalWebUrl(url)) lastFinishedInternalUrl = url;
           unawaited(_saveLastInternalUrl(url));
 
@@ -355,8 +363,8 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
   }
 
   String? _premiumId(Uri uri) {
-    if (uri.scheme != 'https' || uri.host != 'seo.cocbaseai.com' || uri.userInfo.isNotEmpty || uri.port != 443) return null;
-    return RegExp(r'^/api/premium/base/([0-9a-f]{32})$').firstMatch(uri.path)?.group(1);
+    if (uri.scheme != 'https' || uri.userInfo.isNotEmpty || uri.port != 443 || !['seo.cocbaseai.com', 'basecoc.net', 'www.basecoc.net'].contains(uri.host)) return null;
+    return RegExp(r'^/(?:api/premium/base|e)/([0-9a-fA-F]{32})/?$').firstMatch(uri.path)?.group(1)?.toLowerCase();
   }
 
   bool _isCoffee(Uri uri) => uri.scheme == 'https' && uri.userInfo.isEmpty && uri.port == 443 &&
@@ -367,14 +375,21 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
   Future<NavigationDecision> _handleNavigationRequest(NavigationRequest request) async {
     // Navigation callbacks do not prove a user gesture. Never launch Safari here.
     if (isOffline) return NavigationDecision.prevent;
+    final uri = Uri.tryParse(request.url);
+    final id = uri == null ? null : _premiumId(uri);
+    if (id != null) {
+      if (request.isMainFrame) unawaited(_handleWebAction(request.url));
+      return NavigationDecision.prevent;
+    }
+    if (uri != null && (uri.path.startsWith('/e/') || uri.path.startsWith('/api/'))) {
+      if (request.isMainFrame && _isInternalWebUrl(request.url)) {
+        _toast('Unable to identify this base. Please try again.');
+      }
+      return NavigationDecision.prevent;
+    }
     if (_isInternalWebUrl(request.url)) {
       if (request.isMainFrame) currentUrl = request.url;
       return NavigationDecision.navigate;
-    }
-    final uri = Uri.tryParse(request.url);
-    final id = uri == null ? null : _premiumId(uri);
-    if (request.isMainFrame && id != null) {
-      unawaited(_handleWebAction(request.url));
     }
     return NavigationDecision.prevent;
   }
@@ -384,6 +399,11 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
     if (!mounted || isOffline || raw.length > 4096) return;
     final page = await controller.currentUrl();
     if (!_isInternalWebUrl(page) && !_isInternalWebUrl(lastFinishedInternalUrl)) return;
+    if (raw.startsWith('premium:')) {
+      final id = raw.substring(8).toLowerCase();
+      if (RegExp(r'^[0-9a-f]{32}$').hasMatch(id)) await _premiumCopy(id);
+      return;
+    }
     if (raw == 'native-account') { if (mounted) await _showAccount(); return; }
     final uri = Uri.tryParse(raw);
     if (uri == null) return;
@@ -485,6 +505,8 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
       try { u = new URL(a.href, location.href); } catch (_) { return; }
       if (u.protocol !== 'https:') return;
       const internal = ['basecoc.net','www.basecoc.net'].includes(u.hostname);
+      const premium = (internal || u.hostname === 'seo.cocbaseai.com') && /^\/(?:api\/premium\/base|e)\/([0-9a-f]{32})\/?$/i.test(u.pathname);
+      if (premium) { e.preventDefault(); e.stopImmediatePropagation(); BaseActionV81.postMessage(u.href); return; }
       if (internal) { if (a.target === '_blank') a.target = '_self'; return; }
       const allowed = u.hostname === 'link.clashofclans.com' ||
         (u.hostname === 'seo.cocbaseai.com' && /^\/api\/premium\/base\/[0-9a-f]{32}$/.test(u.pathname)) ||
@@ -493,6 +515,16 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
       if (allowed) BaseActionV81.postMessage(u.href);
     }, true);
   }
+
+  // Compatibility with the website's existing Android bridge contract.
+  if (!window.Android) window.Android = {};
+  window.Android.copyPremiumBase = function(id) {
+    if (window.top === window.self && /^[0-9a-f]{32}$/i.test(String(id))) {
+      BaseActionV81.postMessage('premium:' + id);
+    }
+  };
+  window.Android.openAccount = function() { BaseActionV81.postMessage('native-account'); };
+  window.Android.openPremium = window.Android.openAccount;
 
   // Suppress only the legacy bottom navigation, not the website header.
   if (!document.getElementById('basecoc-hide-legacy-nav')) {
@@ -505,8 +537,12 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
     const header = document.querySelector('header');
     if (!header) return;
     const controls = Array.from(header.querySelectorAll('button,a,[role="button"]'));
-    const anchor = controls.find(el => /saved|bookmark|theme|dark|light/i.test([el.id,el.className,el.title,el.getAttribute('aria-label'),el.getAttribute('onclick')].join(' ')));
-    const parent = anchor ? anchor.parentElement : header;
+    const key = el => [el.id,el.className,el.title,el.getAttribute('aria-label'),el.getAttribute('onclick'),el.getAttribute('href')].join(' ');
+    const menu = controls.find(el => /hamburger|menu|nav-toggle/i.test(key(el)) && !/account/i.test(key(el)) && el.getBoundingClientRect().width > 0);
+    const visible = controls.filter(el => el.id !== 'basecoc-native-account' && el.getBoundingClientRect().width > 0);
+    const anchor = menu || visible[visible.length-1];
+    if (!anchor) return;
+    const parent = anchor.parentElement;
     if (!parent) return;
     let button = document.getElementById('basecoc-native-account');
     if (!button) {
@@ -515,15 +551,22 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
       button.type = 'button';
       button.title = 'My Account';
       button.setAttribute('aria-label','My Account');
-      button.style.cssText = 'display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;flex:0 0 32px;padding:5px;border:0;background:transparent;color:inherit;cursor:pointer;';
+      button.style.cssText = 'display:inline-flex!important;visibility:visible!important;opacity:1!important;align-items:center;justify-content:center;box-sizing:border-box;padding:0;cursor:pointer;flex-shrink:0;';
       button.innerHTML = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="3.5"/><path d="M5 21v-2a7 7 0 0 1 14 0v2"/></svg>';
       button.addEventListener('click', function(e) {
         if (e.isTrusted && window.top === window.self) BaseActionV81.postMessage('native-account');
       });
     }
-    if (button.parentElement !== parent) {
-      if (anchor) anchor.insertAdjacentElement('afterend',button);
-      else parent.appendChild(button);
+    const style = getComputedStyle(anchor);
+    const rect = anchor.getBoundingClientRect();
+    button.style.width = Math.max(28,Math.min(44,rect.width))+'px';
+    button.style.height = Math.max(28,Math.min(44,rect.height))+'px';
+    button.style.border = style.border;
+    button.style.borderRadius = style.borderRadius;
+    button.style.setProperty('color',style.color,'important');
+    button.style.setProperty('background',style.backgroundColor,'important');
+    if (button.parentElement !== parent || button.nextElementSibling !== anchor) {
+      anchor.insertAdjacentElement('beforebegin',button);
     }
   }
   placeAccount();
