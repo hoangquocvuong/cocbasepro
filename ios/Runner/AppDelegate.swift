@@ -33,8 +33,19 @@ import StoreKit
   @MainActor private func encode(_ tx: Transaction) -> [String: Any] {
     let id = String(tx.id)
     pending[id] = tx
-    var environment = "Production"
-    if #available(iOS 16.0, *) { environment = tx.environment == .sandbox ? "Sandbox" : "Production" }
+    var environment = "Unknown"
+    if #available(iOS 16.0, *) {
+      if tx.environment == .sandbox {
+        environment = "Sandbox"
+      } else if tx.environment == .production {
+        environment = "Production"
+      }
+    } else if let payload = try? JSONSerialization.jsonObject(with: tx.jsonRepresentation) as? [String: Any],
+              let env = payload["environment"] as? String {
+      if env == "Sandbox" || env == "Production" {
+        environment = env
+      }
+    }
     return ["transaction_id": id, "environment": environment]
   }
   @MainActor private func handle(_ call: FlutterMethodCall, _ result: @escaping FlutterResult) async throws {
