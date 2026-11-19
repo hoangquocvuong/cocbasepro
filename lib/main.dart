@@ -371,6 +371,11 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
       if (request.isMainFrame) currentUrl = request.url;
       return NavigationDecision.navigate;
     }
+    final uri = Uri.tryParse(request.url);
+    final id = uri == null ? null : _premiumId(uri);
+    if (request.isMainFrame && id != null) {
+      unawaited(_handleWebAction(request.url));
+    }
     return NavigationDecision.prevent;
   }
 
@@ -378,7 +383,7 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
   Future<void> _handleWebAction(String raw) async {
     if (!mounted || isOffline || raw.length > 4096) return;
     final page = await controller.currentUrl();
-    if (!_isInternalWebUrl(page)) return;
+    if (!_isInternalWebUrl(page) && !_isInternalWebUrl(lastFinishedInternalUrl)) return;
     if (raw == 'native-account') { if (mounted) await _showAccount(); return; }
     final uri = Uri.tryParse(raw);
     if (uri == null) return;
@@ -489,19 +494,42 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
     }, true);
   }
 
-  // Preserve the website layout. Only add a single native account entry.
-  if (!document.getElementById('basecoc-native-account')) {
-    const button = document.createElement('button');
-    button.id = 'basecoc-native-account';
-    button.type = 'button';
-    button.textContent = 'My Account';
-    button.style.cssText = 'display:block;margin:8px auto;padding:8px 14px;border:1px solid #d4a017;border-radius:8px;background:transparent;color:inherit;font:inherit;font-size:13px;';
-    button.addEventListener('click', function(e) {
-      if (e.isTrusted && window.top === window.self) BaseActionV81.postMessage('native-account');
-    });
+  // Suppress only the legacy bottom navigation, not the website header.
+  if (!document.getElementById('basecoc-hide-legacy-nav')) {
+    const css = document.createElement('style');
+    css.id = 'basecoc-hide-legacy-nav';
+    css.textContent = '#mobile-nav,.bottom-nav,#mobile-more-sheet{display:none!important;visibility:hidden!important;}';
+    (document.head || html).appendChild(css);
+  }
+  function placeAccount() {
     const header = document.querySelector('header');
-    if (header) header.insertAdjacentElement('afterend', button);
-    else if (body) body.prepend(button);
+    if (!header) return;
+    const controls = Array.from(header.querySelectorAll('button,a,[role="button"]'));
+    const anchor = controls.find(el => /saved|bookmark|theme|dark|light/i.test([el.id,el.className,el.title,el.getAttribute('aria-label'),el.getAttribute('onclick')].join(' ')));
+    const parent = anchor ? anchor.parentElement : header;
+    if (!parent) return;
+    let button = document.getElementById('basecoc-native-account');
+    if (!button) {
+      button = document.createElement('button');
+      button.id = 'basecoc-native-account';
+      button.type = 'button';
+      button.title = 'My Account';
+      button.setAttribute('aria-label','My Account');
+      button.style.cssText = 'display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;flex:0 0 32px;padding:5px;border:0;background:transparent;color:inherit;cursor:pointer;';
+      button.innerHTML = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="3.5"/><path d="M5 21v-2a7 7 0 0 1 14 0v2"/></svg>';
+      button.addEventListener('click', function(e) {
+        if (e.isTrusted && window.top === window.self) BaseActionV81.postMessage('native-account');
+      });
+    }
+    if (button.parentElement !== parent) {
+      if (anchor) anchor.insertAdjacentElement('afterend',button);
+      else parent.appendChild(button);
+    }
+  }
+  placeAccount();
+  if (!window.__baseAccountObserver) {
+    window.__baseAccountObserver = new MutationObserver(placeAccount);
+    window.__baseAccountObserver.observe(html,{childList:true,subtree:true});
   }
 
   const normalizeMode = function(value) {
@@ -1023,26 +1051,6 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
       padding:const EdgeInsets.symmetric(horizontal:6,vertical:8),child:Column(mainAxisAlignment:MainAxisAlignment.center,children:[Icon(icon,size:22,color:color),const SizedBox(height:5),Text(label,maxLines:1,overflow:TextOverflow.ellipsis,style:TextStyle(color:color,fontSize:9.5,fontWeight:FontWeight.w800))]),
     )),
   );
-
-  Widget _navItem({required IconData icon,required String label,required VoidCallback onTap,int badge=0,bool emphasized=false}) {
-    final fg = isDarkMode ? const Color(0xFFF8FAFC) : const Color(0xFF111827);
-    final c = emphasized ? const Color(0xFFFACC15) : fg;
-    return Expanded(child:InkWell(borderRadius:BorderRadius.circular(11),onTap:onTap,child:SizedBox(height:45,child:Stack(alignment:Alignment.center,children:[
-      Column(mainAxisAlignment:MainAxisAlignment.center,children:[Icon(icon,size:20,color:c),const SizedBox(height:2),Text(label,maxLines:1,overflow:TextOverflow.fade,softWrap:false,style:TextStyle(color:c,fontSize:8.4,fontWeight:FontWeight.w800,height:1))]),
-      if(badge>0) Positioned(top:1,right:7,child:Container(constraints:const BoxConstraints(minWidth:15,minHeight:15),padding:const EdgeInsets.symmetric(horizontal:3),alignment:Alignment.center,decoration:const BoxDecoration(color:Color(0xFFEF4444),borderRadius:BorderRadius.all(Radius.circular(999))),child:Text(badge>9?'9+':'$badge',style:const TextStyle(color:Colors.white,fontSize:8,fontWeight:FontWeight.w900))))
-    ]))));
-  }
-
-  Widget _compactNativeMenu() {
-    final bg = isDarkMode ? const Color(0xF207111F) : Colors.white.withValues(alpha:.97);
-    return SafeArea(top:false,child:Container(height:52,padding:const EdgeInsets.symmetric(horizontal:4,vertical:3),decoration:BoxDecoration(color:bg,border:Border(top:BorderSide(color:isDarkMode?Colors.white.withValues(alpha:.07):Colors.black.withValues(alpha:.06),width:.5))),child:Material(color:Colors.transparent,child:Row(children:[
-      _navItem(icon:Icons.home_rounded,label:'Home',onTap:_openHome),
-      _navItem(icon:Icons.person_outline,label:'Account',onTap:_showAccount),
-      _navItem(icon:Icons.newspaper_rounded,label:'News',badge:unreadNews,onTap:_openNews),
-      _navItem(icon:Icons.bookmark_rounded,label:'Saved',onTap:_openSaved),
-      _navItem(icon:Icons.menu_rounded,label:'More',onTap:_showMoreMenu),
-    ]))));
-  }
 
   void _toast(String message) {
     if (!mounted) return;
