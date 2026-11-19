@@ -179,7 +179,6 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
 
           // Template + UA already suppress the web navigation. This is only
           // a lightweight defensive reinforcement and never blocks painting.
-          unawaited(_injectEarlyIOSMenuHide());
         },
         onPageFinished: (url) async {
           _loadingFinishTimer?.cancel();
@@ -380,6 +379,7 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
     if (!mounted || isOffline || raw.length > 4096) return;
     final page = await controller.currentUrl();
     if (!_isInternalWebUrl(page)) return;
+    if (raw == 'native-account') { if (mounted) await _showAccount(); return; }
     final uri = Uri.tryParse(raw);
     if (uri == null) return;
     final id = _premiumId(uri);
@@ -463,43 +463,6 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
     unawaited(_saveNativeNewsBadge(count));
   }
 
-  Future<void> _injectEarlyIOSMenuHide() async {
-    if (!Platform.isIOS) return;
-
-    try {
-      await controller.runJavaScript(r'''
-(function () {
-  try {
-    const id = 'cbp-ios-early-menu-hide-v58';
-    let style = document.getElementById(id);
-
-    if (!style && document.documentElement) {
-      style = document.createElement('style');
-      style.id = id;
-      style.textContent = `
-        #mobile-nav,
-        .bottom-nav,
-        #mobile-more-sheet,
-        #nav-donate-btn {
-          display:none !important;
-          visibility:hidden !important;
-          opacity:0 !important;
-          pointer-events:none !important;
-          height:0 !important;
-          min-height:0 !important;
-          max-height:0 !important;
-          overflow:hidden !important;
-        }
-      `;
-
-      (document.head || document.documentElement).appendChild(style);
-    }
-  } catch (_) {}
-})();
-''');
-    } catch (_) {}
-  }
-
   Future<void> _applyIOSAppWebMode() async {
     try {
       await controller.runJavaScript(r'''
@@ -526,49 +489,20 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
     }, true);
   }
 
-  html.classList.add(
-    'ios-app-mode',
-    'cocbase-native-ios',
-    'cocbase-app-webview',
-    'cocbase-no-ads'
-  );
-
-  if (body) {
-    body.classList.add(
-      'ios-app-mode',
-      'cocbase-native-ios',
-      'cocbase-app-webview',
-      'cocbase-no-ads'
-    );
+  // Preserve the website layout. Only add a single native account entry.
+  if (!document.getElementById('basecoc-native-account')) {
+    const button = document.createElement('button');
+    button.id = 'basecoc-native-account';
+    button.type = 'button';
+    button.textContent = 'My Account';
+    button.style.cssText = 'display:block;margin:8px auto;padding:8px 14px;border:1px solid #d4a017;border-radius:8px;background:transparent;color:inherit;font:inherit;font-size:13px;';
+    button.addEventListener('click', function(e) {
+      if (e.isTrusted && window.top === window.self) BaseActionV81.postMessage('native-account');
+    });
+    const header = document.querySelector('header');
+    if (header) header.insertAdjacentElement('afterend', button);
+    else if (body) body.prepend(button);
   }
-
-  let style = document.getElementById('cbp-ios-single-menu-v55');
-  if (!style) {
-    style = document.createElement('style');
-    style.id = 'cbp-ios-single-menu-v55';
-    document.head.appendChild(style);
-  }
-
-  style.textContent = `
-    #mobile-nav,
-    .bottom-nav,
-    #nav-donate-btn,
-    #cbp-support-popup,
-    [href="#donate-center"],
-    .cbp-support-progress {
-      display:none !important;
-      visibility:hidden !important;
-      opacity:0 !important;
-      pointer-events:none !important;
-      width:0 !important;
-      height:0 !important;
-      min-height:0 !important;
-      max-height:0 !important;
-      padding:0 !important;
-      margin:0 !important;
-      overflow:hidden !important;
-    }
-  `;
 
   const normalizeMode = function(value) {
     value = String(value || '').toLowerCase();
@@ -1365,21 +1299,15 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
       },
       child: Scaffold(
         backgroundColor: bg,
-        bottomNavigationBar: Platform.isIOS
-            ? Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _stickyBanner(),
-                  if (!moreMenuOpen) _compactNativeMenu(),
-                ],
-              )
+        bottomNavigationBar: Platform.isIOS && _showStickyBanner
+            ? SafeArea(top: false, child: _stickyBanner())
             : null,
         body: AnnotatedRegion<SystemUiOverlayStyle>(
           value: overlay,
           child: Stack(
             children: [
               SafeArea(
-                bottom: false,
+                bottom: !_showStickyBanner,
                 child: AnimatedOpacity(
                   opacity: (_hasPresentedFirstPage || _webShellReady) ? 1 : 0,
                   duration: const Duration(milliseconds: 70),
