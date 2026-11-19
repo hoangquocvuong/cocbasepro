@@ -1,8 +1,8 @@
-name: cocbasepro
+﻿name: cocbasepro
 description: Coc Base Pro App
 publish_to: "none"
 
-version: 8.0.1+11
+version: 8.1.0+12
 
 
 
@@ -46,4 +46,5 @@ flutter_launcher_icons:
   android: true
   image_path: "assets/icon_ios.jpg"
   remove_alpha_ios: true
+
 

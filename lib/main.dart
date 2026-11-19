@@ -129,6 +129,9 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
         _setTheme(dark, persist: true);
       });
 
+    await controller.addJavaScriptChannel('BaseActionV81', onMessageReceived: (message) {
+      unawaited(_handleWebAction(message.message));
+    });
     await controller.setNavigationDelegate(NavigationDelegate(
         onProgress: (progress) {
           if (!mounted) return;
@@ -352,35 +355,59 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
     );
   }
 
-  Future<NavigationDecision> _handleNavigationRequest(NavigationRequest request) async {
-    final uri = Uri.tryParse(request.url);
-    if (uri == null || isOffline) return NavigationDecision.prevent;
-    final host = uri.host.toLowerCase();
+  String? _premiumId(Uri uri) {
+    if (uri.scheme != 'https' || uri.host != 'seo.cocbaseai.com' || uri.userInfo.isNotEmpty || uri.port != 443) return null;
+    return RegExp(r'^/api/premium/base/([0-9a-f]{32})$').firstMatch(uri.path)?.group(1);
+  }
 
-    if (uri.scheme == "https" && uri.host == "seo.cocbaseai.com") {
-      final m = RegExp(r"^/api/premium/base/([0-9a-f]{32})$").firstMatch(uri.path);
-      if (m != null) { unawaited(_premiumCopy(m.group(1)!)); return NavigationDecision.prevent; }
-    }
+  bool _isCoffee(Uri uri) => uri.scheme == 'https' && uri.userInfo.isEmpty && uri.port == 443 &&
+      (uri.host == 'buymeacoffee.com' || uri.host == 'www.buymeacoffee.com') && uri.pathSegments.isNotEmpty;
+
+  bool _isLayout(Uri uri) => uri.scheme == 'https' && uri.host == 'link.clashofclans.com' && uri.userInfo.isEmpty && uri.port == 443;
+
+  Future<NavigationDecision> _handleNavigationRequest(NavigationRequest request) async {
+    // Navigation callbacks do not prove a user gesture. Never launch Safari here.
+    if (isOffline) return NavigationDecision.prevent;
     if (_isInternalWebUrl(request.url)) {
-      currentUrl = request.url;
+      if (request.isMainFrame) currentUrl = request.url;
       return NavigationDecision.navigate;
     }
-    if (host.contains('firebaseio.com')) return NavigationDecision.prevent;
-
-
-    if (uri.scheme == 'https' && host == 'link.clashofclans.com') {
-      unawaited(_classifyLayout(request.url));
-      return NavigationDecision.prevent;
-    }
-    if (uri.scheme == 'https' || uri.scheme == 'mailto') await _openExternal(request.url);
     return NavigationDecision.prevent;
+  }
+
+  DateTime _lastAction = DateTime.fromMillisecondsSinceEpoch(0);
+  Future<void> _handleWebAction(String raw) async {
+    if (!mounted || isOffline || raw.length > 4096) return;
+    final page = await controller.currentUrl();
+    if (!_isInternalWebUrl(page)) return;
+    final uri = Uri.tryParse(raw);
+    if (uri == null) return;
+    final id = _premiumId(uri);
+    if (id == null && !_isLayout(uri) && !_isCoffee(uri)) return;
+    final now = DateTime.now();
+    if (now.difference(_lastAction).inMilliseconds < 800) return;
+    _lastAction = now;
+    if (id != null) { await _premiumCopy(id); return; }
+    if (_isLayout(uri)) { await _classifyLayout(raw); return; }
+    // A native confirmation also protects against a forged JS channel message.
+    if (!mounted) return;
+    final confirmed = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
+      title: const Text('Support BASECOC'), content: const Text('Open Buy Me a Coffee in your browser?'),
+      actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+        FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Continue'))]));
+    if (confirmed == true) await _openExternal(raw);
   }
 
   Future<void> _openExternal(String url) async {
     final uri = Uri.tryParse(url);
-    if (uri == null) return;
-    final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
-    if (!ok) _toast('Cannot open this link.');
+    if (uri == null || uri.scheme != 'https' || uri.userInfo.isNotEmpty || uri.port != 443) return;
+    if (!_isLayout(uri) && !_isCoffee(uri) &&
+        url != 'https://apps.apple.com/account/subscriptions' &&
+        url != 'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/') return;
+    try {
+      final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!ok) _toast('Unable to open the selected link.');
+    } catch (_) { _toast('Unable to open the selected link.'); }
   }
 
   Future<void> _loadNativeTheme() async {
@@ -479,6 +506,25 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
 (function () {
   const html = document.documentElement;
   const body = document.body;
+
+  if (!window.__baseActionV81) {
+    window.__baseActionV81 = true;
+    document.addEventListener('click', function(e) {
+      if (!e.isTrusted || window.top !== window.self) return;
+      const a = e.target && e.target.closest && e.target.closest('a[href]');
+      if (!a) return;
+      let u;
+      try { u = new URL(a.href, location.href); } catch (_) { return; }
+      if (u.protocol !== 'https:') return;
+      const internal = ['basecoc.net','www.basecoc.net'].includes(u.hostname);
+      if (internal) { if (a.target === '_blank') a.target = '_self'; return; }
+      const allowed = u.hostname === 'link.clashofclans.com' ||
+        (u.hostname === 'seo.cocbaseai.com' && /^\/api\/premium\/base\/[0-9a-f]{32}$/.test(u.pathname)) ||
+        ['buymeacoffee.com','www.buymeacoffee.com'].includes(u.hostname);
+      e.preventDefault(); e.stopImmediatePropagation();
+      if (allowed) BaseActionV81.postMessage(u.href);
+    }, true);
+  }
 
   html.classList.add(
     'ios-app-mode',
@@ -682,9 +728,31 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
     await _refreshNewsBadge(explicitZero: true);
   }
 
-  Future<void> _openFindSource() async {
-    final opened = await _runMenuScript(r'''(function(){if(typeof window.closeMobileMore==='function')window.closeMobileMore();if(typeof window.openAIFinder==='function'){window.openAIFinder();return true;}if(typeof window.openAIFinderPopup==='function'){window.openAIFinderPopup();return true;}if(typeof window.CBPMenuOpenAIFinder==='function'){window.CBPMenuOpenAIFinder();return true;}const b=document.getElementById('nav-ai-btn');if(b){b.click();return true;}return false;})();''');
-    if (!opened) _toast('Find Source is not available on this page.');
+  Future<void> _openSupport() async {
+    try {
+      final result = await controller.runJavaScriptReturningResult(r'''(function(){
+        for (const a of document.querySelectorAll('a[href]')) {
+          try { const u = new URL(a.href); if (['buymeacoffee.com','www.buymeacoffee.com'].includes(u.hostname)) return u.href; } catch (_) {}
+        }
+        return '';
+      })();''');
+      var raw = result.toString();
+      if (raw.startsWith('"')) raw = jsonDecode(raw) as String;
+      final uri = Uri.tryParse(raw);
+      if (uri != null && _isCoffee(uri)) { await _openExternal(raw); return; }
+    } catch (_) {}
+    _toast('Support link is not available on this page.');
+  }
+
+  Future<void> _showBenefits() async {
+    await showModalBottomSheet<void>(context: context, builder: (ctx) => SafeArea(child: Padding(
+      padding: const EdgeInsets.all(20), child: Column(mainAxisSize: MainAxisSize.min, children: [
+        const Text('FREE vs VIP', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 12),
+        const ListTile(leading: Icon(Icons.person_outline), title: Text('FREE'), subtitle: Text('Free bases • Banner ads • Watch video to unlock premium bases')),
+        const ListTile(leading: Icon(Icons.workspace_premium, color: Colors.amber), title: Text('VIP'), subtitle: Text('No ads • Unlimited premium bases • VIP recommendations')),
+        FilledButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
+      ]))));
   }
 
   Future<void> _openSaved() async {
@@ -718,7 +786,7 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
           decoration: BoxDecoration(color:bg,borderRadius:const BorderRadius.vertical(top:Radius.circular(22))),
           child: Column(mainAxisSize:MainAxisSize.min,children:[
             Container(width:38,height:4,margin:const EdgeInsets.only(bottom:10),decoration:BoxDecoration(color:fg.withValues(alpha:.20),borderRadius:BorderRadius.circular(999))),
-            Row(children:[Expanded(child:Text('Explore CocBasePro',style:TextStyle(color:fg,fontSize:16,fontWeight:FontWeight.w900))),IconButton(visualDensity:VisualDensity.compact,onPressed:()=>Navigator.pop(sheetContext),icon:Icon(Icons.close_rounded,color:fg))]),
+            Row(children:[Expanded(child:Text('Explore BASECOC',style:TextStyle(color:fg,fontSize:16,fontWeight:FontWeight.w900))),IconButton(visualDensity:VisualDensity.compact,onPressed:()=>Navigator.pop(sheetContext),icon:Icon(Icons.close_rounded,color:fg))]),
             const SizedBox(height:4),
             GridView.count(
               crossAxisCount: 3,
@@ -771,21 +839,21 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
                   ),
                 ),
                 _moreTile(
-                  Icons.favorite_rounded,
-                  'My Account',
-                  const Color(0xFFFACC15),
+                  Icons.coffee_rounded,
+                  'Support',
+                  const Color(0xFFB8860B),
                   () {
-                    Navigator.of(context).pop();
-                    _showAccount();
+                    Navigator.pop(sheetContext);
+                    unawaited(_openSupport());
                   },
                 ),
                 _moreTile(
-                  Icons.refresh_rounded,
-                  'Reload',
+                  Icons.workspace_premium_outlined,
+                  'VIP Benefits',
                   fg,
                   () {
-                    Navigator.of(context).pop();
-                    controller.reload();
+                    Navigator.pop(sheetContext);
+                    unawaited(_showBenefits());
                   },
                 ),
                 _moreTile(
@@ -872,22 +940,55 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
       await _refreshMembership();
       final products = await IosBackend.store.invokeListMethod<dynamic>('products') ?? [];
       if (!mounted) return;
-      final action = await showModalBottomSheet<String>(context: context, isScrollControlled: true, builder: (ctx) => SafeArea(child: SingleChildScrollView(child: Padding(padding: const EdgeInsets.all(20), child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        const Icon(Icons.workspace_premium, color: Colors.amber, size: 40),
-        Text(_membershipKnown ? (_vip ? 'VIP Member' : 'FREE Member') : 'Membership unavailable', textAlign: TextAlign.center, style: const TextStyle(fontSize: 23, fontWeight: FontWeight.bold)),
-        const Text('Ad-free browsing • Unlimited premium base access', textAlign: TextAlign.center),
-        for (final p in products) FilledButton(onPressed: () => Navigator.pop(ctx, p['id'] as String), child: Text('${p['id'] == 'premium_monthly' ? 'Monthly' : 'Yearly'} – ${p['price']}')),
-        const Text('Subscriptions renew automatically unless cancelled. Manage or cancel in Apple subscriptions.'),
-        TextButton(onPressed: () => Navigator.pop(ctx, 'restore'), child: const Text('Restore Purchases')),
-        TextButton(onPressed: () => Navigator.pop(ctx, 'manage'), child: const Text('Manage Subscription')),
-        TextButton(onPressed: () => Navigator.pop(ctx, 'notifications'), child: const Text('Notifications & Inbox')),
-        TextButton(onPressed: () => Navigator.pop(ctx, 'terms'), child: const Text('Terms of Use')),
-        TextButton(onPressed: () => Navigator.pop(ctx, 'privacy'), child: const Text('Privacy Policy')),
-      ])))));
+      final action = await showModalBottomSheet<String>(
+        context: context, isScrollControlled: true, backgroundColor: Colors.transparent,
+        builder: (ctx) {
+          final fg = isDarkMode ? const Color(0xFFF8FAFC) : const Color(0xFF111827);
+          final bg = isDarkMode ? const Color(0xFF111827) : Colors.white;
+          final subtle = isDarkMode ? const Color(0xFFCBD5E1) : const Color(0xFF475569);
+          const gold = Color(0xFFFACC15);
+          Widget link(String label, String action, IconData icon) => Expanded(child: TextButton.icon(
+            style: TextButton.styleFrom(foregroundColor: fg, padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 8), minimumSize: const Size(0, 44)),
+            onPressed: () => Navigator.pop(ctx, action), icon: Icon(icon, size: 17), label: Text(label, style: const TextStyle(fontSize: 12))));
+          return Container(decoration: BoxDecoration(color: bg, borderRadius: const BorderRadius.vertical(top: Radius.circular(24))),
+            child: SafeArea(top: false, child: SingleChildScrollView(child: Padding(padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+              child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                Center(child: Container(width: 36, height: 4, decoration: BoxDecoration(color: subtle.withValues(alpha: .35), borderRadius: BorderRadius.circular(4)))),
+                Row(children: [const Icon(Icons.account_circle_outlined, color: gold, size: 30), const SizedBox(width: 10),
+                  Expanded(child: Text('My Account', style: TextStyle(color: fg, fontSize: 20, fontWeight: FontWeight.w800))),
+                  IconButton(onPressed: () => Navigator.pop(ctx), icon: Icon(Icons.close, color: fg))]),
+                Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: fg.withValues(alpha: .06), borderRadius: BorderRadius.circular(12)), child: Row(children: [
+                  Icon(_vip ? Icons.workspace_premium : Icons.person_outline, color: _vip ? gold : subtle), const SizedBox(width: 10),
+                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(_membershipKnown ? (_vip ? 'VIP Member' : 'FREE Member') : 'Membership unavailable', style: TextStyle(color: fg, fontWeight: FontWeight.bold)),
+                    Text(_vip ? 'Ad-free • Unlimited premium access' : 'Free bases • Rewarded unlocks', style: TextStyle(color: subtle, fontSize: 12)),
+                  ]))])),
+                if (!_vip) ...[
+                  const SizedBox(height: 12),
+                  Text('Upgrade to VIP', style: TextStyle(color: fg, fontWeight: FontWeight.bold, fontSize: 16)),
+                  Text('No ads • Unlimited premium bases', style: TextStyle(color: subtle, fontSize: 12)),
+                  const SizedBox(height: 8),
+                  if (products.isEmpty) Text('Plans temporarily unavailable', style: TextStyle(color: subtle)),
+                  Row(children: [for (final id in ['premium_monthly', 'premium_yearly'])
+                    for (final p in products.where((p) => p['id'] == id)) Expanded(child: Padding(padding: const EdgeInsets.symmetric(horizontal: 3), child: InkWell(
+                      onTap: () => Navigator.pop(ctx, id), borderRadius: BorderRadius.circular(12), child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 13, horizontal: 4), decoration: BoxDecoration(color: id == 'premium_yearly' ? gold : fg.withValues(alpha: .07), borderRadius: BorderRadius.circular(12), border: Border.all(color: gold)),
+                        child: Column(children: [Text(id == 'premium_monthly' ? 'Monthly' : 'Yearly', style: TextStyle(color: id == 'premium_yearly' ? Colors.black : fg, fontWeight: FontWeight.bold)),
+                          const SizedBox(height: 5), Text('${p['price']}', textAlign: TextAlign.center, style: TextStyle(color: id == 'premium_yearly' ? Colors.black : fg, fontWeight: FontWeight.w800, fontSize: 15))]))))) ]),
+                  const SizedBox(height: 7), Text('Auto-renews unless cancelled in Apple subscriptions.', style: TextStyle(color: subtle, fontSize: 11)),
+                ],
+                Divider(color: subtle.withValues(alpha: .24)),
+                Row(children: [link('Restore Purchases', 'restore', Icons.restore), link('Manage Plan', 'manage', Icons.settings_outlined)]),
+                Row(children: [link('Notifications & Inbox', 'notifications', Icons.notifications_outlined), link('VIP Benefits', 'benefits', Icons.workspace_premium_outlined)]),
+                Row(children: [link('Terms of Use', 'terms', Icons.description_outlined), link('Privacy Policy', 'privacy', Icons.privacy_tip_outlined)]),
+              ])))));
+        },
+      );
       if (action == null) return;
       if (action == 'manage') { await _openExternal('https://apps.apple.com/account/subscriptions'); return; }
       if (action == 'terms') { await _openExternal('https://www.apple.com/legal/internet-services/itunes/dev/stdeula/'); return; }
-      if (action == 'privacy') { await _openExternal('$homeUrl/p/privacy-policy.html'); return; }
+      if (action == 'privacy') { await controller.loadRequest(Uri.parse('$homeUrl/p/privacy-policy.html')); return; }
+      if (action == 'benefits') { await _showBenefits(); return; }
       if (action == 'notifications') { await _showNotifications(); return; }
       await _api.initialize();
       if (action == 'restore') {
@@ -978,7 +1079,7 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
 
   Future<void> _openVerifiedLayout(String link) async {
     final uri = Uri.parse(link);
-    if (uri.scheme != 'https' || uri.host != 'link.clashofclans.com') throw StateError('Invalid layout link');
+    if (!_isLayout(uri)) throw StateError('Invalid layout link');
     await _openExternal(link);
   }
 
@@ -1003,7 +1104,7 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
     return SafeArea(top:false,child:Container(height:52,padding:const EdgeInsets.symmetric(horizontal:4,vertical:3),decoration:BoxDecoration(color:bg,border:Border(top:BorderSide(color:isDarkMode?Colors.white.withValues(alpha:.07):Colors.black.withValues(alpha:.06),width:.5))),child:Material(color:Colors.transparent,child:Row(children:[
       _navItem(icon:Icons.home_rounded,label:'Home',onTap:_openHome),
       _navItem(icon:Icons.person_outline,label:'Account',onTap:_showAccount),
-      _navItem(icon:Icons.document_scanner_outlined,label:'Find Source',emphasized:true,onTap:_openFindSource),
+      _navItem(icon:Icons.newspaper_rounded,label:'News',badge:unreadNews,onTap:_openNews),
       _navItem(icon:Icons.bookmark_rounded,label:'Saved',onTap:_openSaved),
       _navItem(icon:Icons.menu_rounded,label:'More',onTap:_showMoreMenu),
     ]))));
@@ -1015,9 +1116,7 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _back() async {
-    if (await controller.canGoBack()) {
-      await controller.goBack();
-    } else if (mounted) SystemNavigator.pop();
+    if (await controller.canGoBack()) await controller.goBack(); else if (mounted) SystemNavigator.pop();
   }
 
 
@@ -1026,7 +1125,7 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
     final uri = Uri.tryParse(raw.trim());
     if (uri == null) return false;
     final host = uri.host.toLowerCase();
-    return uri.scheme == 'https' && (host == 'basecoc.net' || host == 'www.basecoc.net');
+    return uri.scheme == 'https' && uri.userInfo.isEmpty && uri.port == 443 && (host == 'basecoc.net' || host == 'www.basecoc.net');
   }
 
   Future<void> _saveLastInternalUrl(String url) async {
