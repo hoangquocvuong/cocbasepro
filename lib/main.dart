@@ -1023,7 +1023,7 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
     return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [cell('FREE', false, ['Free layouts', 'Video per premium base', 'Banner ads', 'No exclusive VIP links']), const SizedBox(width: 8), cell('VIP', true, ['All layouts', 'Instant premium copy', 'Ad-free experience', _vipLinksBenefit])]);
   }
 
-  Future<String?> _unlockChoice() => showModalBottomSheet<String>(context: context, isScrollControlled: true, backgroundColor: Colors.transparent, builder: (ctx) {
+  Future<String?> _unlockChoice({bool pending = false, bool canReplace = false}) => showModalBottomSheet<String>(context: context, isScrollControlled: true, backgroundColor: Colors.transparent, builder: (ctx) {
     final fg = isDarkMode ? const Color(0xFFF8FAFC) : const Color(0xFF111827);
     final bg = isDarkMode ? const Color(0xFF111827) : Colors.white;
     final subtle = isDarkMode ? const Color(0xFFCBD5E1) : const Color(0xFF475569);
@@ -1032,7 +1032,12 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
       _vipHighlight(fg), const SizedBox(height: 10),
       _membershipComparison(fg, subtle), const SizedBox(height: 12),
       FilledButton.icon(style: FilledButton.styleFrom(backgroundColor: const Color(0xFFFACC15), foregroundColor: Colors.black), onPressed: () => Navigator.pop(ctx, 'vip'), icon: const Icon(Icons.workspace_premium), label: const Text('Unlock VIP Access')),
-      OutlinedButton.icon(style: OutlinedButton.styleFrom(foregroundColor: fg), onPressed: () => Navigator.pop(ctx, 'reward'), icon: const Icon(Icons.play_circle_outline), label: const Text('Watch video • Unlock this base')),
+      if (pending) ...[
+        Text('A previous video reward is awaiting confirmation.', style: TextStyle(color: subtle, fontSize: 12)),
+        OutlinedButton.icon(onPressed: () => Navigator.pop(ctx, 'check'), icon: const Icon(Icons.refresh), label: const Text('Check previous reward')),
+      ],
+      if (!pending || canReplace)
+        OutlinedButton.icon(style: OutlinedButton.styleFrom(foregroundColor: fg), onPressed: () => Navigator.pop(ctx, 'reward'), icon: const Icon(Icons.play_circle_outline), label: Text(pending ? 'Start a new video' : 'Watch video • Unlock this base')),
     ])))));
   });
 
@@ -1195,44 +1200,46 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
       }
       final key = 'reward_$id';
       final saved = await _api.storage.read(key: key).timeout(const Duration(seconds: 5));
+      Map<String, dynamic>? previous;
       if (saved != null) {
-        final previous = Map<String, dynamic>.from(jsonDecode(saved) as Map);
-        if (DateTime.now().millisecondsSinceEpoch < (previous['deadline'] as int)) {
-          _unlockProgress('Confirming video reward…');
-          if (await _claimReward(id, previous)) return;
-          final age = DateTime.now().millisecondsSinceEpoch -
-              (previous['started_at'] as int? ?? ((previous['deadline'] as int) - 23 * 3600000));
-          if (!_rewardStillPending || age < 5 * 60000 || !mounted) {
-            _unlockProgress('Reward pending. Retry without another video.', retryBase: id);
-            return;
-          }
-          final replace = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
-            title: const Text('Reward still pending'),
-            content: const Text('Google has not confirmed this reward. You can keep checking or start a new video. Starting a new video replaces the pending attempt.'),
-            actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Keep waiting')),
-              TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('New video'))],
-          ));
-          if (replace != true) {
-            _unlockProgress('Reward pending. Retry without another video.', retryBase: id);
-            return;
-          }
-          // Recheck once before offering a replacement.
-          if (await _claimReward(id, previous, waitSeconds: 5)) return;
-          if (!_rewardStillPending) {
-            _unlockProgress('Unable to confirm reward. Retry later.', retryBase: id);
-            return;
-          }
+        final candidate = Map<String, dynamic>.from(jsonDecode(saved) as Map);
+        if (DateTime.now().millisecondsSinceEpoch < (candidate['deadline'] as int)) {
+          previous = candidate;
         }
-        // Keep the previous attempt until a new session is actually saved.
       }
+      final age = previous == null ? 0 : DateTime.now().millisecondsSinceEpoch -
+          (previous['started_at'] as int? ?? ((previous['deadline'] as int) - 23 * 3600000));
       if (!mounted) return;
-      final action = await _unlockChoice();
+      final action = await _unlockChoice(pending: previous != null, canReplace: age >= 5 * 60000);
+      if (action == 'check' && previous != null) {
+        _unlockProgress('Checking previous reward…');
+        if (!await _claimReward(id, previous, waitSeconds: 8)) {
+          _unlockProgress('Reward pending. Check again later.', retryBase: id);
+        }
+        return;
+      }
       if (action == 'vip') {
         await _showAccount();
         if (_membershipKnown && _vip) await _openVerifiedLayout(await _api.copy(id).timeout(const Duration(seconds: 12)));
         return;
       }
       if (action != 'reward') return;
+      if (previous != null) {
+        _unlockProgress('Checking previous reward…');
+        if (await _claimReward(id, previous, waitSeconds: 5)) return;
+        if (!_rewardStillPending || !mounted) {
+          _unlockProgress('Unable to verify previous reward. Try later.', retryBase: id);
+          return;
+        }
+        _unlockProgress(null);
+        final replace = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
+          title: const Text('Start a new video?'),
+          content: const Text('The previous reward is still pending. A new video replaces that attempt.'),
+          actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+            TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Continue'))],
+        ));
+        if (replace != true) return;
+      }
       _unlockProgress('Loading ad…');
       if (!_adsReady) {
         await MobileAds.instance.initialize().timeout(const Duration(seconds: 10));
@@ -1283,7 +1290,7 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
     }
   }
 
-  Future<bool> _claimReward(String id, Map<String, dynamic> start, {int waitSeconds = 45}) async {
+  Future<bool> _claimReward(String id, Map<String, dynamic> start, {int waitSeconds = 12}) async {
     _rewardStillPending = false;
     final until = DateTime.now().add(Duration(seconds: waitSeconds));
     while (mounted && DateTime.now().isBefore(until)) {
