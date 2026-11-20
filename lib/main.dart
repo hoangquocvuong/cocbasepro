@@ -555,36 +555,41 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
     css.textContent = '#mobile-nav,.bottom-nav,#mobile-more-sheet{display:none!important;visibility:hidden!important;}';
     (document.head || html).appendChild(css);
   }
-  // V892: compact article view, only inside the native iOS WebView.
+  // V893: hide presentation-only AI article content in the iOS WebView.
   function hideAiOverview() {
-    if (!Array.from(document.querySelectorAll('h2,h3,h4,h5')).some(h => /^layout overview:?$/i.test(h.textContent.trim()))) return;
+    const normalize = t => (t || '').replace(/\s+/g,' ').trim().replace(/:$/, '').toLowerCase();
     const known = /^(layout overview|base overview|layout analysis|base analysis|defensive analysis|defensive strategy|strategic analysis|strategic overview|design analysis|design overview|base design analysis|tactical analysis|attack strategy|defense strategy|layout description|base description|key defensive features|strengths and weaknesses|defensive strengths|conclusion)$/i;
-    const hide = el => {
-      if (el && !el.matches('a,button,input,select,textarea') && !el.querySelector('img,video,iframe,a,button,input,select,textarea,[role="button"]')) {
-        el.style.setProperty('display','none','important');
+    const protectedSelector = 'img,picture,video,iframe,button,input,select,textarea,form,[role="button"],a,header,nav,footer';
+    const safe = el => el && !el.matches(protectedSelector) && !el.querySelector(protectedSelector);
+    const hide = el => { if (safe(el)) el.style.setProperty('display','none','important'); };
+    const headings = Array.from(document.querySelectorAll('h1,h2,h3,h4,h5,h6,[role="heading"],div,span,strong,b,p')).filter(el => known.test(normalize(el.textContent)) && !Array.from(el.children).some(c => known.test(normalize(c.textContent))));
+    if (!headings.some(el => normalize(el.textContent) === 'layout overview')) return;
+    for (const heading of headings) {
+      let block = heading;
+      // Handle nested heading wrappers and dedicated text-only article containers.
+      for (let i=0;i<4;i++) {
+        const p = block.parentElement;
+        if (!p || p === document.body || p.matches('main,article,header,footer,nav') || !safe(p)) break;
+        if (normalize(p.textContent) === normalize(block.textContent)) { block=p; continue; }
+        if (p.textContent.trim().length > block.textContent.trim().length + 30 && normalize(p.textContent).startsWith(normalize(heading.textContent))) { block=p; }
+        break;
       }
-    };
-    for (const h of document.querySelectorAll('h2,h3,h4,h5')) {
-      if (!known.test(h.textContent.trim().replace(/:$/, ''))) continue;
-      hide(h);
-      let node = h.nextElementSibling;
-      while (node && !/^H[1-6]$/.test(node.tagName)) {
-        if (!node.matches('p,ul,ol,blockquote,div')) break;
-        if (node.querySelector('h1,h2,h3,h4,h5,h6,img,video,iframe,a,button,input,select,textarea,[role="button"]')) break;
-        hide(node);
-        node = node.nextElementSibling;
+      hide(block);
+      let sibling = block.nextElementSibling;
+      while (sibling && safe(sibling) && sibling.matches('p,div,section,ul,ol,blockquote') && !sibling.querySelector('table') && !/^(related|recommended|similar|comments|more bases|ratings|share|download|copy|support|forum)/i.test(normalize(sibling.textContent))) {
+        hide(sibling); sibling = sibling.nextElementSibling;
       }
     }
   }
   hideAiOverview();
-  if (!window.__basecocAiObserverV892) {
+  if (!window.__basecocAiObserverV893) {
     let queued = false;
-    window.__basecocAiObserverV892 = new MutationObserver(function() {
+    window.__basecocAiObserverV893 = new MutationObserver(function() {
       if (queued) return;
       queued = true;
-      requestAnimationFrame(function() { queued = false; hideAiOverview(); });
+      requestAnimationFrame(function() { queued=false; hideAiOverview(); });
     });
-    window.__basecocAiObserverV892.observe(html,{childList:true,subtree:true});
+    window.__basecocAiObserverV893.observe(html,{childList:true,subtree:true,characterData:true});
   }
   function placeAccount() {
     const header = document.querySelector('header');

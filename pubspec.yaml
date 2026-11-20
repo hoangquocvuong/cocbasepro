@@ -2,7 +2,7 @@
 description: Coc Base Pro App
 publish_to: "none"
 
-version: 8.9.2+22
+version: 8.9.3+23
 
 
 
@@ -46,6 +46,7 @@ flutter_launcher_icons:
   android: true
   image_path: "assets/icon_ios.jpg"
   remove_alpha_ios: true
+
 
 
 
