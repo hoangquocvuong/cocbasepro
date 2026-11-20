@@ -555,13 +555,22 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
     css.textContent = '#mobile-nav,.bottom-nav,#mobile-more-sheet{display:none!important;visibility:hidden!important;}';
     (document.head || html).appendChild(css);
   }
-  // V893: hide presentation-only AI article content in the iOS WebView.
+  // V894: hide presentation-only AI article content in the iOS WebView.
   function hideAiOverview() {
     const normalize = t => (t || '').replace(/\s+/g,' ').trim().replace(/:$/, '').toLowerCase();
     const known = /^(layout overview|base overview|layout analysis|base analysis|defensive analysis|defensive strategy|strategic analysis|strategic overview|design analysis|design overview|base design analysis|tactical analysis|attack strategy|defense strategy|layout description|base description|key defensive features|strengths and weaknesses|defensive strengths|conclusion)$/i;
     const protectedSelector = 'img,picture,video,iframe,button,input,select,textarea,form,[role="button"],a,header,nav,footer';
     const safe = el => el && !el.matches(protectedSelector) && !el.querySelector(protectedSelector);
-    const hide = el => { if (safe(el)) el.style.setProperty('display','none','important'); };
+    const hidden = new Set();
+    const hide = el => {
+      if (safe(el)) { el.style.setProperty('display','none','important'); hidden.add(el); }
+    };
+    // Collapse wrappers only when their remaining rendered content is empty.
+    const emptyWrapper = el => {
+      if (!safe(el) || el.matches('html,body,main,header,footer,nav') || !el.matches('div,section,article,aside')) return false;
+      if (el.querySelector('canvas,svg,table,object,embed,audio,[contenteditable]')) return false;
+      return !normalize(el.innerText);
+    };
     const headings = Array.from(document.querySelectorAll('h1,h2,h3,h4,h5,h6,[role="heading"],div,span,strong,b,p')).filter(el => known.test(normalize(el.textContent)) && !Array.from(el.children).some(c => known.test(normalize(c.textContent))));
     if (!headings.some(el => normalize(el.textContent) === 'layout overview')) return;
     for (const heading of headings) {
@@ -580,16 +589,24 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
         hide(sibling); sibling = sibling.nextElementSibling;
       }
     }
+    for (const node of Array.from(hidden)) {
+      let parent = node.parentElement;
+      while (parent && emptyWrapper(parent)) {
+        const next = parent.parentElement;
+        hide(parent);
+        parent = next;
+      }
+    }
   }
   hideAiOverview();
-  if (!window.__basecocAiObserverV893) {
+  if (!window.__basecocAiObserverV894) {
     let queued = false;
-    window.__basecocAiObserverV893 = new MutationObserver(function() {
+    window.__basecocAiObserverV894 = new MutationObserver(function() {
       if (queued) return;
       queued = true;
       requestAnimationFrame(function() { queued=false; hideAiOverview(); });
     });
-    window.__basecocAiObserverV893.observe(html,{childList:true,subtree:true,characterData:true});
+    window.__basecocAiObserverV894.observe(html,{childList:true,subtree:true,characterData:true});
   }
   function placeAccount() {
     const header = document.querySelector('header');
