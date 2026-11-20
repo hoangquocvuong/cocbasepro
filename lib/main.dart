@@ -74,6 +74,14 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
   bool _vip = false;
   bool _membershipKnown = false;
   bool _copyBusy = false;
+  String? _unlockStatus;
+  String? _retryBase;
+  static const _vipLinksBenefit = 'Handpicked VIP base links 3× monthly';
+  static const _vipLinksDetails = 'Receive handpicked VIP base links on the 5th, 15th and 25th of every month via the notification bell, push and email (opt-in).';
+
+  void _unlockProgress(String? message, {String? retryBase}) {
+    if (mounted) setState(() { _unlockStatus = message; _retryBase = retryBase; });
+  }
   bool _accountOpen = false;
   bool _inboxOpen = false;
   int _vipUnread = 0;
@@ -362,14 +370,14 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
       
       load.complete(ad);
     }
-    final timer = Timer(const Duration(seconds: 25), () => finish(null));
+    final timer = Timer(const Duration(seconds: 12), () => finish(null));
     try {
-      await RewardedAd.load(adUnitId: rewardedAdUnitId,
+      unawaited(RewardedAd.load(adUnitId: rewardedAdUnitId,
         request: const AdRequest(nonPersonalizedAds: true),
         rewardedAdLoadCallback: RewardedAdLoadCallback(
           onAdLoaded: (ad) { timer.cancel(); finish(ad); },
-          onAdFailedToLoad: (_) { timer.cancel(); finish(null); },
-        ));
+          onAdFailedToLoad: (error) { debugPrint('Rewarded load failed: ${error.code}'); timer.cancel(); finish(null); },
+        )).catchError((Object error) { timer.cancel(); finish(null); }));
     } catch (_) { timer.cancel(); finish(null); }
     return load.future;
   }
@@ -791,7 +799,7 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
         const Text('FREE vs VIP', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
         const SizedBox(height: 12),
         const ListTile(leading: Icon(Icons.person_outline), title: Text('FREE'), subtitle: Text('Free bases • Banner ads • Watch video to unlock premium bases')),
-        const ListTile(leading: Icon(Icons.workspace_premium, color: Colors.amber), title: Text('VIP'), subtitle: Text('No ads • Unlimited premium bases • VIP recommendations')),
+        const ListTile(leading: Icon(Icons.workspace_premium, color: Colors.amber), title: Text('VIP'), subtitle: Text('No ads • Unlimited premium bases • Handpicked VIP base links 3× monthly')),
         FilledButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
       ]))));
   }
@@ -991,7 +999,7 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
         const SizedBox(height: 8),
         for (final item in items) Padding(padding: const EdgeInsets.symmetric(vertical: 4), child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [Icon(vip ? Icons.check_circle_outline : Icons.remove_circle_outline, size: 15, color: vip ? const Color(0xFFB8870A) : subtle), const SizedBox(width: 5), Expanded(child: Text(item, style: TextStyle(color: fg, fontSize: 12)))])),
       ])));
-    return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [cell('FREE', false, ['Free layouts', 'Video per premium base', 'Banner ads', 'No VIP alerts']), const SizedBox(width: 8), cell('VIP', true, ['All layouts', 'Instant premium copy', 'Ad-free experience', 'VIP alerts 3× monthly'])]);
+    return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [cell('FREE', false, ['Free layouts', 'Video per premium base', 'Banner ads', 'No exclusive VIP links']), const SizedBox(width: 8), cell('VIP', true, ['All layouts', 'Instant premium copy', 'Ad-free experience', _vipLinksBenefit])]);
   }
 
   Future<String?> _unlockChoice() => showModalBottomSheet<String>(context: context, isScrollControlled: true, backgroundColor: Colors.transparent, builder: (ctx) {
@@ -1001,7 +1009,7 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
     return Container(decoration: BoxDecoration(color: bg, borderRadius: const BorderRadius.vertical(top: Radius.circular(24))), child: SafeArea(top: false, child: SingleChildScrollView(child: Padding(padding: const EdgeInsets.all(16), child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       Row(children: [const Icon(Icons.workspace_premium, color: Color(0xFFEAB308)), const SizedBox(width: 8), Expanded(child: Text('Unlock Premium Base', style: TextStyle(color: fg, fontSize: 20, fontWeight: FontWeight.w800))), IconButton(onPressed: () => Navigator.pop(ctx), icon: Icon(Icons.close, color: fg))]),
       _membershipComparison(fg, subtle), const SizedBox(height: 12),
-      Text('VIP base recommendations on the 5th, 15th and 25th via Inbox, push or email (opt-in).', style: TextStyle(color: fg, fontSize: 13)), const SizedBox(height: 12),
+      Text(_vipLinksDetails, style: TextStyle(color: fg, fontSize: 13)), const SizedBox(height: 12),
       FilledButton.icon(style: FilledButton.styleFrom(backgroundColor: const Color(0xFFFACC15), foregroundColor: Colors.black), onPressed: () => Navigator.pop(ctx, 'vip'), icon: const Icon(Icons.workspace_premium), label: const Text('Explore VIP plans')),
       OutlinedButton.icon(style: OutlinedButton.styleFrom(foregroundColor: fg), onPressed: () => Navigator.pop(ctx, 'reward'), icon: const Icon(Icons.play_circle_outline), label: const Text('Watch video • Unlock this base')),
     ])))));
@@ -1034,7 +1042,7 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
                   IconButton(onPressed: () => Navigator.pop(ctx), icon: Icon(Icons.close, color: fg))]),
                 Text(_membershipKnown ? (_vip ? 'Current plan: VIP' : 'Current plan: FREE') : 'Membership unavailable', style: TextStyle(color: subtle, fontSize: 12)),
                 const SizedBox(height: 8), _membershipComparison(fg, subtle),
-                const SizedBox(height: 6), Text('VIP alerts: 5th, 15th & 25th • Inbox, push & email (opt-in)', style: TextStyle(color: subtle, fontSize: 11)),
+                const SizedBox(height: 6), Text(_vipLinksDetails, style: TextStyle(color: subtle, fontSize: 11)),
                 if (!_vip) ...[
                   const SizedBox(height: 8),
                   if (products.isEmpty) Text('Plans temporarily unavailable', style: TextStyle(color: subtle)),
@@ -1139,60 +1147,108 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _premiumCopy(String id) async {
-    if (_copyBusy) return;
+    if (_copyBusy || !mounted) return;
     _copyBusy = true;
-    bool progress = false;
-    void busy(String message) { if (mounted) { ScaffoldMessenger.of(context).hideCurrentSnackBar(); ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message), duration: const Duration(minutes: 3))); progress = true; } }
-    void clear() { if (progress && mounted) ScaffoldMessenger.of(context).hideCurrentSnackBar(); progress = false; }
+    _unlockProgress(null);
+    RewardedAd? ownedAd;
     try {
-      if (!_membershipKnown) await _refreshMembership().timeout(const Duration(seconds: 15));
+      if (!_membershipKnown) await _refreshMembership().timeout(const Duration(seconds: 12));
       if (!_membershipKnown) throw StateError('Membership unavailable');
-      if (_vip) { await _openVerifiedLayout(await _api.copy(id)); return; }
-      if (!mounted) return;
-      final action = await _unlockChoice();
-      if (action == 'vip') { await _showAccount(); if (_membershipKnown && _vip) await _openVerifiedLayout(await _api.copy(id)); return; }
-      if (action != 'reward') return;
-      busy('Loading video…');
-      final saved = await _api.storage.read(key: 'reward_$id');
+      if (_vip) {
+        _unlockProgress('Opening base…');
+        await _openVerifiedLayout(await _api.copy(id).timeout(const Duration(seconds: 12)));
+        return;
+      }
+      final key = 'reward_$id';
+      final saved = await _api.storage.read(key: key).timeout(const Duration(seconds: 5));
       if (saved != null) {
         final previous = Map<String, dynamic>.from(jsonDecode(saved) as Map);
         if (DateTime.now().millisecondsSinceEpoch < (previous['deadline'] as int)) {
-          busy('Opening base…');
-          if (await _claimReward(id, previous)) return;
-          clear(); _toast('Video reward is still pending. Please try again later.'); return;
+          _unlockProgress('Confirming video reward…');
+          if (!await _claimReward(id, previous)) {
+            _unlockProgress('Reward pending. Retry without another video.', retryBase: id);
+          }
+          return;
         }
-        await _api.storage.delete(key: 'reward_$id');
+        await _api.storage.delete(key: key);
       }
-      if (!_adsReady) { await MobileAds.instance.initialize().timeout(const Duration(seconds: 15)); _adsReady = true; }
-      final ad = await _loadRewarded().timeout(const Duration(seconds: 30));
-      if (ad == null || !mounted) { clear(); _toast('No video available. Please try again.'); return; }
-      final start = await _api.request('reward/start', body: {'base_id': id}).timeout(const Duration(seconds: 20));
-      await ad.setServerSideOptions(ServerSideVerificationOptions(customData: start['custom_data'] as String));
+      if (!mounted) return;
+      final action = await _unlockChoice();
+      if (action == 'vip') {
+        await _showAccount();
+        if (_membershipKnown && _vip) await _openVerifiedLayout(await _api.copy(id).timeout(const Duration(seconds: 12)));
+        return;
+      }
+      if (action != 'reward') return;
+      _unlockProgress('Loading ad…');
+      if (!_adsReady) {
+        await MobileAds.instance.initialize().timeout(const Duration(seconds: 10));
+        _adsReady = true;
+      }
+      final ad = await _loadRewarded().timeout(const Duration(seconds: 13));
+      if (ad == null || !mounted) {
+        _unlockProgress('No video available. Try again.', retryBase: id);
+        return;
+      }
       _rewardedAd = null;
+      ownedAd = ad;
+      final start = await _api.request('reward/start', body: {'base_id': id}).timeout(const Duration(seconds: 12));
+      await ad.setServerSideOptions(ServerSideVerificationOptions(customData: start['custom_data'] as String)).timeout(const Duration(seconds: 5));
+      if (!mounted) return;
       final completed = Completer<bool>();
       bool earned = false;
-      ad.fullScreenContentCallback = FullScreenContentCallback(onAdDismissedFullScreenContent: (a) { a.dispose(); if (!completed.isCompleted) completed.complete(earned); }, onAdFailedToShowFullScreenContent: (a, e) { a.dispose(); if (!completed.isCompleted) completed.complete(false); });
-      clear();
-      try { await ad.show(onUserEarnedReward: (_, __) { earned = true; }); } catch (_) { ad.dispose(); rethrow; }
-      final watched = await completed.future.timeout(const Duration(minutes: 5));
-      unawaited(_loadRewarded());
-      if (!watched) { _toast('Video not completed.'); return; }
+      bool disposed = false;
+      void disposeAd() { if (!disposed) { disposed = true; ad.dispose(); } }
+      ad.fullScreenContentCallback = FullScreenContentCallback(
+        onAdDismissedFullScreenContent: (a) { disposeAd(); if (!completed.isCompleted) completed.complete(earned); },
+        onAdFailedToShowFullScreenContent: (a, e) { debugPrint('Rewarded show failed: ${e.code}'); disposeAd(); if (!completed.isCompleted) completed.complete(false); },
+      );
+      _unlockProgress(null);
+      ownedAd = null;
+      try {
+        await ad.show(onUserEarnedReward: (_, __) { earned = true; }).timeout(const Duration(seconds: 15));
+        final watched = await completed.future.timeout(const Duration(minutes: 3));
+        if (!watched) { _unlockProgress('Video unavailable or not completed.', retryBase: id); return; }
+      } finally { disposeAd(); unawaited(_loadRewarded()); }
       start['deadline'] = DateTime.now().millisecondsSinceEpoch + 23 * 3600000;
-      await _api.storage.write(key: 'reward_$id', value: jsonEncode(start));
-      busy('Opening base…');
-      if (!await _claimReward(id, start)) { clear(); _toast('Video reward is still pending. Please try again later.'); }
-    } catch (_) { clear(); _toast('Unable to unlock this base. Please try again.'); } finally { clear(); _copyBusy = false; }
+      await _api.storage.write(key: key, value: jsonEncode(start)).timeout(const Duration(seconds: 5));
+      _unlockProgress('Confirming video reward…');
+      if (!await _claimReward(id, start)) {
+        _unlockProgress('Reward pending. Retry without another video.', retryBase: id);
+      }
+    } catch (e) {
+      debugPrint('Premium unlock failed: ${e.runtimeType}');
+      _unlockProgress('Unable to open base. Try again.', retryBase: id);
+    } finally {
+      ownedAd?.dispose();
+      _copyBusy = false;
+      if (_retryBase == null) _unlockProgress(null);
+    }
   }
 
   Future<bool> _claimReward(String id, Map<String, dynamic> start) async {
-    final until = DateTime.now().add(const Duration(seconds: 65));
+    final until = DateTime.now().add(const Duration(seconds: 18));
     while (mounted && DateTime.now().isBefore(until)) {
       try {
         final remaining = until.difference(DateTime.now());
         if (remaining.isNegative) break;
-        final claim = await _api.request('reward/claim', body: {'custom_data': start['custom_data'], 'claim_secret': start['claim_secret']}).timeout(remaining);
-        if (claim['link'] is String) { await _openVerifiedLayout(claim['link'] as String); await _api.storage.delete(key: 'reward_$id'); return true; }
-      } on TimeoutException { return false; } on ApiFailure catch (e) { if (e.status != 409 && e.status != 425) rethrow; }
+        if (start['verified_link'] is! String) {
+          final claim = await _api.request('reward/claim', body: {'custom_data': start['custom_data'], 'claim_secret': start['claim_secret']}).timeout(remaining < const Duration(seconds: 5) ? remaining : const Duration(seconds: 5));
+          if (claim['link'] is String) {
+            final link = claim['link'] as String;
+            if (!_isLayout(Uri.parse(link))) throw StateError('Invalid layout link');
+            start['verified_link'] = link;
+            await _api.storage.write(key: 'reward_$id', value: jsonEncode(start)).timeout(const Duration(seconds: 5));
+          }
+        }
+        if (start['verified_link'] is String) {
+          _unlockProgress('Opening base…');
+          await _openVerifiedLayout(start['verified_link'] as String);
+          await _api.storage.delete(key: 'reward_$id').timeout(const Duration(seconds: 5));
+          return true;
+        }
+      } on TimeoutException { /* Retry within the bounded claim window. */ }
+      on ApiFailure catch (e) { if (e.status != 409 && e.status != 425 && e.status != 429 && e.status < 500) rethrow; }
       await Future<void>.delayed(const Duration(seconds: 2));
     }
     return false;
@@ -1201,7 +1257,25 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
   Future<void> _openVerifiedLayout(String link) async {
     final uri = Uri.parse(link);
     if (!_isLayout(uri)) throw StateError('Invalid layout link');
-    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) { throw StateError('Could not open Clash of Clans. Please try again.'); }
+    if (!await launchUrl(uri, mode: LaunchMode.externalApplication).timeout(const Duration(seconds: 8))) {
+      throw StateError('Could not open Clash of Clans. Please try again.');
+    }
+  }
+
+  Widget _unlockStatusBar() {
+    final retry = _retryBase;
+    final fg = isDarkMode ? Colors.white : const Color(0xFF111827);
+    return Material(
+      color: isDarkMode ? const Color(0xFF1E293B) : const Color(0xFFFFF7D6),
+      child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4), child: Row(children: [
+        if (retry == null) const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) else Icon(Icons.info_outline, size: 18, color: fg),
+        const SizedBox(width: 8), Expanded(child: Text(_unlockStatus ?? '', style: TextStyle(color: fg, fontSize: 12))),
+        if (retry != null) ...[
+          TextButton(onPressed: () => unawaited(_premiumCopy(retry)), child: const Text('Retry')),
+          IconButton(onPressed: () => _unlockProgress(null), icon: const Icon(Icons.close, size: 18)),
+        ],
+      ])),
+    );
   }
 
   Widget _moreTile(IconData icon,String label,Color color,VoidCallback onTap) => Material(
@@ -1475,12 +1549,15 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
           child: Stack(
             children: [
               SafeArea(
-                bottom: !_showStickyBanner,
-                child: AnimatedOpacity(
+                bottom: true,
+                child: Column(children: [
+                  if (_unlockStatus != null) _unlockStatusBar(),
+                  Expanded(key: const ValueKey('basecoc-webview'), child: AnimatedOpacity(
                   opacity: (_hasPresentedFirstPage || _webShellReady) ? 1 : 0,
                   duration: const Duration(milliseconds: 70),
                   child: WebViewWidget(controller: controller),
-                ),
+                )),
+                ]),
               ),
 
               // Cold-start cover only. Never put a solid light/dark screen
