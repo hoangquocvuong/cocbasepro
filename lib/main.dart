@@ -397,7 +397,7 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
   DateTime _lastAction = DateTime.fromMillisecondsSinceEpoch(0);
   Future<void> _handleWebAction(String raw) async {
     if (!mounted || isOffline || raw.length > 4096) return;
-    final page = await controller.currentUrl();
+    final page = await controller.currentUrl().timeout(const Duration(seconds: 2), onTimeout: () => lastFinishedInternalUrl);
     if (!_isInternalWebUrl(page) && !_isInternalWebUrl(lastFinishedInternalUrl)) return;
     if (raw.startsWith('premium:')) {
       final id = raw.substring(8).toLowerCase();
@@ -669,7 +669,7 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
   sendTheme();
 })();
 ''');
-      await _syncAccountBadge();
+      unawaited(_syncAccountBadge());
     } catch (_) {}
   }
 
@@ -929,7 +929,7 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _syncAccountBadge() async {
-    try { await controller.runJavaScript('window.__basecocVip = ${_membershipKnown && _vip}; if(window.__basecocPlaceAccount) window.__basecocPlaceAccount();'); } catch (_) {}
+    try { await controller.runJavaScript('window.__basecocVip = ${_membershipKnown && _vip}; if(window.__basecocPlaceAccount) window.__basecocPlaceAccount();').timeout(const Duration(seconds: 3)); } catch (_) {}
   }
 
   Future<void> _refreshMembership({bool sync = false}) async {
@@ -944,14 +944,14 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
       final data = await _api.request('vip/status');
       if (!mounted) return;
       setState(() { _vip = data['vip'] == true; _membershipKnown = true; });
-      await _syncAccountBadge();
+      unawaited(_syncAccountBadge());
       if (_vip) {
         _bannerAd?.dispose(); _bannerAd = null; _bannerLoaded = false;
         _rewardedAd?.dispose(); _rewardedAd = null; _rewardedReady = false;
       } else { _loadBanner(); _loadRewarded(); }
     } catch (_) {
       if (mounted) setState(() => _membershipKnown = false);
-      await _syncAccountBadge();
+      unawaited(_syncAccountBadge());
     }
   }
 
@@ -992,9 +992,10 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
           final bg = isDarkMode ? const Color(0xFF111827) : Colors.white;
           final subtle = isDarkMode ? const Color(0xFFCBD5E1) : const Color(0xFF475569);
           const gold = Color(0xFFFACC15);
-          Widget link(String label, String action, IconData icon) => Expanded(child: TextButton.icon(
-            style: TextButton.styleFrom(foregroundColor: fg, padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 8), minimumSize: const Size(0, 44)),
-            onPressed: () => Navigator.pop(ctx, action), icon: Icon(icon, size: 17), label: Text(label, style: const TextStyle(fontSize: 12))));
+          Widget link(String label, String action, IconData icon) => Expanded(child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 2), child: TextButton(
+              style: TextButton.styleFrom(foregroundColor: fg, padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 5), minimumSize: const Size(0, 44)),
+              onPressed: () => Navigator.pop(ctx, action), child: Column(mainAxisSize: MainAxisSize.min, children: [Icon(icon, size: 19), const SizedBox(height: 3), Text(label, textAlign: TextAlign.center, style: const TextStyle(fontSize: 11))]))));
           return Container(decoration: BoxDecoration(color: bg, borderRadius: const BorderRadius.vertical(top: Radius.circular(24))),
             child: SafeArea(top: false, child: SingleChildScrollView(child: Padding(padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
               child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -1017,9 +1018,8 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
                   const SizedBox(height: 7), Text('Auto-renews unless cancelled in Apple subscriptions.', style: TextStyle(color: subtle, fontSize: 11)),
                 ],
                 Divider(color: subtle.withValues(alpha: .24)),
-                Row(children: [link('Restore Purchases', 'restore', Icons.restore), link('Manage Plan', 'manage', Icons.settings_outlined)]),
-                Row(children: [link('Notifications & Inbox', 'notifications', Icons.notifications_outlined), link('VIP Benefits', 'benefits', Icons.workspace_premium_outlined)]),
-                Row(children: [link('Terms of Use', 'terms', Icons.description_outlined), link('Privacy Policy', 'privacy', Icons.privacy_tip_outlined)]),
+                Row(children: [link('Restore', 'restore', Icons.restore), link('Manage Plan', 'manage', Icons.settings_outlined), link('Inbox & Alerts', 'notifications', Icons.notifications_outlined)]),
+                Wrap(alignment: WrapAlignment.center, spacing: 12, children: [for (final item in ['terms', 'privacy']) TextButton(style: TextButton.styleFrom(foregroundColor: subtle, minimumSize: const Size(0, 34), padding: const EdgeInsets.symmetric(horizontal: 4)), onPressed: () => Navigator.pop(ctx, item), child: Text(item == 'terms' ? 'Terms of Use' : 'Privacy Policy', style: const TextStyle(fontSize: 11)))]),
               ])))));
         },
       );
@@ -1068,23 +1068,15 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _premiumCopy(String id) async {
-    if (_copyBusy) return;
+    if (_copyBusy) { _toast('Unlock already in progress. Please wait.'); return; }
     _copyBusy = true;
     try {
-      await _refreshMembership();
-      if (!_membershipKnown) throw StateError('Membership unavailable');
-      if (_vip) { await _openVerifiedLayout(await _api.copy(id)); return; }
-      final saved = await _api.storage.read(key: 'reward_$id');
-      if (saved != null) {
-        final previous = Map<String, dynamic>.from(jsonDecode(saved) as Map);
-        if (DateTime.now().millisecondsSinceEpoch < (previous['deadline'] as int)) {
-          if (await _claimReward(id, previous)) return;
-          _toast('Reward verification pending. Try this base again shortly.'); return;
-        }
-        await _api.storage.delete(key: 'reward_$id');
+      if (_membershipKnown && _vip) {
+        await _openVerifiedLayout(await _api.copy(id)); return;
       }
       if (!mounted) return;
       final action = await _unlockChoice();
+      if (action == null) return;
       if (action == 'vip') {
         await _showAccount();
         await _refreshMembership();
@@ -1092,6 +1084,20 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
         return;
       }
       if (action != 'reward') return;
+      _toast('Checking unlock status…');
+      await _refreshMembership().timeout(const Duration(seconds: 15));
+      if (!_membershipKnown) throw StateError('Membership unavailable. Please retry.');
+      if (_vip) { await _openVerifiedLayout(await _api.copy(id)); return; }
+      final saved = await _api.storage.read(key: 'reward_$id');
+      if (saved != null) {
+        final previous = Map<String, dynamic>.from(jsonDecode(saved) as Map);
+        if (DateTime.now().millisecondsSinceEpoch < (previous['deadline'] as int)) {
+          _toast('Checking your previous video reward…');
+          if (await _claimReward(id, previous)) return;
+          _toast('Reward verification pending. Try this base again shortly.'); return;
+        }
+        await _api.storage.delete(key: 'reward_$id');
+      }
       final ad = _rewardedAd;
       if (ad == null || !_rewardedReady) { _loadRewarded(); _toast('Video not ready. Try again shortly.'); return; }
       final start = await _api.request('reward/start', body: {'base_id': id});
