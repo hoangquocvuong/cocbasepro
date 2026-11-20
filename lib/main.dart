@@ -76,8 +76,9 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
   bool _copyBusy = false;
   String? _unlockStatus;
   String? _retryBase;
-  static const _vipLinksBenefit = 'Handpicked VIP base links 3× monthly';
-  static const _vipLinksDetails = 'Receive handpicked VIP base links on the 5th, 15th and 25th of every month via the notification bell, push and email (opt-in).';
+  bool _rewardStillPending = false;
+  static const _vipLinksBenefit = 'Exclusive meta-focused bases 3× monthly';
+  static const _vipLinksDetails = 'Receive exclusive defensive layouts selected for the latest attack meta on the 5th, 15th and 25th of every month. Delivered in the app and by email when enabled.';
 
   void _unlockProgress(String? message, {String? retryBase}) {
     if (mounted) setState(() { _unlockStatus = message; _retryBase = retryBase; });
@@ -583,16 +584,18 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
     button.setAttribute('aria-label',button.title);
     if (button.dataset.vip !== String(vip)) {
       button.dataset.vip = String(vip);
-      button.innerHTML = vip ? '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M5 2l3 2 4-3 4 3 3-2-2 6H7z" fill="#FACC15" stroke="#A16207"/><circle cx="12" cy="12" r="3"/><path d="M5 23v-2a7 7 0 0 1 14 0v2"/></svg>' : '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="3.5"/><path d="M5 21v-2a7 7 0 0 1 14 0v2"/></svg>';
+      button.innerHTML = vip ? '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M5 2l3 2 4-3 4 3 3-2-2 6H7z" fill="#FACC15" stroke="#A16207"/><circle cx="12" cy="12" r="3"/><path d="M5 23v-2a7 7 0 0 1 14 0v2"/></svg><span style="font-size:8px;font-weight:900;line-height:9px">VIP</span>' : '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="3.5"/><path d="M5 21v-2a7 7 0 0 1 14 0v2"/></svg>';
     }
     const style = getComputedStyle(anchor);
     const rect = anchor.getBoundingClientRect();
     button.style.width = Math.max(28,Math.min(44,rect.width))+'px';
     button.style.height = Math.max(28,Math.min(44,rect.height))+'px';
-    button.style.border = style.border;
+    button.style.border = vip ? '1px solid #B8860B' : style.border;
     button.style.borderRadius = style.borderRadius;
-    button.style.setProperty('color',style.color,'important');
-    button.style.setProperty('background',style.backgroundColor,'important');
+    button.style.setProperty('color',vip ? '#713F12' : style.color,'important');
+    button.style.setProperty('background',vip ? '#FACC15' : style.backgroundColor,'important');
+    button.style.flexDirection = vip ? 'column' : 'row';
+    button.style.lineHeight = '1';
     if (button.parentElement !== parent || button.nextElementSibling !== anchor) {
       anchor.insertAdjacentElement('beforebegin',button);
     }
@@ -603,7 +606,10 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
       bell.innerHTML = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg><span style="position:absolute;right:-3px;top:-4px;background:#dc2626;color:white;border-radius:10px;min-width:15px;font-size:10px;line-height:15px;text-align:center"></span>';
       bell.addEventListener('click', e => { if(e.isTrusted && window.top===window.self) BaseActionV81.postMessage('native-inbox'); });
     }
-    bell.style.cssText = button.style.cssText + ';position:relative;';
+    bell.style.cssText = 'display:inline-flex!important;align-items:center;justify-content:center;position:relative;flex-shrink:0;padding:0;box-sizing:border-box;';
+    bell.style.width = button.style.width; bell.style.height = button.style.height;
+    bell.style.border = style.border; bell.style.borderRadius = style.borderRadius;
+    bell.style.color = style.color; bell.style.backgroundColor = style.backgroundColor;
     const count = Number(window.__basecocVipUnread || 0);
     const badge = bell.querySelector('span');
     const label = count > 99 ? '99+' : String(count);
@@ -799,7 +805,8 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
         const Text('FREE vs VIP', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
         const SizedBox(height: 12),
         const ListTile(leading: Icon(Icons.person_outline), title: Text('FREE'), subtitle: Text('Free bases • Banner ads • Watch video to unlock premium bases')),
-        const ListTile(leading: Icon(Icons.workspace_premium, color: Colors.amber), title: Text('VIP'), subtitle: Text('No ads • Unlimited premium bases • Handpicked VIP base links 3× monthly')),
+        _vipHighlight(Theme.of(ctx).colorScheme.onSurface),
+        const ListTile(leading: Icon(Icons.workspace_premium, color: Colors.amber), title: Text('VIP'), subtitle: Text('No ads • Unlimited premium bases • Instant copy')),
         FilledButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
       ]))));
   }
@@ -979,8 +986,9 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
       final data = await _api.request('vip/status');
       if (!mounted) return;
       setState(() { _vip = data['vip'] == true; _membershipKnown = true; });
-      unawaited(_syncAccountBadge());
+      await _syncAccountBadge();
       if (_vip) {
+        unawaited(_refreshInbox());
         _bannerAd?.dispose(); _bannerAd = null; _bannerLoaded = false;
         _rewardedAd?.dispose(); _rewardedAd = null;
       } else { _loadBanner(); _loadRewarded(); }
@@ -989,6 +997,19 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
       unawaited(_syncAccountBadge());
     }
   }
+
+  Widget _vipHighlight(Color fg) => Container(
+    width: double.infinity,
+    padding: const EdgeInsets.all(12),
+    decoration: BoxDecoration(color: const Color(0xFFFACC15).withValues(alpha: .12), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFD4A017))),
+    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(children: [const Icon(Icons.workspace_premium, color: Color(0xFFB8870A)), const SizedBox(width: 7), Expanded(child: Text('EXCLUSIVE VIP BASES', style: TextStyle(color: fg, fontWeight: FontWeight.w900, fontSize: 15)))]),
+      const SizedBox(height: 5),
+      Text('Stay ahead of the latest attack meta.', style: TextStyle(color: fg, fontWeight: FontWeight.w700, fontSize: 13)),
+      const SizedBox(height: 5),
+      Text(_vipLinksDetails, style: TextStyle(color: fg, fontSize: 12)),
+    ]),
+  );
 
   Widget _membershipComparison(Color fg, Color subtle) {
     const gold = Color(0xFFFACC15);
@@ -1008,9 +1029,9 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
     final subtle = isDarkMode ? const Color(0xFFCBD5E1) : const Color(0xFF475569);
     return Container(decoration: BoxDecoration(color: bg, borderRadius: const BorderRadius.vertical(top: Radius.circular(24))), child: SafeArea(top: false, child: SingleChildScrollView(child: Padding(padding: const EdgeInsets.all(16), child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       Row(children: [const Icon(Icons.workspace_premium, color: Color(0xFFEAB308)), const SizedBox(width: 8), Expanded(child: Text('Unlock Premium Base', style: TextStyle(color: fg, fontSize: 20, fontWeight: FontWeight.w800))), IconButton(onPressed: () => Navigator.pop(ctx), icon: Icon(Icons.close, color: fg))]),
+      _vipHighlight(fg), const SizedBox(height: 10),
       _membershipComparison(fg, subtle), const SizedBox(height: 12),
-      Text(_vipLinksDetails, style: TextStyle(color: fg, fontSize: 13)), const SizedBox(height: 12),
-      FilledButton.icon(style: FilledButton.styleFrom(backgroundColor: const Color(0xFFFACC15), foregroundColor: Colors.black), onPressed: () => Navigator.pop(ctx, 'vip'), icon: const Icon(Icons.workspace_premium), label: const Text('Explore VIP plans')),
+      FilledButton.icon(style: FilledButton.styleFrom(backgroundColor: const Color(0xFFFACC15), foregroundColor: Colors.black), onPressed: () => Navigator.pop(ctx, 'vip'), icon: const Icon(Icons.workspace_premium), label: const Text('Unlock VIP Access')),
       OutlinedButton.icon(style: OutlinedButton.styleFrom(foregroundColor: fg), onPressed: () => Navigator.pop(ctx, 'reward'), icon: const Icon(Icons.play_circle_outline), label: const Text('Watch video • Unlock this base')),
     ])))));
   });
@@ -1037,12 +1058,12 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
             child: SafeArea(top: false, child: SingleChildScrollView(child: Padding(padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
               child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                 Center(child: Container(width: 36, height: 4, decoration: BoxDecoration(color: subtle.withValues(alpha: .35), borderRadius: BorderRadius.circular(4)))),
-                Row(children: [const Icon(Icons.account_circle_outlined, color: gold, size: 30), const SizedBox(width: 10),
+                Row(children: [Icon(_membershipKnown && _vip ? Icons.workspace_premium : Icons.account_circle_outlined, color: gold, size: 30), const SizedBox(width: 10),
                   Expanded(child: Text('My Account', style: TextStyle(color: fg, fontSize: 20, fontWeight: FontWeight.w800))),
                   IconButton(onPressed: () => Navigator.pop(ctx), icon: Icon(Icons.close, color: fg))]),
                 Text(_membershipKnown ? (_vip ? 'Current plan: VIP' : 'Current plan: FREE') : 'Membership unavailable', style: TextStyle(color: subtle, fontSize: 12)),
+                const SizedBox(height: 8), _vipHighlight(fg),
                 const SizedBox(height: 8), _membershipComparison(fg, subtle),
-                const SizedBox(height: 6), Text(_vipLinksDetails, style: TextStyle(color: subtle, fontSize: 11)),
                 if (!_vip) ...[
                   const SizedBox(height: 8),
                   if (products.isEmpty) Text('Plans temporarily unavailable', style: TextStyle(color: subtle)),
@@ -1091,7 +1112,7 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
           padding: EdgeInsets.fromLTRB(18, 18, 18, MediaQuery.of(ctx).viewInsets.bottom + 18),
           child: SingleChildScrollView(child: Form(key: key, child: Column(mainAxisSize: MainAxisSize.min, children: [
             const Text('VIP Email Notifications', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-            CheckboxListTile(value: enabled, onChanged: (v) => update(() => enabled = v ?? false), title: const Text('Receive selected VIP bases'), subtitle: const Text('Email only for curated VIP base releases during your membership. No promotional emails.')),
+            CheckboxListTile(value: enabled, onChanged: (v) => update(() => enabled = v ?? false), title: const Text('Receive exclusive VIP bases'), subtitle: const Text('Meta-focused defensive layouts delivered on the 5th, 15th and 25th. No promotional emails.')),
             if (enabled) TextFormField(controller: email, keyboardType: TextInputType.emailAddress, decoration: const InputDecoration(labelText: 'Email address'), validator: (v) => RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(v?.trim() ?? '') ? null : 'Enter a valid email'),
             FilledButton(onPressed: () { if (key.currentState!.validate()) Navigator.pop(ctx, {'email_enabled': enabled, 'email': enabled ? email.text.trim() : ''}); }, child: const Text('Continue')),
           ])))))));
@@ -1133,12 +1154,25 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
     _inboxOpen = true;
     try {
       await _api.initialize();
-      if (!_vip) { _toast('VIP notifications are available to members.'); return; }
+      await _refreshMembership();
+      if (!mounted) return;
+      if (!_membershipKnown) { _toast('Membership unavailable. Try again later.'); return; }
+      if (!_vip) {
+        final upgrade = await showModalBottomSheet<bool>(context: context, isScrollControlled: true, builder: (ctx) => SafeArea(child: SingleChildScrollView(child: Padding(padding: const EdgeInsets.all(16), child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          _vipHighlight(Theme.of(ctx).colorScheme.onSurface),
+          const SizedBox(height: 12),
+          FilledButton(style: FilledButton.styleFrom(backgroundColor: const Color(0xFFFACC15), foregroundColor: Colors.black), onPressed: () => Navigator.pop(ctx, true), child: const Text('Unlock VIP Access')),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Not now')),
+        ])))));
+        if (upgrade == true && mounted) await _showAccount();
+        return;
+      }
       final inbox = await _api.request('notifications/inbox');
       final items = _inboxItems(inbox).take(5).toList();
       if (!mounted) return;
       await showModalBottomSheet<void>(context: context, isScrollControlled: true, builder: (ctx) => SafeArea(child: Padding(padding: const EdgeInsets.all(16), child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
         Row(children: [const Expanded(child: Text('VIP Notifications', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold))), IconButton(onPressed: () => Navigator.pop(ctx), icon: const Icon(Icons.close))]),
+        _vipHighlight(Theme.of(ctx).colorScheme.onSurface),
         if (items.isEmpty) const Padding(padding: EdgeInsets.all(20), child: Text('No new VIP notifications.')),
         for (final item in items) ListTile(leading: const Icon(Icons.notifications_outlined), title: Text('${item['title'] ?? ''}'), subtitle: Text('${item['body'] ?? ''}'), onTap: () { final url = '${item['url'] ?? item['link'] ?? ''}'; if (_isInternalWebUrl(url)) { Navigator.pop(ctx); unawaited(controller.loadRequest(Uri.parse(url))); } }),
         if (items.isNotEmpty) TextButton(onPressed: () async { try { await _api.request('notifications/read-all', body: {}); _vipUnread = 0; await _syncAccountBadge(); if (ctx.mounted) Navigator.pop(ctx); } catch (_) { _toast('Unable to mark notifications as read.'); } }, child: const Text('Mark all as read')),
@@ -1165,12 +1199,31 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
         final previous = Map<String, dynamic>.from(jsonDecode(saved) as Map);
         if (DateTime.now().millisecondsSinceEpoch < (previous['deadline'] as int)) {
           _unlockProgress('Confirming video reward…');
-          if (!await _claimReward(id, previous)) {
+          if (await _claimReward(id, previous)) return;
+          final age = DateTime.now().millisecondsSinceEpoch -
+              (previous['started_at'] as int? ?? ((previous['deadline'] as int) - 23 * 3600000));
+          if (!_rewardStillPending || age < 5 * 60000 || !mounted) {
             _unlockProgress('Reward pending. Retry without another video.', retryBase: id);
+            return;
           }
-          return;
+          final replace = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
+            title: const Text('Reward still pending'),
+            content: const Text('Google has not confirmed this reward. You can keep checking or start a new video. Starting a new video replaces the pending attempt.'),
+            actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Keep waiting')),
+              TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('New video'))],
+          ));
+          if (replace != true) {
+            _unlockProgress('Reward pending. Retry without another video.', retryBase: id);
+            return;
+          }
+          // Recheck once before offering a replacement.
+          if (await _claimReward(id, previous, waitSeconds: 5)) return;
+          if (!_rewardStillPending) {
+            _unlockProgress('Unable to confirm reward. Retry later.', retryBase: id);
+            return;
+          }
         }
-        await _api.storage.delete(key: key);
+        // Keep the previous attempt until a new session is actually saved.
       }
       if (!mounted) return;
       final action = await _unlockChoice();
@@ -1194,24 +1247,28 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
       ownedAd = ad;
       final start = await _api.request('reward/start', body: {'base_id': id}).timeout(const Duration(seconds: 12));
       await ad.setServerSideOptions(ServerSideVerificationOptions(customData: start['custom_data'] as String)).timeout(const Duration(seconds: 5));
+      debugPrint('Reward V89: SSV options set; adapter=${ad.responseInfo?.mediationAdapterClassName}');
       if (!mounted) return;
+      start['started_at'] = DateTime.now().millisecondsSinceEpoch;
+      start['deadline'] = (start['started_at'] as int) + 23 * 3600000;
+      await _api.storage.write(key: key, value: jsonEncode(start)).timeout(const Duration(seconds: 5));
       final completed = Completer<bool>();
       bool earned = false;
       bool disposed = false;
       void disposeAd() { if (!disposed) { disposed = true; ad.dispose(); } }
       ad.fullScreenContentCallback = FullScreenContentCallback(
-        onAdDismissedFullScreenContent: (a) { disposeAd(); if (!completed.isCompleted) completed.complete(earned); },
+        onAdShowedFullScreenContent: (a) { debugPrint('Reward V89: shown'); },
+        onAdImpression: (a) { debugPrint('Reward V89: impression'); },
+        onAdDismissedFullScreenContent: (a) { debugPrint('Reward V89: dismissed; earned=$earned'); if (!completed.isCompleted) completed.complete(earned); },
         onAdFailedToShowFullScreenContent: (a, e) { debugPrint('Rewarded show failed: ${e.code}'); disposeAd(); if (!completed.isCompleted) completed.complete(false); },
       );
       _unlockProgress(null);
       ownedAd = null;
       try {
-        await ad.show(onUserEarnedReward: (_, __) { earned = true; }).timeout(const Duration(seconds: 15));
+        await ad.show(onUserEarnedReward: (_, reward) { earned = true; debugPrint('Reward V89: earned callback; amount=${reward.amount}'); }).timeout(const Duration(seconds: 15));
         final watched = await completed.future.timeout(const Duration(minutes: 3));
-        if (!watched) { _unlockProgress('Video unavailable or not completed.', retryBase: id); return; }
+        if (!watched) { debugPrint('Reward V89: no earned callback at dismissal; checking server'); }
       } finally { disposeAd(); unawaited(_loadRewarded()); }
-      start['deadline'] = DateTime.now().millisecondsSinceEpoch + 23 * 3600000;
-      await _api.storage.write(key: key, value: jsonEncode(start)).timeout(const Duration(seconds: 5));
       _unlockProgress('Confirming video reward…');
       if (!await _claimReward(id, start)) {
         _unlockProgress('Reward pending. Retry without another video.', retryBase: id);
@@ -1226,15 +1283,18 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
     }
   }
 
-  Future<bool> _claimReward(String id, Map<String, dynamic> start) async {
-    final until = DateTime.now().add(const Duration(seconds: 18));
+  Future<bool> _claimReward(String id, Map<String, dynamic> start, {int waitSeconds = 45}) async {
+    _rewardStillPending = false;
+    final until = DateTime.now().add(Duration(seconds: waitSeconds));
     while (mounted && DateTime.now().isBefore(until)) {
       try {
         final remaining = until.difference(DateTime.now());
         if (remaining.isNegative) break;
         if (start['verified_link'] is! String) {
           final claim = await _api.request('reward/claim', body: {'custom_data': start['custom_data'], 'claim_secret': start['claim_secret']}).timeout(remaining < const Duration(seconds: 5) ? remaining : const Duration(seconds: 5));
-          if (claim['link'] is String) {
+          _rewardStillPending = claim['status'] == 'pending';
+          debugPrint('Reward V89: claim status=${_rewardStillPending ? "pending" : (claim['status'] == 'granted' ? "granted" : "unexpected")}');
+          if (claim['status'] == 'granted' && claim['base_id'] == id && claim['link'] is String) {
             final link = claim['link'] as String;
             if (!_isLayout(Uri.parse(link))) throw StateError('Invalid layout link');
             start['verified_link'] = link;
@@ -1247,8 +1307,8 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
           await _api.storage.delete(key: 'reward_$id').timeout(const Duration(seconds: 5));
           return true;
         }
-      } on TimeoutException { /* Retry within the bounded claim window. */ }
-      on ApiFailure catch (e) { if (e.status != 409 && e.status != 425 && e.status != 429 && e.status < 500) rethrow; }
+      } on TimeoutException { _rewardStillPending = false; }
+      on ApiFailure catch (e) { _rewardStillPending = false; if (e.status != 409 && e.status != 425 && e.status != 429 && e.status < 500) rethrow; }
       await Future<void>.delayed(const Duration(seconds: 2));
     }
     return false;
