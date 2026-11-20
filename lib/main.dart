@@ -555,6 +555,37 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
     css.textContent = '#mobile-nav,.bottom-nav,#mobile-more-sheet{display:none!important;visibility:hidden!important;}';
     (document.head || html).appendChild(css);
   }
+  // V892: compact article view, only inside the native iOS WebView.
+  function hideAiOverview() {
+    if (!Array.from(document.querySelectorAll('h2,h3,h4,h5')).some(h => /^layout overview:?$/i.test(h.textContent.trim()))) return;
+    const known = /^(layout overview|base overview|layout analysis|base analysis|defensive analysis|defensive strategy|strategic analysis|strategic overview|design analysis|design overview|base design analysis|tactical analysis|attack strategy|defense strategy|layout description|base description|key defensive features|strengths and weaknesses|defensive strengths|conclusion)$/i;
+    const hide = el => {
+      if (el && !el.matches('a,button,input,select,textarea') && !el.querySelector('img,video,iframe,a,button,input,select,textarea,[role="button"]')) {
+        el.style.setProperty('display','none','important');
+      }
+    };
+    for (const h of document.querySelectorAll('h2,h3,h4,h5')) {
+      if (!known.test(h.textContent.trim().replace(/:$/, ''))) continue;
+      hide(h);
+      let node = h.nextElementSibling;
+      while (node && !/^H[1-6]$/.test(node.tagName)) {
+        if (!node.matches('p,ul,ol,blockquote,div')) break;
+        if (node.querySelector('h1,h2,h3,h4,h5,h6,img,video,iframe,a,button,input,select,textarea,[role="button"]')) break;
+        hide(node);
+        node = node.nextElementSibling;
+      }
+    }
+  }
+  hideAiOverview();
+  if (!window.__basecocAiObserverV892) {
+    let queued = false;
+    window.__basecocAiObserverV892 = new MutationObserver(function() {
+      if (queued) return;
+      queued = true;
+      requestAnimationFrame(function() { queued = false; hideAiOverview(); });
+    });
+    window.__basecocAiObserverV892.observe(html,{childList:true,subtree:true});
+  }
   function placeAccount() {
     const header = document.querySelector('header');
     if (!header) return;
