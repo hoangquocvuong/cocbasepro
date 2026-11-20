@@ -74,8 +74,13 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
   bool _vip = false;
   bool _membershipKnown = false;
   bool _copyBusy = false;
+  bool _accountOpen = false;
+  bool _inboxOpen = false;
+  int _vipUnread = 0;
+  Completer<RewardedAd?>? _rewardLoad;
+  Timer? _inboxTimer;
+  bool _inboxRefreshing = false;
   StreamSubscription<String>? _pushRefresh;
-  bool _rewardedReady = false;
   bool isOffline = false;
   bool pageLoaded = false;
   bool _webShellReady = false;
@@ -241,6 +246,8 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
       });
       await _refreshMembership(sync: true);
       unawaited(_restorePushRegistration());
+      unawaited(_refreshInbox());
+      _inboxTimer = Timer.periodic(const Duration(minutes: 1), (_) => unawaited(_refreshInbox()));
     }
     unawaited(_loadNativeNewsBadge());
 
@@ -341,25 +348,30 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
     );
   }
 
-  void _loadRewarded() {
-    if (!_adsReady || !_membershipKnown || _vip || _rewardedAd != null) return;
-
-    RewardedAd.load(
-      adUnitId: rewardedAdUnitId,
-      request: const AdRequest(nonPersonalizedAds: true),
-      rewardedAdLoadCallback: RewardedAdLoadCallback(
-        onAdLoaded: (ad) {
-          _rewardedAd?.dispose();
-          _rewardedAd = ad;
-          if (mounted) setState(() => _rewardedReady = true);
-        },
-        onAdFailedToLoad: (error) {
-          _rewardedAd = null;
-          if (mounted) setState(() => _rewardedReady = false);
-          debugPrint('Rewarded load failed: $error');
-        },
-      ),
-    );
+  Future<RewardedAd?> _loadRewarded() async {
+    if (!_adsReady || !_membershipKnown || _vip || !mounted) return null;
+    if (_rewardedAd != null) return _rewardedAd;
+    if (_rewardLoad != null) return _rewardLoad!.future;
+    final load = Completer<RewardedAd?>();
+    _rewardLoad = load;
+    void finish(RewardedAd? ad) {
+      if (load.isCompleted) { ad?.dispose(); return; }
+      if (!mounted || _vip) { ad?.dispose(); ad = null; }
+      _rewardedAd = ad;
+      _rewardLoad = null;
+      
+      load.complete(ad);
+    }
+    final timer = Timer(const Duration(seconds: 25), () => finish(null));
+    try {
+      await RewardedAd.load(adUnitId: rewardedAdUnitId,
+        request: const AdRequest(nonPersonalizedAds: true),
+        rewardedAdLoadCallback: RewardedAdLoadCallback(
+          onAdLoaded: (ad) { timer.cancel(); finish(ad); },
+          onAdFailedToLoad: (_) { timer.cancel(); finish(null); },
+        ));
+    } catch (_) { timer.cancel(); finish(null); }
+    return load.future;
   }
 
   String? _premiumId(Uri uri) {
@@ -404,6 +416,7 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
       if (RegExp(r'^[0-9a-f]{32}$').hasMatch(id)) await _premiumCopy(id);
       return;
     }
+    if (raw == 'native-inbox') { await _showNotifications(); return; }
     if (raw == 'native-account') { if (mounted) await _showAccount(); return; }
     final uri = Uri.tryParse(raw);
     if (uri == null) return;
@@ -539,7 +552,7 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
     const controls = Array.from(header.querySelectorAll('button,a,[role="button"]'));
     const key = el => [el.id,el.className,el.title,el.getAttribute('aria-label'),el.getAttribute('onclick'),el.getAttribute('href')].join(' ');
     const menu = controls.find(el => /hamburger|menu|nav-toggle/i.test(key(el)) && !/account/i.test(key(el)) && el.getBoundingClientRect().width > 0);
-    const visible = controls.filter(el => el.id !== 'basecoc-native-account' && el.getBoundingClientRect().width > 0);
+    const visible = controls.filter(el => !['basecoc-native-account','basecoc-native-inbox'].includes(el.id) && el.getBoundingClientRect().width > 0);
     const anchor = menu || visible[visible.length-1];
     if (!anchor) return;
     const parent = anchor.parentElement;
@@ -575,6 +588,20 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
     if (button.parentElement !== parent || button.nextElementSibling !== anchor) {
       anchor.insertAdjacentElement('beforebegin',button);
     }
+    let bell = document.getElementById('basecoc-native-inbox');
+    if (!bell) {
+      bell = document.createElement('button'); bell.id = 'basecoc-native-inbox'; bell.type = 'button';
+      bell.title = 'VIP Notifications'; bell.setAttribute('aria-label', bell.title);
+      bell.innerHTML = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg><span style="position:absolute;right:-3px;top:-4px;background:#dc2626;color:white;border-radius:10px;min-width:15px;font-size:10px;line-height:15px;text-align:center"></span>';
+      bell.addEventListener('click', e => { if(e.isTrusted && window.top===window.self) BaseActionV81.postMessage('native-inbox'); });
+    }
+    bell.style.cssText = button.style.cssText + ';position:relative;';
+    const count = Number(window.__basecocVipUnread || 0);
+    const badge = bell.querySelector('span');
+    const label = count > 99 ? '99+' : String(count);
+    if (badge.textContent !== label) badge.textContent = label;
+    badge.style.display = count > 0 ? 'block' : 'none';
+    if (bell.parentElement !== parent || bell.nextElementSibling !== button) button.insertAdjacentElement('beforebegin',bell);
   }
   window.__basecocPlaceAccount = placeAccount;
   placeAccount();
@@ -929,7 +956,7 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _syncAccountBadge() async {
-    try { await controller.runJavaScript('window.__basecocVip = ${_membershipKnown && _vip}; if(window.__basecocPlaceAccount) window.__basecocPlaceAccount();').timeout(const Duration(seconds: 3)); } catch (_) {}
+    try { await controller.runJavaScript('window.__basecocVip = ${_membershipKnown && _vip}; window.__basecocVipUnread = $_vipUnread; if(window.__basecocPlaceAccount) window.__basecocPlaceAccount();').timeout(const Duration(seconds: 3)); } catch (_) {}
   }
 
   Future<void> _refreshMembership({bool sync = false}) async {
@@ -947,7 +974,7 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
       unawaited(_syncAccountBadge());
       if (_vip) {
         _bannerAd?.dispose(); _bannerAd = null; _bannerLoaded = false;
-        _rewardedAd?.dispose(); _rewardedAd = null; _rewardedReady = false;
+        _rewardedAd?.dispose(); _rewardedAd = null;
       } else { _loadBanner(); _loadRewarded(); }
     } catch (_) {
       if (mounted) setState(() => _membershipKnown = false);
@@ -981,6 +1008,8 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
   });
 
   Future<void> _showAccount() async {
+    if (_accountOpen || !mounted) return;
+    _accountOpen = true;
     try {
       await _refreshMembership();
       final products = await IosBackend.store.invokeListMethod<dynamic>('products') ?? [];
@@ -1018,7 +1047,7 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
                   const SizedBox(height: 7), Text('Auto-renews unless cancelled in Apple subscriptions.', style: TextStyle(color: subtle, fontSize: 11)),
                 ],
                 Divider(color: subtle.withValues(alpha: .24)),
-                Row(children: [link('Restore', 'restore', Icons.restore), link('Manage Plan', 'manage', Icons.settings_outlined), link('Inbox & Alerts', 'notifications', Icons.notifications_outlined)]),
+                Row(children: [link('Restore', 'restore', Icons.restore), link('Manage Plan', 'manage', Icons.settings_outlined), link('Email Preferences', 'email', Icons.mail_outline)]),
                 Wrap(alignment: WrapAlignment.center, spacing: 12, children: [for (final item in ['terms', 'privacy']) TextButton(style: TextButton.styleFrom(foregroundColor: subtle, minimumSize: const Size(0, 34), padding: const EdgeInsets.symmetric(horizontal: 4)), onPressed: () => Navigator.pop(ctx, item), child: Text(item == 'terms' ? 'Terms of Use' : 'Privacy Policy', style: const TextStyle(fontSize: 11)))]),
               ])))));
         },
@@ -1028,103 +1057,145 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
       if (action == 'terms') { await _openExternal('https://www.apple.com/legal/internet-services/itunes/dev/stdeula/'); return; }
       if (action == 'privacy') { await controller.loadRequest(Uri.parse('$homeUrl/p/privacy-policy.html')); return; }
       if (action == 'benefits') { await _showBenefits(); return; }
-      if (action == 'notifications') { await _showNotifications(); return; }
+      if (action == 'email') { await _emailPreferences(); return; }
       await _api.initialize();
       if (action == 'restore') {
         final rows = await IosBackend.store.invokeListMethod<dynamic>('restore') ?? [];
         for (final row in rows) { await _api.verify(row as Map, restore: true); }
         _toast(rows.isEmpty ? 'No active purchase found.' : 'Purchases checked.');
       } else {
+        final preference = await _emailForm();
+        if (preference == null) return;
         final tx = await IosBackend.store.invokeMapMethod<String, dynamic>('buy', {'id': action, 'token': _api.accountToken});
-        if (tx != null) await _api.verify(tx);
+        if (tx != null) { await _api.verify(tx); await _refreshMembership(); if (_vip) await _saveEmail(preference); }
       }
       await _refreshMembership();
-    } catch (e) { _toast('$e'); }
+    } catch (e) { _toast('$e'); } finally { _accountOpen = false; }
+  }
+
+  Future<Map<String, dynamic>?> _emailForm({String initial = '', bool enabled = true}) async {
+    if (!mounted) return null;
+    final email = TextEditingController(text: initial);
+    final key = GlobalKey<FormState>();
+    try {
+      return await showModalBottomSheet<Map<String, dynamic>>(context: context, isScrollControlled: true,
+        builder: (ctx) => StatefulBuilder(builder: (ctx, update) => SafeArea(child: Padding(
+          padding: EdgeInsets.fromLTRB(18, 18, 18, MediaQuery.of(ctx).viewInsets.bottom + 18),
+          child: SingleChildScrollView(child: Form(key: key, child: Column(mainAxisSize: MainAxisSize.min, children: [
+            const Text('VIP Email Notifications', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+            CheckboxListTile(value: enabled, onChanged: (v) => update(() => enabled = v ?? false), title: const Text('Receive selected VIP bases'), subtitle: const Text('Email only for curated VIP base releases during your membership. No promotional emails.')),
+            if (enabled) TextFormField(controller: email, keyboardType: TextInputType.emailAddress, decoration: const InputDecoration(labelText: 'Email address'), validator: (v) => RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(v?.trim() ?? '') ? null : 'Enter a valid email'),
+            FilledButton(onPressed: () { if (key.currentState!.validate()) Navigator.pop(ctx, {'email_enabled': enabled, 'email': enabled ? email.text.trim() : ''}); }, child: const Text('Continue')),
+          ])))))));
+    } finally { email.dispose(); }
+  }
+
+  Future<void> _saveEmail(Map<String, dynamic> preference) async {
+    try {
+      final settings = await _api.request('notifications/settings');
+      await _api.request('notifications/settings', body: {...preference, 'push_enabled': settings['push_enabled'] == true || settings['push_enabled'] == 1});
+      final updated = await _api.request('notifications/settings');
+      final enabled = updated['email_enabled'] == true || updated['email_enabled'] == 1;
+      if (enabled != preference['email_enabled'] || (enabled && updated['email'] != preference['email'])) throw StateError('Email not saved');
+    } catch (_) { _toast('VIP is active. Email preference could not be saved. Update it later in My Account.'); }
+  }
+
+  Future<void> _emailPreferences() async {
+    if (!_vip) { _toast('Email alerts are a VIP benefit.'); return; }
+    final settings = await _api.request('notifications/settings');
+    final choice = await _emailForm(initial: '${settings['email'] ?? ''}', enabled: settings['email_enabled'] == true || settings['email_enabled'] == 1);
+    if (choice != null) await _saveEmail(choice);
+  }
+
+  List<dynamic> _inboxItems(Map<String, dynamic> data) => (data['items'] ?? data['inbox'] ?? []) as List;
+  Future<void> _refreshInbox() async {
+    if (_inboxRefreshing || !mounted || !_membershipKnown) return;
+    if (!_vip) { _vipUnread = 0; await _syncAccountBadge(); return; }
+    _inboxRefreshing = true;
+    try {
+      final inbox = await _api.request('notifications/inbox');
+      final count = inbox['unread_count'] ?? inbox['unread'];
+      _vipUnread = count is num ? count.toInt() : _inboxItems(inbox).where((i) => i is Map && (i['read'] == false || i['is_read'] == false || (i.containsKey('read_at') && i['read_at'] == null))).length;
+      await _syncAccountBadge();
+    } catch (_) {} finally { _inboxRefreshing = false; }
   }
 
   Future<void> _showNotifications() async {
+    if (_inboxOpen || !mounted) return;
+    _inboxOpen = true;
     try {
       await _api.initialize();
-      final settings = await _api.request('notifications/settings');
+      if (!_vip) { _toast('VIP notifications are available to members.'); return; }
       final inbox = await _api.request('notifications/inbox');
-      final items = (inbox['items'] ?? inbox['inbox'] ?? []) as List;
+      final items = _inboxItems(inbox).take(5).toList();
       if (!mounted) return;
-      final email = TextEditingController(text: settings['email'] as String? ?? '');
-      final code = TextEditingController();
-      await showModalBottomSheet<void>(context: context, isScrollControlled: true, builder: (ctx) => SafeArea(child: Padding(padding: EdgeInsets.fromLTRB(18, 18, 18, MediaQuery.of(ctx).viewInsets.bottom + 18), child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
-        const Text('Push, Email & Inbox', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-        TextButton(onPressed: () async { try { await _enablePush(true); _toast('Push enabled'); } catch(e) { _toast('$e'); } }, child: const Text('Enable push notifications')),
-        TextButton(onPressed: () async { try { await _enablePush(false); _toast('Push disabled'); } catch(e) { _toast('$e'); } }, child: const Text('Disable push notifications')),
-        TextField(controller: email, keyboardType: TextInputType.emailAddress, decoration: const InputDecoration(labelText: 'Email address')),
-        TextButton(onPressed: () async { try { await _api.request('notifications/email/start', body: {'email': email.text.trim()}); _toast('Verification code sent.'); } catch(e) { _toast('$e'); } }, child: const Text('Send code')),
-        TextField(controller: code, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Verification code')),
-        FilledButton(onPressed: () async { try { await _api.request('notifications/email/verify', body: {'email': email.text.trim(), 'code': code.text.trim()}); _toast('Email verified.'); } catch(e) { _toast('$e'); } }, child: const Text('Verify email')),
-        for (final enabled in [true, false]) TextButton(onPressed: () async { try { final latest = await _api.request('notifications/settings'); await _api.request('notifications/settings', body: {'email_enabled': enabled, 'push_enabled': latest['push_enabled'] == true || latest['push_enabled'] == 1}); _toast(enabled ? 'Email enabled' : 'Email disabled'); } catch(e) { _toast('$e'); } }, child: Text(enabled ? 'Enable email' : 'Disable email')),
-        TextButton(onPressed: () async { try { await _api.request('notifications/read-all', body: {}); _toast('Marked as read'); } catch(e) { _toast('$e'); } }, child: const Text('Mark all read')),
-        for (final item in items) ListTile(title: Text('${item['title'] ?? ''}'), subtitle: Text('${item['body'] ?? ''}')),
+      await showModalBottomSheet<void>(context: context, isScrollControlled: true, builder: (ctx) => SafeArea(child: Padding(padding: const EdgeInsets.all(16), child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
+        Row(children: [const Expanded(child: Text('VIP Notifications', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold))), IconButton(onPressed: () => Navigator.pop(ctx), icon: const Icon(Icons.close))]),
+        if (items.isEmpty) const Padding(padding: EdgeInsets.all(20), child: Text('No new VIP notifications.')),
+        for (final item in items) ListTile(leading: const Icon(Icons.notifications_outlined), title: Text('${item['title'] ?? ''}'), subtitle: Text('${item['body'] ?? ''}'), onTap: () { final url = '${item['url'] ?? item['link'] ?? ''}'; if (_isInternalWebUrl(url)) { Navigator.pop(ctx); unawaited(controller.loadRequest(Uri.parse(url))); } }),
+        if (items.isNotEmpty) TextButton(onPressed: () async { try { await _api.request('notifications/read-all', body: {}); _vipUnread = 0; await _syncAccountBadge(); if (ctx.mounted) Navigator.pop(ctx); } catch (_) { _toast('Unable to mark notifications as read.'); } }, child: const Text('Mark all as read')),
       ])))));
-      email.dispose(); code.dispose();
-    } catch(e) { _toast('$e'); }
+    } catch (_) { _toast('Notifications unavailable. Try again later.'); } finally { _inboxOpen = false; unawaited(_refreshInbox()); }
   }
 
   Future<void> _premiumCopy(String id) async {
-    if (_copyBusy) { _toast('Unlock already in progress. Please wait.'); return; }
+    if (_copyBusy) return;
     _copyBusy = true;
+    bool progress = false;
+    void busy(String message) { if (mounted) { ScaffoldMessenger.of(context).hideCurrentSnackBar(); ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message), duration: const Duration(minutes: 3))); progress = true; } }
+    void clear() { if (progress && mounted) ScaffoldMessenger.of(context).hideCurrentSnackBar(); progress = false; }
     try {
-      if (_membershipKnown && _vip) {
-        await _openVerifiedLayout(await _api.copy(id)); return;
-      }
+      if (!_membershipKnown) await _refreshMembership().timeout(const Duration(seconds: 15));
+      if (!_membershipKnown) throw StateError('Membership unavailable');
+      if (_vip) { await _openVerifiedLayout(await _api.copy(id)); return; }
       if (!mounted) return;
       final action = await _unlockChoice();
-      if (action == null) return;
-      if (action == 'vip') {
-        await _showAccount();
-        await _refreshMembership();
-        if (_membershipKnown && _vip) await _openVerifiedLayout(await _api.copy(id));
-        return;
-      }
+      if (action == 'vip') { await _showAccount(); if (_membershipKnown && _vip) await _openVerifiedLayout(await _api.copy(id)); return; }
       if (action != 'reward') return;
-      _toast('Checking unlock status…');
-      await _refreshMembership().timeout(const Duration(seconds: 15));
-      if (!_membershipKnown) throw StateError('Membership unavailable. Please retry.');
-      if (_vip) { await _openVerifiedLayout(await _api.copy(id)); return; }
+      busy('Loading video…');
       final saved = await _api.storage.read(key: 'reward_$id');
       if (saved != null) {
         final previous = Map<String, dynamic>.from(jsonDecode(saved) as Map);
         if (DateTime.now().millisecondsSinceEpoch < (previous['deadline'] as int)) {
-          _toast('Checking your previous video reward…');
+          busy('Opening base…');
           if (await _claimReward(id, previous)) return;
-          _toast('Reward verification pending. Try this base again shortly.'); return;
+          clear(); _toast('Video reward is still pending. Please try again later.'); return;
         }
         await _api.storage.delete(key: 'reward_$id');
       }
-      final ad = _rewardedAd;
-      if (ad == null || !_rewardedReady) { _loadRewarded(); _toast('Video not ready. Try again shortly.'); return; }
-      final start = await _api.request('reward/start', body: {'base_id': id});
+      if (!_adsReady) { await MobileAds.instance.initialize().timeout(const Duration(seconds: 15)); _adsReady = true; }
+      final ad = await _loadRewarded().timeout(const Duration(seconds: 30));
+      if (ad == null || !mounted) { clear(); _toast('No video available. Please try again.'); return; }
+      final start = await _api.request('reward/start', body: {'base_id': id}).timeout(const Duration(seconds: 20));
       await ad.setServerSideOptions(ServerSideVerificationOptions(customData: start['custom_data'] as String));
-      _rewardedAd = null; _rewardedReady = false;
+      _rewardedAd = null;
       final completed = Completer<bool>();
       bool earned = false;
       ad.fullScreenContentCallback = FullScreenContentCallback(onAdDismissedFullScreenContent: (a) { a.dispose(); if (!completed.isCompleted) completed.complete(earned); }, onAdFailedToShowFullScreenContent: (a, e) { a.dispose(); if (!completed.isCompleted) completed.complete(false); });
-      await ad.show(onUserEarnedReward: (_, __) { earned = true; });
-      final watched = await completed.future;
-      _loadRewarded();
-      if (!watched) return;
+      clear();
+      try { await ad.show(onUserEarnedReward: (_, __) { earned = true; }); } catch (_) { ad.dispose(); rethrow; }
+      final watched = await completed.future.timeout(const Duration(minutes: 5));
+      unawaited(_loadRewarded());
+      if (!watched) { _toast('Video not completed.'); return; }
       start['deadline'] = DateTime.now().millisecondsSinceEpoch + 23 * 3600000;
       await _api.storage.write(key: 'reward_$id', value: jsonEncode(start));
-      if (!await _claimReward(id, start)) _toast('Reward verification pending. Try this base again shortly.');
-    } catch(e) { _toast('$e'); } finally { _copyBusy = false; }
+      busy('Opening base…');
+      if (!await _claimReward(id, start)) { clear(); _toast('Video reward is still pending. Please try again later.'); }
+    } catch (_) { clear(); _toast('Unable to unlock this base. Please try again.'); } finally { clear(); _copyBusy = false; }
   }
 
   Future<bool> _claimReward(String id, Map<String, dynamic> start) async {
-      for (var i = 0; i < 20; i++) {
-        try {
-          final claim = await _api.request('reward/claim', body: {'custom_data': start['custom_data'], 'claim_secret': start['claim_secret']});
-          if (claim['link'] is String) { await _openVerifiedLayout(claim['link'] as String); await _api.storage.delete(key: 'reward_$id'); return true; }
-        } on ApiFailure catch (e) { if (e.status != 409 && e.status != 425) rethrow; }
-        await Future<void>.delayed(const Duration(seconds: 3));
-      }
-      return false;
+    final until = DateTime.now().add(const Duration(seconds: 65));
+    while (mounted && DateTime.now().isBefore(until)) {
+      try {
+        final remaining = until.difference(DateTime.now());
+        if (remaining.isNegative) break;
+        final claim = await _api.request('reward/claim', body: {'custom_data': start['custom_data'], 'claim_secret': start['claim_secret']}).timeout(remaining);
+        if (claim['link'] is String) { await _openVerifiedLayout(claim['link'] as String); await _api.storage.delete(key: 'reward_$id'); return true; }
+      } on TimeoutException { return false; } on ApiFailure catch (e) { if (e.status != 409 && e.status != 425) rethrow; }
+      await Future<void>.delayed(const Duration(seconds: 2));
+    }
+    return false;
   }
 
   Future<void> _openVerifiedLayout(String link) async {
@@ -1345,7 +1416,7 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
     switch (state) {
       case AppLifecycleState.resumed:
         _scheduleResumeRecovery(reason: 'app-resumed');
-        if (Platform.isIOS) unawaited(_refreshMembership());
+        if (Platform.isIOS && !_copyBusy) { unawaited(_refreshMembership().then((_) => _refreshInbox())); }
         break;
       case AppLifecycleState.inactive:
       case AppLifecycleState.paused:
@@ -1362,6 +1433,7 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
     IosBackend.store.setMethodCallHandler(null);
     _netSub?.cancel();
     _pushRefresh?.cancel();
+    _inboxTimer?.cancel();
     _loadingFinishTimer?.cancel();
     _resumeRecoveryTimer?.cancel();
     _rewardedAd?.dispose();
