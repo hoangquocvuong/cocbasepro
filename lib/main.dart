@@ -557,6 +557,13 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
         if (e.isTrusted && window.top === window.self) BaseActionV81.postMessage('native-account');
       });
     }
+    const vip = window.__basecocVip === true;
+    button.title = vip ? 'VIP Account' : 'My Account';
+    button.setAttribute('aria-label',button.title);
+    if (button.dataset.vip !== String(vip)) {
+      button.dataset.vip = String(vip);
+      button.innerHTML = vip ? '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M5 2l3 2 4-3 4 3 3-2-2 6H7z" fill="#FACC15" stroke="#A16207"/><circle cx="12" cy="12" r="3"/><path d="M5 23v-2a7 7 0 0 1 14 0v2"/></svg>' : '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="3.5"/><path d="M5 21v-2a7 7 0 0 1 14 0v2"/></svg>';
+    }
     const style = getComputedStyle(anchor);
     const rect = anchor.getBoundingClientRect();
     button.style.width = Math.max(28,Math.min(44,rect.width))+'px';
@@ -569,6 +576,7 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
       anchor.insertAdjacentElement('beforebegin',button);
     }
   }
+  window.__basecocPlaceAccount = placeAccount;
   placeAccount();
   if (!window.__baseAccountObserver) {
     window.__baseAccountObserver = new MutationObserver(placeAccount);
@@ -661,6 +669,7 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
   sendTheme();
 })();
 ''');
+      await _syncAccountBadge();
     } catch (_) {}
   }
 
@@ -919,6 +928,10 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
     await _api.request('notifications/settings', body: {'push_enabled': enabled, 'email_enabled': settings['email_enabled'] == true || settings['email_enabled'] == 1});
   }
 
+  Future<void> _syncAccountBadge() async {
+    try { await controller.runJavaScript('window.__basecocVip = ${_membershipKnown && _vip}; if(window.__basecocPlaceAccount) window.__basecocPlaceAccount();'); } catch (_) {}
+  }
+
   Future<void> _refreshMembership({bool sync = false}) async {
     try {
       if (_api.accountToken == null) await _api.initialize();
@@ -931,14 +944,41 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
       final data = await _api.request('vip/status');
       if (!mounted) return;
       setState(() { _vip = data['vip'] == true; _membershipKnown = true; });
+      await _syncAccountBadge();
       if (_vip) {
         _bannerAd?.dispose(); _bannerAd = null; _bannerLoaded = false;
         _rewardedAd?.dispose(); _rewardedAd = null; _rewardedReady = false;
       } else { _loadBanner(); _loadRewarded(); }
     } catch (_) {
       if (mounted) setState(() => _membershipKnown = false);
+      await _syncAccountBadge();
     }
   }
+
+  Widget _membershipComparison(Color fg, Color subtle) {
+    const gold = Color(0xFFFACC15);
+    Widget cell(String title, bool vip, List<String> items) => Expanded(child: Container(
+      padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: vip ? gold.withValues(alpha: .12) : fg.withValues(alpha: .045), borderRadius: BorderRadius.circular(12), border: Border.all(color: vip ? gold : subtle.withValues(alpha: .2))),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [Icon(vip ? Icons.workspace_premium : Icons.person_outline, size: 18, color: vip ? const Color(0xFFB8870A) : subtle), const SizedBox(width: 5), Text(title, style: TextStyle(color: fg, fontWeight: FontWeight.w800))]),
+        const SizedBox(height: 8),
+        for (final item in items) Padding(padding: const EdgeInsets.symmetric(vertical: 4), child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [Icon(vip ? Icons.check_circle_outline : Icons.remove_circle_outline, size: 15, color: vip ? const Color(0xFFB8870A) : subtle), const SizedBox(width: 5), Expanded(child: Text(item, style: TextStyle(color: fg, fontSize: 12)))])),
+      ])));
+    return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [cell('FREE', false, ['Free layouts', 'Video per premium base', 'Banner ads', 'No VIP alerts']), const SizedBox(width: 8), cell('VIP', true, ['All layouts', 'Instant premium copy', 'Ad-free experience', 'VIP alerts 3× monthly'])]);
+  }
+
+  Future<String?> _unlockChoice() => showModalBottomSheet<String>(context: context, isScrollControlled: true, backgroundColor: Colors.transparent, builder: (ctx) {
+    final fg = isDarkMode ? const Color(0xFFF8FAFC) : const Color(0xFF111827);
+    final bg = isDarkMode ? const Color(0xFF111827) : Colors.white;
+    final subtle = isDarkMode ? const Color(0xFFCBD5E1) : const Color(0xFF475569);
+    return Container(decoration: BoxDecoration(color: bg, borderRadius: const BorderRadius.vertical(top: Radius.circular(24))), child: SafeArea(top: false, child: SingleChildScrollView(child: Padding(padding: const EdgeInsets.all(16), child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      Row(children: [const Icon(Icons.workspace_premium, color: Color(0xFFEAB308)), const SizedBox(width: 8), Expanded(child: Text('Unlock Premium Base', style: TextStyle(color: fg, fontSize: 20, fontWeight: FontWeight.w800))), IconButton(onPressed: () => Navigator.pop(ctx), icon: Icon(Icons.close, color: fg))]),
+      _membershipComparison(fg, subtle), const SizedBox(height: 12),
+      Text('VIP base recommendations on the 5th, 15th and 25th via Inbox, push or email (opt-in).', style: TextStyle(color: fg, fontSize: 13)), const SizedBox(height: 12),
+      FilledButton.icon(style: FilledButton.styleFrom(backgroundColor: const Color(0xFFFACC15), foregroundColor: Colors.black), onPressed: () => Navigator.pop(ctx, 'vip'), icon: const Icon(Icons.workspace_premium), label: const Text('Explore VIP plans')),
+      OutlinedButton.icon(style: OutlinedButton.styleFrom(foregroundColor: fg), onPressed: () => Navigator.pop(ctx, 'reward'), icon: const Icon(Icons.play_circle_outline), label: const Text('Watch video • Unlock this base')),
+    ])))));
+  });
 
   Future<void> _showAccount() async {
     try {
@@ -962,16 +1002,10 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
                 Row(children: [const Icon(Icons.account_circle_outlined, color: gold, size: 30), const SizedBox(width: 10),
                   Expanded(child: Text('My Account', style: TextStyle(color: fg, fontSize: 20, fontWeight: FontWeight.w800))),
                   IconButton(onPressed: () => Navigator.pop(ctx), icon: Icon(Icons.close, color: fg))]),
-                Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: fg.withValues(alpha: .06), borderRadius: BorderRadius.circular(12)), child: Row(children: [
-                  Icon(_vip ? Icons.workspace_premium : Icons.person_outline, color: _vip ? gold : subtle), const SizedBox(width: 10),
-                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text(_membershipKnown ? (_vip ? 'VIP Member' : 'FREE Member') : 'Membership unavailable', style: TextStyle(color: fg, fontWeight: FontWeight.bold)),
-                    Text(_vip ? 'Ad-free • Unlimited premium access' : 'Free bases • Rewarded unlocks', style: TextStyle(color: subtle, fontSize: 12)),
-                  ]))])),
+                Text(_membershipKnown ? (_vip ? 'Current plan: VIP' : 'Current plan: FREE') : 'Membership unavailable', style: TextStyle(color: subtle, fontSize: 12)),
+                const SizedBox(height: 8), _membershipComparison(fg, subtle),
+                const SizedBox(height: 6), Text('VIP alerts: 5th, 15th & 25th • Inbox, push & email (opt-in)', style: TextStyle(color: subtle, fontSize: 11)),
                 if (!_vip) ...[
-                  const SizedBox(height: 12),
-                  Text('Upgrade to VIP', style: TextStyle(color: fg, fontWeight: FontWeight.bold, fontSize: 16)),
-                  Text('No ads • Unlimited premium bases', style: TextStyle(color: subtle, fontSize: 12)),
                   const SizedBox(height: 8),
                   if (products.isEmpty) Text('Plans temporarily unavailable', style: TextStyle(color: subtle)),
                   Row(children: [for (final id in ['premium_monthly', 'premium_yearly'])
@@ -1050,8 +1084,13 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
         await _api.storage.delete(key: 'reward_$id');
       }
       if (!mounted) return;
-      final action = await showDialog<String>(context: context, builder: (ctx) => AlertDialog(title: const Text('Unlock Premium Base'), content: const Text('Watch a rewarded video to unlock this base, or become a VIP member.'), actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')), TextButton(onPressed: () => Navigator.pop(ctx, 'vip'), child: const Text('VIP')), FilledButton(onPressed: () => Navigator.pop(ctx, 'reward'), child: const Text('Watch video'))]));
-      if (action == 'vip') { await _showAccount(); return; }
+      final action = await _unlockChoice();
+      if (action == 'vip') {
+        await _showAccount();
+        await _refreshMembership();
+        if (_membershipKnown && _vip) await _openVerifiedLayout(await _api.copy(id));
+        return;
+      }
       if (action != 'reward') return;
       final ad = _rewardedAd;
       if (ad == null || !_rewardedReady) { _loadRewarded(); _toast('Video not ready. Try again shortly.'); return; }
@@ -1072,9 +1111,9 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
   }
 
   Future<bool> _claimReward(String id, Map<String, dynamic> start) async {
-      for (var i = 0; i < 10; i++) {
+      for (var i = 0; i < 20; i++) {
         try {
-          final claim = await _api.request('reward/claim', body: {'nonce': start['custom_data'], 'secret': start['claim_secret']});
+          final claim = await _api.request('reward/claim', body: {'custom_data': start['custom_data'], 'claim_secret': start['claim_secret']});
           if (claim['link'] is String) { await _openVerifiedLayout(claim['link'] as String); await _api.storage.delete(key: 'reward_$id'); return true; }
         } on ApiFailure catch (e) { if (e.status != 409 && e.status != 425) rethrow; }
         await Future<void>.delayed(const Duration(seconds: 3));
@@ -1085,7 +1124,7 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
   Future<void> _openVerifiedLayout(String link) async {
     final uri = Uri.parse(link);
     if (!_isLayout(uri)) throw StateError('Invalid layout link');
-    await _openExternal(link);
+    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) { throw StateError('Could not open Clash of Clans. Please try again.'); }
   }
 
   Widget _moreTile(IconData icon,String label,Color color,VoidCallback onTap) => Material(
