@@ -77,8 +77,8 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
   String? _unlockStatus;
   String? _retryBase;
   bool _rewardStillPending = false;
-  static const _vipLinksBenefit = 'Exclusive meta-focused bases 3× monthly';
-  static const _vipLinksDetails = 'Receive exclusive defensive layouts selected for the latest attack meta on the 5th, 15th and 25th of every month. Delivered in the app and by email when enabled.';
+  static const _vipLinksBenefit = 'Exclusive pro-player base picks + VIP alerts';
+  static const _vipLinksDetails = 'Get notifications about exclusive base layouts curated from leading professional Clash of Clans players worldwide, delivered through in-app alerts and email when enabled.';
 
   void _unlockProgress(String? message, {String? retryBase}) {
     if (mounted) setState(() { _unlockStatus = message; _retryBase = retryBase; });
@@ -1058,7 +1058,7 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Row(children: [const Icon(Icons.workspace_premium, color: Color(0xFFB8870A)), const SizedBox(width: 7), Expanded(child: Text('EXCLUSIVE VIP BASES', style: TextStyle(color: fg, fontWeight: FontWeight.w900, fontSize: 15)))]),
       const SizedBox(height: 5),
-      Text('Stay ahead of the latest attack meta.', style: TextStyle(color: fg, fontWeight: FontWeight.w700, fontSize: 13)),
+      Text('Discover standout layouts from top-level players.', style: TextStyle(color: fg, fontWeight: FontWeight.w700, fontSize: 13)),
       const SizedBox(height: 5),
       Text(_vipLinksDetails, style: TextStyle(color: fg, fontSize: 12)),
     ]),
@@ -1170,7 +1170,7 @@ class _WebScreenState extends State<WebScreen> with WidgetsBindingObserver {
           padding: EdgeInsets.fromLTRB(18, 18, 18, MediaQuery.of(ctx).viewInsets.bottom + 18),
           child: SingleChildScrollView(child: Form(key: key, child: Column(mainAxisSize: MainAxisSize.min, children: [
             const Text('VIP Email Notifications', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-            CheckboxListTile(value: enabled, onChanged: (v) => update(() => enabled = v ?? false), title: const Text('Receive exclusive VIP bases'), subtitle: const Text('Meta-focused defensive layouts delivered on the 5th, 15th and 25th. No promotional emails.')),
+            CheckboxListTile(value: enabled, onChanged: (v) => update(() => enabled = v ?? false), title: const Text('Receive exclusive VIP bases'), subtitle: const Text('Get exclusive base selections from leading players worldwide by email and in-app notification. No promotional emails.')),
             if (enabled) TextFormField(controller: email, keyboardType: TextInputType.emailAddress, decoration: const InputDecoration(labelText: 'Email address'), validator: (v) => RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(v?.trim() ?? '') ? null : 'Enter a valid email'),
             FilledButton(onPressed: () { if (key.currentState!.validate()) Navigator.pop(ctx, {'email_enabled': enabled, 'email': enabled ? email.text.trim() : ''}); }, child: const Text('Continue')),
           ])))))));
